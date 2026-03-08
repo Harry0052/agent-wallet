@@ -16,6 +16,18 @@ interface ParsedIntent {
   recipientName?: string;
 }
 
+export interface AgentIntentParseResult {
+  intent: 'send_money' | 'procurement_task' | 'fund_wallet' | 'review_spend' | 'cancel_subscription';
+  amount: number | null;
+  currency: 'USD';
+  recipient_name: string | null;
+  merchant: string | null;
+  description: string;
+  budget_limit: number | null;
+  confidence: number;
+  missing_fields: string[];
+}
+
 export function parseIntent(text: string): ParsedIntent {
   const lower = text.toLowerCase().trim();
 
@@ -69,6 +81,40 @@ export function parseIntent(text: string): ParsedIntent {
   }
 
   return { action: 'unknown', query: text };
+}
+
+export async function parseAgentIntent(message: string): Promise<AgentIntentParseResult> {
+  const response = await fetch('/api/agent/intent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    intent?: AgentIntentParseResult;
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !body.intent) {
+    const error = body.errorCode && body.error
+      ? `${body.errorCode}: ${body.error}`
+      : body.error || 'Failed to parse intent';
+    throw new Error(error);
+  }
+
+  return body.intent;
+}
+
+export function isAffirmativeResponse(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return /^(yes|yep|yeah|y|confirm|approved?|do it|send it|go ahead|ok|okay)$/i.test(normalized);
+}
+
+export function isNegativeResponse(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return /^(no|nope|nah|n|reject|cancel|stop|don'?t)$/i.test(normalized);
 }
 
 function msg(role: ChatMessage['role'], content: string, type: ChatMessage['type'] = 'text', data?: ChatMessage['data']): ChatMessage {
@@ -242,7 +288,13 @@ export async function handleSendFlow(
   };
 
   if (!intent.amount || intent.amount <= 0 || !intent.recipientName) {
-    cb.addMessage(msg('assistant', 'Use: "Send $10 to Alice". Recipient must be approved with a Stripe connected account.'));
+    if (!intent.amount && !intent.recipientName) {
+      cb.addMessage(msg('assistant', 'Who should receive the payment, and how much should I send?'));
+    } else if (!intent.amount) {
+      cb.addMessage(msg('assistant', `How much should I send to ${intent.recipientName}?`));
+    } else {
+      cb.addMessage(msg('assistant', 'Who should receive the payment?'));
+    }
     task.status = 'cancelled';
     return task;
   }

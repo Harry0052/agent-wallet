@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Recipient } from '@/lib/types';
-import { addRecipient, getWallet, getWalletUserId, setRecipientStatus } from '@/lib/server/ledger';
+import {
+  addRecipient,
+  getWallet,
+  getWalletUserId,
+  resolveRecipientByName,
+  setRecipientStatus,
+} from '@/lib/server/ledger';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const wallet = await getWallet(getWalletUserId());
+    const userId = getWalletUserId();
+    const name = req.nextUrl.searchParams.get('name');
+    if (name && name.trim()) {
+      const recipient = await resolveRecipientByName(userId, name.trim());
+      return NextResponse.json({ recipient });
+    }
+
+    const wallet = await getWallet(userId);
     return NextResponse.json({ recipients: wallet.recipients });
   } catch (error) {
     return NextResponse.json(

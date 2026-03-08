@@ -10,6 +10,7 @@ import * as walletService from '@/services/wallet';
 import * as agent from '@/services/agent';
 import * as fundingService from '@/services/funding';
 import * as procurementService from '@/services/procurement';
+import * as subscriptionService from '@/services/subscriptions';
 
 interface AppState {
   wallet: Wallet;
@@ -223,11 +224,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMessages((prev) => [...prev, userMsg]);
     setIsProcessing(true);
 
-    const intent = agent.parseIntent(text);
-
     try {
-      switch (intent.action) {
-        case 'procurement': {
+      if (activeTask?.status === 'awaiting-approval' && activeTask.selectedOption) {
+        if (agent.isAffirmativeResponse(text)) {
+          const completed = activeTask.category === 'send'
+            ? await agent.completeSendFlow(activeTask, activeTask.selectedOption, callbacks)
+            : await agent.completePurchase(activeTask, activeTask.selectedOption, callbacks);
+          setActiveTask(completed);
+          setIsProcessing(false);
+          return;
+        }
+
+        if (agent.isNegativeResponse(text)) {
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: 'Action cancelled.',
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          });
+          setActiveTask((prev) => prev ? { ...prev, status: 'cancelled' } : null);
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      const parsed = await agent.parseAgentIntent(text);
+      const normalizedText = text.trim().toLowerCase();
+
+      if (/^(settings|config|preferences|budget|cap|limit|guardrail)/i.test(normalizedText)) {
+        setShowSettings(true);
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: 'Guardrail settings are open in the right panel.',
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      if (/^(help|what can|how do|commands)/i.test(normalizedText)) {
+        agent.handleHelp(callbacks);
+        setIsProcessing(false);
+        return;
+      }
+
+      if (/^(history|transactions|past|recent|log)/i.test(normalizedText)) {
+        setShowHistory(true);
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: 'Transaction history is open in the right panel.',
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      switch (parsed.intent) {
+        case 'procurement_task': {
           await refreshWallet();
           addMessage({
             id: uid(),
@@ -237,7 +295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             timestamp: new Date().toISOString(),
           });
 
-          const planning = await procurementService.planProcurementTask(intent.query, walletRef.current);
+          const planning = await procurementService.planProcurementTask(text, walletRef.current);
           setLatestProcurementTask(planning.task);
           setLatestProcurementPlan(planning.planning);
           setActiveTask(null);
@@ -264,57 +322,203 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           break;
         }
-        case 'buy': {
+
+        case 'send_money': {
           await refreshWallet();
-          const location = walletRef.current.settings.requireLocation ? 'San Francisco, CA' : undefined;
-          const task = await agent.handleBuyFlow(intent, location, callbacks);
+
+          const amount = parsed.amount;
+          const recipientHint = parsed.recipient_name?.trim() || null;
+          if (amount === null || amount <= 0) {
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: 'How much should I send?',
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          if (!recipientHint) {
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: 'Who should receive the payment?',
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          const approvedRecipients = walletRef.current.recipients.filter((recipient) => recipient.status === 'approved');
+          const normalizedLookup = recipientHint.toLowerCase();
+          const recipient = approvedRecipients.find((candidate) => {
+            const normalizedCandidate = candidate.name.toLowerCase();
+            return normalizedCandidate === normalizedLookup
+              || normalizedCandidate.includes(normalizedLookup)
+              || normalizedLookup.includes(normalizedCandidate);
+          }) || null;
+
+          if (!recipient) {
+            if (approvedRecipients.length === 0) {
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: `I don't see a saved recipient named "${recipientHint}". Would you like to add them?`,
+                type: 'text',
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              const recipientsList = approvedRecipients.slice(0, 5).map((candidate) => candidate.name).join(', ');
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: `I can send $${amount.toFixed(2)}. Who is "${recipientHint}" in your recipient list? Available recipients: ${recipientsList}.`,
+                type: 'text',
+                timestamp: new Date().toISOString(),
+              });
+            }
+            break;
+          }
+
+          const check = walletService.canSpendSnapshot(walletRef.current, amount, recipient.name);
+          if (!check.allowed) {
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: `Cannot send $${amount.toFixed(2)} to ${recipient.name}: ${check.reason}.`,
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          const task: AgentTask = {
+            id: uid(),
+            intent: text,
+            category: 'send',
+            maxBudget: amount,
+            status: 'awaiting-approval',
+            steps: [],
+            selectedOption: {
+              id: uid(),
+              name: recipient.name,
+              item: 'Direct transfer',
+              price: amount,
+            },
+            startedAt: new Date().toISOString(),
+          };
+
           setActiveTask(task);
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: `I found ${recipient.name} in your recipients list. Send $${amount.toFixed(2)}?`,
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          });
           break;
         }
-        case 'send': {
-          await refreshWallet();
-          const task = await agent.handleSendFlow(intent, callbacks);
-          setActiveTask(task);
+
+        case 'fund_wallet': {
+          const amount = parsed.amount;
+          if (amount === null || amount <= 0) {
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: 'How much should I add to your wallet?',
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          agent.handleFundFlow({
+            action: 'fund',
+            query: text,
+            amount,
+          }, callbacks);
           break;
         }
-        case 'fund':
-          agent.handleFundFlow(intent, callbacks);
-          break;
-        case 'balance':
+
+        case 'review_spend':
           await refreshWallet();
-          agent.handleBalanceFlow(callbacks);
-          break;
-        case 'history':
           setShowHistory(true);
+          agent.handleBalanceFlow(callbacks);
           addMessage({
             id: uid(),
             role: 'assistant',
-            content: 'Transaction history is open in the right panel.',
+            content: 'Opened your spend history and current wallet summary.',
             type: 'text',
             timestamp: new Date().toISOString(),
           });
           break;
-        case 'settings':
-          setShowSettings(true);
+
+        case 'cancel_subscription': {
+          const merchant = parsed.merchant?.trim();
+          if (!merchant) {
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: 'Which subscription should I cancel?',
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          const status = await subscriptionService.fetchSubscriptionStatus();
+          if (status.activeSubscriptions.length === 0) {
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: 'I do not see any active approved subscriptions to cancel right now.',
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          const normalizedMerchant = merchant.toLowerCase();
+          const target = status.activeSubscriptions.find((subscription) => {
+            const vendor = subscription.vendorName.toLowerCase();
+            return vendor === normalizedMerchant
+              || vendor.includes(normalizedMerchant)
+              || normalizedMerchant.includes(vendor);
+          });
+
+          if (!target) {
+            const list = status.activeSubscriptions.slice(0, 6).map((subscription) => subscription.vendorName).join(', ');
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: `I couldn't match "${merchant}" to an active subscription. Available subscriptions: ${list}.`,
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          const result = await subscriptionService.runSubscriptionOperation({
+            taskId: target.taskId,
+            operation: 'cancel',
+          });
+
           addMessage({
             id: uid(),
             role: 'assistant',
-            content: 'Guardrail settings are open in the right panel.',
+            content: result.started
+              ? `Starting live cancellation for ${target.vendorName}. I will stream progress in Subscription Operations.`
+              : `Cancellation for ${target.vendorName} is already running.`,
             type: 'text',
             timestamp: new Date().toISOString(),
           });
           break;
-        case 'help':
+        }
+
+        default:
           agent.handleHelp(callbacks);
           break;
-        default:
-          addMessage({
-            id: uid(),
-            role: 'assistant',
-            content: 'Try: "Find the best AI note-taking tool under $15/month", "Buy me coffee", "Send $5 to Alice", or "Add $20".',
-            type: 'text',
-            timestamp: new Date().toISOString(),
-          });
       }
     } catch (error) {
       addMessage({
@@ -329,7 +533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setIsProcessing(false);
-  }, [isProcessing, callbacks, addMessage, refreshWallet]);
+  }, [isProcessing, activeTask, callbacks, addMessage, refreshWallet]);
 
   const approveTask = useCallback(async (taskId: string) => {
     if (!activeTask || activeTask.id !== taskId || !activeTask.selectedOption) return;

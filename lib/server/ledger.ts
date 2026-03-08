@@ -42,7 +42,7 @@ type RecipientRow = {
   user_id: string;
   name: string;
   stripe_account_id: string;
-  status: Recipient['status'];
+  status: Recipient['status'] | null;
   created_at: string;
 };
 
@@ -96,12 +96,16 @@ function rowToTransaction(row: LedgerRow): Transaction {
 }
 
 function rowToRecipient(row: RecipientRow): Recipient {
+  const status = row.status === 'blocked' || row.status === 'pending' || row.status === 'approved'
+    ? row.status
+    : 'approved';
+
   return {
     id: row.id,
     userId: row.user_id,
     name: row.name,
     stripeAccountId: row.stripe_account_id,
-    status: row.status,
+    status,
     createdAt: row.created_at,
   };
 }
@@ -167,6 +171,55 @@ export function getWalletUserId(): string {
   return process.env.WALLET_USER_ID || 'default-user';
 }
 
+async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
+  const recipientResult = await query<RecipientRow>(
+    `
+      WITH normalized AS (
+        SELECT
+          r.id,
+          r.user_id,
+          r.name,
+          r.stripe_account_id,
+          COALESCE(wr.status, 'approved') AS status,
+          r.created_at::text AS created_at
+        FROM recipients r
+        LEFT JOIN wallet_recipients wr
+          ON wr.id = r.id
+         AND wr.user_id = r.user_id
+        WHERE r.user_id = $1
+
+        UNION ALL
+
+        SELECT
+          wr.id,
+          wr.user_id,
+          wr.name,
+          wr.stripe_account_id,
+          wr.status,
+          wr.created_at::text AS created_at
+        FROM wallet_recipients wr
+        WHERE wr.user_id = $1
+          AND NOT EXISTS (
+            SELECT 1
+            FROM recipients r
+            WHERE r.id = wr.id
+              AND r.user_id = wr.user_id
+          )
+      )
+      SELECT id, user_id, name, stripe_account_id, status, created_at
+      FROM normalized
+      ORDER BY created_at DESC
+    `,
+    [userId],
+  );
+
+  return recipientResult.rows.map(rowToRecipient);
+}
+
+export async function listRecipients(userId: string): Promise<Recipient[]> {
+  return listRecipientsForUser(userId);
+}
+
 export async function getWallet(userId: string): Promise<Wallet> {
   const user = await getUserRow(userId);
 
@@ -183,18 +236,8 @@ export async function getWallet(userId: string): Promise<Wallet> {
     [userId],
   );
 
-  const recipientResult = await query<RecipientRow>(
-    `
-      SELECT id, user_id, name, stripe_account_id, status, created_at::text
-      FROM wallet_recipients
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-    `,
-    [userId],
-  );
-
   const transactions = txResult.rows.map(rowToTransaction);
-  const recipients = recipientResult.rows.map(rowToRecipient);
+  const recipients = await listRecipientsForUser(userId);
 
   return {
     balance: computeBalance(transactions),
@@ -229,22 +272,48 @@ export async function addRecipient(
   status: Recipient['status'] = 'approved',
 ): Promise<Recipient> {
   const id = randomUUID();
+  const trimmedName = name.trim();
+  const trimmedStripeAccountId = stripeAccountId.trim();
+
+  await query(
+    `
+      INSERT INTO recipients (id, user_id, name, stripe_account_id, default_currency)
+      VALUES ($1, $2, $3, $4, 'usd')
+    `,
+    [id, userId, trimmedName, trimmedStripeAccountId],
+  );
 
   await query(
     `
       INSERT INTO wallet_recipients (id, user_id, name, stripe_account_id, status)
       VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (id) DO UPDATE
+      SET
+        name = EXCLUDED.name,
+        stripe_account_id = EXCLUDED.stripe_account_id,
+        status = EXCLUDED.status,
+        updated_at = NOW()
     `,
-    [id, userId, name.trim(), stripeAccountId.trim(), status],
+    [id, userId, trimmedName, trimmedStripeAccountId, status],
   );
 
   const result = await query<RecipientRow>(
     `
-      SELECT id, user_id, name, stripe_account_id, status, created_at::text
-      FROM wallet_recipients
-      WHERE id = $1
+      SELECT
+        r.id,
+        r.user_id,
+        r.name,
+        r.stripe_account_id,
+        COALESCE(wr.status, 'approved') AS status,
+        r.created_at::text AS created_at
+      FROM recipients r
+      LEFT JOIN wallet_recipients wr
+        ON wr.id = r.id
+       AND wr.user_id = r.user_id
+      WHERE r.id = $1
+        AND r.user_id = $2
     `,
-    [id],
+    [id, userId],
   );
 
   if (!result.rows[0]) {
@@ -259,7 +328,7 @@ export async function setRecipientStatus(
   recipientId: string,
   status: Recipient['status'],
 ): Promise<Recipient | null> {
-  const result = await query<RecipientRow>(
+  let result = await query<RecipientRow>(
     `
       UPDATE wallet_recipients
       SET status = $3,
@@ -270,8 +339,39 @@ export async function setRecipientStatus(
     [recipientId, userId, status],
   );
 
+  if (!result.rows[0]) {
+    result = await query<RecipientRow>(
+      `
+        INSERT INTO wallet_recipients (id, user_id, name, stripe_account_id, status)
+        SELECT id, user_id, name, stripe_account_id, $3
+        FROM recipients
+        WHERE id = $1 AND user_id = $2
+        RETURNING id, user_id, name, stripe_account_id, status, created_at::text
+      `,
+      [recipientId, userId, status],
+    );
+  }
+
   if (!result.rows[0]) return null;
   return rowToRecipient(result.rows[0]);
+}
+
+export async function resolveRecipientByName(userId: string, rawName: string): Promise<Recipient | null> {
+  const lookup = rawName.trim().toLowerCase();
+  if (!lookup) return null;
+
+  const recipients = await listRecipientsForUser(userId);
+  const approved = recipients.filter((recipient) => recipient.status === 'approved');
+
+  const exact = approved.find((recipient) => recipient.name.trim().toLowerCase() === lookup);
+  if (exact) return exact;
+
+  const partial = approved.find((recipient) => {
+    const normalized = recipient.name.trim().toLowerCase();
+    return normalized.includes(lookup) || lookup.includes(normalized);
+  });
+
+  return partial || null;
 }
 
 export async function markWebhookProcessed(eventId: string): Promise<boolean> {
@@ -449,15 +549,9 @@ export async function checkGuardrails(params: {
     return { allowed: false, reason: 'Merchant is not in allowed list' };
   }
 
-  const recipient = wallet.recipients.find((r) => {
-    if (r.status !== 'approved') return false;
-    if (params.recipientId) return r.id === params.recipientId;
-
-    const lookup = (params.recipientName || params.merchant || '').trim().toLowerCase();
-    if (!lookup) return false;
-    const candidate = r.name.toLowerCase();
-    return candidate === lookup || candidate.includes(lookup) || lookup.includes(candidate);
-  });
+  const recipient = params.recipientId
+    ? wallet.recipients.find((candidate) => candidate.id === params.recipientId && candidate.status === 'approved')
+    : await resolveRecipientByName(params.userId, params.recipientName || params.merchant || '');
 
   if (!recipient) {
     return { allowed: false, reason: 'No approved recipient matched this target' };

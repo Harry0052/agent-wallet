@@ -56,6 +56,22 @@ export async function ensureSchema(): Promise<void> {
     `);
 
     await p.query(`
+      CREATE TABLE IF NOT EXISTS recipients (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        stripe_account_id TEXT NOT NULL,
+        default_currency TEXT NOT NULL DEFAULT 'usd',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await p.query(`
+      CREATE INDEX IF NOT EXISTS idx_recipients_user_name
+      ON recipients (user_id, lower(name));
+    `);
+
+    await p.query(`
       CREATE TABLE IF NOT EXISTS ledger_entries (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -95,6 +111,13 @@ export async function ensureSchema(): Promise<void> {
         id TEXT PRIMARY KEY,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await p.query(`
+      INSERT INTO recipients (id, user_id, name, stripe_account_id, default_currency, created_at)
+      SELECT id, user_id, name, stripe_account_id, 'usd', created_at
+      FROM wallet_recipients
+      ON CONFLICT (id) DO NOTHING;
     `);
 
     await p.query(`

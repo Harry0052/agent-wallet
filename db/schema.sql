@@ -16,6 +16,18 @@ CREATE TABLE IF NOT EXISTS wallet_recipients (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS recipients (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  stripe_account_id TEXT NOT NULL,
+  default_currency TEXT NOT NULL DEFAULT 'usd',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipients_user_name
+ON recipients (user_id, lower(name));
+
 CREATE TABLE IF NOT EXISTS ledger_entries (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -44,6 +56,11 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
   id TEXT PRIMARY KEY,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+INSERT INTO recipients (id, user_id, name, stripe_account_id, default_currency, created_at)
+SELECT id, user_id, name, stripe_account_id, 'usd', created_at
+FROM wallet_recipients
+ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS agent_tasks (
   id TEXT PRIMARY KEY,
