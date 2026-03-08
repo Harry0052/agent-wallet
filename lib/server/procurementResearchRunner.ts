@@ -7,7 +7,7 @@ import {
   listProcurementFindings,
   updateProcurementTask,
 } from '@/lib/server/procurement';
-import { runTinyFishVendorPricingResearch } from '@/lib/server/tinyfishResearch';
+import { discoverTinyFishVendorCandidates, runTinyFishVendorPricingResearch } from '@/lib/server/tinyfishResearch';
 
 function firstMeaningfulMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
@@ -117,16 +117,55 @@ export async function runProcurementResearchTask(params: {
     throw new Error('Task requires clarification before live vendor research can run');
   }
 
-  if (task.targetVendors.length === 0) {
+  const plannedTargets = task.targetVendors.map((vendor) => vendor.trim()).filter(Boolean);
+  let workingVendors = [...plannedTargets];
+  const discoveryErrors: string[] = [];
+
+  try {
+    const discovered = await discoverTinyFishVendorCandidates({
+      goal: task.goal,
+      category: task.category,
+      existingTargets: plannedTargets,
+      maxCandidates: 10,
+    });
+    workingVendors = Array.from(new Set([...plannedTargets, ...discovered]));
+    await appendLog({
+      userId: task.userId,
+      taskId: task.id,
+      actionType: 'plan',
+      status: 'done',
+      phase: 'researching',
+      event: 'vendor_discovery_completed',
+      code: 'VENDOR_DISCOVERY_COMPLETED',
+      message: `TinyFish discovered ${discovered.length} candidate vendor(s) from live web research`,
+      details: { discoveredVendors: discovered },
+    });
+  } catch (error) {
+    const message = firstMeaningfulMessage(error);
+    discoveryErrors.push(message);
+    await appendLog({
+      userId: task.userId,
+      taskId: task.id,
+      actionType: 'plan',
+      status: 'error',
+      phase: 'researching',
+      event: 'vendor_discovery_failed',
+      code: 'VENDOR_DISCOVERY_FAILED',
+      message: `TinyFish vendor discovery failed: ${message}`,
+    });
+  }
+
+  if (workingVendors.length === 0) {
     await persistTaskUpdate(task, {
       status: 'failed',
       findings: {
         vendorsRequested: 0,
         vendorsResearched: 0,
         plansCollected: 0,
+        discoveryErrors,
       },
       recommendation: null,
-      error: '[INVALID_STATE] No target vendors in planned task',
+      error: `[TINYFISH_RESEARCH_FAILURE] No vendor candidates available. ${discoveryErrors.join(' | ')}`,
     });
 
     await appendLog({
@@ -137,7 +176,7 @@ export async function runProcurementResearchTask(params: {
       phase: 'planning',
       event: 'research_blocked_no_targets',
       code: 'RESEARCH_BLOCKED_NO_TARGETS',
-      message: 'research blocked: no target vendors were present in the planned task',
+      message: 'research blocked: no vendor candidates were available from plan or discovery',
     });
 
     return;
@@ -158,12 +197,12 @@ export async function runProcurementResearchTask(params: {
     phase: 'researching',
     event: 'research_started',
     code: 'RESEARCH_STARTED',
-    message: `starting live vendor research across ${task.targetVendors.length} vendor target(s)`,
+    message: `starting live vendor research across ${workingVendors.length} vendor target(s)`,
   });
 
   const vendorErrors: string[] = [];
 
-  for (const vendor of task.targetVendors) {
+  for (const vendor of workingVendors) {
     await appendLog({
       userId: task.userId,
       taskId: task.id,
@@ -246,6 +285,8 @@ export async function runProcurementResearchTask(params: {
           monthlyPrice: finding.monthlyPrice,
           annualPrice: finding.annualPrice,
           billingFrequency: finding.billingFrequency,
+          contentAvailability: finding.contentAvailability,
+          notes: finding.notes,
           notableFeatures: finding.notableFeatures,
           extractionTimestamp: finding.extractionTimestamp,
           raw: finding.raw,
@@ -294,11 +335,11 @@ export async function runProcurementResearchTask(params: {
   const recommendation = buildRecommendation(findings);
 
   const findingSummary: Record<string, unknown> = {
-    vendorsRequested: task.targetVendors.length,
+    vendorsRequested: workingVendors.length,
     vendorsResearched: uniqueVendors(findings).length,
     plansCollected: findings.length,
     vendorNames: uniqueVendors(findings),
-    errors: vendorErrors,
+    errors: [...discoveryErrors, ...vendorErrors],
     completedAt: new Date().toISOString(),
   };
 

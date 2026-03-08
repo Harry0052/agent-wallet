@@ -1,6 +1,6 @@
 'use client';
 
-import { ChatMessage as Msg, OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData, EvidenceData } from '@/lib/types';
+import { ChatMessage as Msg, OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData, EvidenceData, TaskProgressData, TaskState } from '@/lib/types';
 import { useApp } from '@/lib/store';
 import { fmt, fmtTime, cn, domainFromUrl } from '@/lib/utils';
 
@@ -171,6 +171,40 @@ function EvidencePanel({ data }: { data: EvidenceData }) {
   );
 }
 
+const STATE_STYLES: Record<TaskState, { dot: string; label: string }> = {
+  received: { dot: 'bg-[var(--aw-text-muted)]', label: 'Received' },
+  parsing: { dot: 'bg-[#dfc08a] animate-pulse', label: 'Parsing' },
+  needs_clarification: { dot: 'bg-[#e6a23c]', label: 'Needs Info' },
+  resolving_recipient: { dot: 'bg-[#dfc08a] animate-pulse', label: 'Resolving' },
+  ready_to_execute: { dot: 'bg-[#67c4a0]', label: 'Ready' },
+  executing: { dot: 'aw-dot-live', label: 'Executing' },
+  awaiting_approval: { dot: 'bg-[#e6a23c]', label: 'Awaiting Approval' },
+  completed: { dot: 'bg-[var(--aw-success)]', label: 'Completed' },
+  failed: { dot: 'bg-[var(--aw-danger)]', label: 'Failed' },
+};
+
+function TaskProgressPanel({ data }: { data: TaskProgressData }) {
+  return (
+    <div className="mt-3 space-y-1.5 rounded-2xl border border-[var(--aw-border)] bg-black/20 p-3">
+      {data.stateHistory.map((entry, index) => {
+        const style = STATE_STYLES[entry.state] || STATE_STYLES.received;
+        const isLast = index === data.stateHistory.length - 1;
+        return (
+          <div key={`${entry.state}-${index}`} className="flex items-center gap-2">
+            <span className={cn('h-2 w-2 rounded-full flex-shrink-0', style.dot)} />
+            <span className={cn(
+              'text-xs',
+              isLast ? 'text-[var(--aw-text)] font-medium' : 'text-[var(--aw-text-muted)]',
+            )}>
+              {entry.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ThinkingIndicator() {
   return (
     <div className="mt-2 flex items-center gap-1.5">
@@ -213,6 +247,7 @@ export function ChatMessageBubble({ message }: { message: Msg }) {
         {message.type === 'funding' && message.data && <FundingCard data={message.data as FundingData} />}
         {message.type === 'agent-log' && message.data && <AgentLog data={message.data as AgentLogData} />}
         {message.type === 'evidence' && message.data && <EvidencePanel data={message.data as EvidenceData} />}
+        {message.type === 'task-progress' && message.data && <TaskProgressPanel data={message.data as TaskProgressData} />}
 
         <p className={cn('mt-1.5 text-[10px]', isUser ? 'text-[#ead7b6]' : 'text-[var(--aw-text-muted)]')}>
           {fmtTime(message.timestamp)}

@@ -62,13 +62,38 @@ export async function ensureSchema(): Promise<void> {
         name TEXT NOT NULL,
         stripe_account_id TEXT NOT NULL,
         default_currency TEXT NOT NULL DEFAULT 'usd',
+        notes TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
 
     await p.query(`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS notes TEXT;
+    `);
+
+    await p.query(`
       CREATE INDEX IF NOT EXISTS idx_recipients_user_name
       ON recipients (user_id, lower(name));
+    `);
+
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS user_autofill_profiles (
+        user_id TEXT PRIMARY KEY,
+        full_name TEXT,
+        email TEXT,
+        phone TEXT,
+        company_name TEXT,
+        billing_name TEXT,
+        address_line1 TEXT,
+        address_line2 TEXT,
+        city TEXT,
+        state_region TEXT,
+        postal_code TEXT,
+        country TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
     `);
 
     await p.query(`
@@ -203,11 +228,23 @@ export async function ensureSchema(): Promise<void> {
         monthly_price NUMERIC(12, 2),
         annual_price NUMERIC(12, 2),
         billing_frequency TEXT NOT NULL,
+        content_availability TEXT,
+        notes TEXT,
         notable_features JSONB NOT NULL,
         extraction_timestamp TIMESTAMPTZ NOT NULL,
         raw JSONB,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await p.query(`
+      ALTER TABLE procurement_findings
+      ADD COLUMN IF NOT EXISTS content_availability TEXT;
+    `);
+
+    await p.query(`
+      ALTER TABLE procurement_findings
+      ADD COLUMN IF NOT EXISTS notes TEXT;
     `);
 
     await p.query(`

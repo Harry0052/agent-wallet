@@ -4,7 +4,15 @@ import { getWalletUserId, recordWebAction } from '@/lib/server/ledger';
 
 export const runtime = 'nodejs';
 
-type TinyFishAction = 'vendor-research' | 'purchase-prepare' | 'purchase-confirm' | 'subscription-operation' | 'search' | 'prepare' | 'confirm';
+type TinyFishAction =
+  | 'vendor-discovery'
+  | 'vendor-research'
+  | 'purchase-prepare'
+  | 'purchase-confirm'
+  | 'subscription-operation'
+  | 'search'
+  | 'prepare'
+  | 'confirm';
 
 interface TinyFishUpstream {
   options?: unknown;
@@ -25,6 +33,7 @@ function endpointFor(action: TinyFishAction): string {
   };
 
   if (action === 'vendor-research' || action === 'search') return configured.vendorResearch || '/vendor-research';
+  if (action === 'vendor-discovery') return process.env.TINYFISH_VENDOR_DISCOVERY_PATH || '/vendor-discovery';
   if (action === 'purchase-prepare' || action === 'prepare') return configured.purchasePrepare || '/purchase/prepare';
   if (action === 'purchase-confirm' || action === 'confirm') return configured.purchaseConfirm || '/purchase/confirm';
   return configured.subscriptionOp || '/subscription/operation';
@@ -135,6 +144,19 @@ export async function POST(req: NextRequest) {
         url: s.url,
         status: s.status,
         details: { step: s },
+      });
+    }
+
+    if (body.action === 'vendor-discovery') {
+      const candidates = upstreamJson.data?.candidates || upstreamJson.options || [];
+      if (!Array.isArray(candidates) || candidates.length === 0) {
+        return NextResponse.json({ ok: false, error: 'TinyFish returned no vendor candidates' }, { status: 502 });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        data: { candidates },
+        steps,
       });
     }
 

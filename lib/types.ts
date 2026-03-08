@@ -58,8 +58,27 @@ export interface Recipient {
   userId: string;
   name: string;
   stripeAccountId: string;
+  defaultCurrency?: string;
+  notes?: string;
   status: 'approved' | 'blocked' | 'pending';
   createdAt: string;
+}
+
+export interface UserAutofillProfile {
+  userId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  companyName?: string;
+  billingName?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateRegion?: string;
+  postalCode?: string;
+  country?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // -- Chat ----------------------------------------------------
@@ -73,14 +92,15 @@ export type MessageType =
   | 'funding'        // add-funds request
   | 'agent-log'      // TinyFish action log
   | 'evidence'       // TinyFish extracted evidence
-  | 'thinking';      // agent "thinking" indicator
+  | 'thinking'       // agent "thinking" indicator
+  | 'task-progress'; // live task state machine progress
 
 export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
   type: MessageType;
-  data?: OptionsData | ApprovalData | ReceiptData | AgentLogData | FundingData | EvidenceData;
+  data?: OptionsData | ApprovalData | ReceiptData | AgentLogData | FundingData | EvidenceData | TaskProgressData;
   timestamp: string;
 }
 
@@ -198,6 +218,8 @@ export interface ProcurementFinding {
   monthlyPrice: number | null;
   annualPrice: number | null;
   billingFrequency: string;
+  contentAvailability?: string | null;
+  notes?: string | null;
   notableFeatures: string[];
   extractionTimestamp: string;
   createdAt: string;
@@ -229,6 +251,8 @@ export interface ProcurementRecommendationOption {
   monthlyPrice: number | null;
   annualPrice: number | null;
   billingFrequency: string;
+  contentAvailability?: string | null;
+  notes?: string | null;
   pricingPageUrl: string;
   notableFeatures: string[];
   extractionTimestamp: string;
@@ -273,6 +297,13 @@ export interface ProcurementPurchasePrepState {
   checkoutUrl?: string;
   proofUrls: string[];
   pendingLedgerEntry?: ProcurementLedgerPreview;
+  blocker?: {
+    code: string;
+    message: string;
+    missingFields: string[];
+    sensitive: boolean;
+    canResume: boolean;
+  };
   error?: string;
 }
 
@@ -283,9 +314,12 @@ export interface ProcurementRecommendationRecord {
   budgetLimit: number | null;
   budgetAssessment: 'fits_budget' | 'mixed' | 'over_budget' | 'unknown';
   noFitExplanation: string | null;
+  confidence?: number;
+  exceptions?: string[];
   winner: ProcurementRecommendationOption | null;
   alternatives: ProcurementRecommendationOption[];
   whyWinner: string[];
+  evidenceLinks?: string[];
   policy: ProcurementPolicyResult | null;
   approval?: ProcurementApprovalState;
   purchasePrep?: ProcurementPurchasePrepState;
@@ -356,6 +390,22 @@ export interface AgentStep {
   timestamp: string;
 }
 
+export type TaskState =
+  | 'received'
+  | 'parsing'
+  | 'needs_clarification'
+  | 'resolving_recipient'
+  | 'ready_to_execute'
+  | 'executing'
+  | 'awaiting_approval'
+  | 'completed'
+  | 'failed';
+
+export interface TaskProgressData {
+  taskState: TaskState;
+  stateHistory: Array<{ state: TaskState; label: string; timestamp: string }>;
+}
+
 export interface AgentTask {
   id: string;
   intent: string;
@@ -363,9 +413,13 @@ export interface AgentTask {
   maxBudget: number;
   location?: string;
   status: 'active' | 'awaiting-approval' | 'completed' | 'cancelled';
+  taskState: TaskState;
   steps: AgentStep[];
   reasoningPlan?: string[];
   selectedOption?: VendorOption;
+  recipientId?: string;
   startedAt: string;
   completedAt?: string;
+  pendingRecipientName?: string;
+  pendingAmount?: number;
 }

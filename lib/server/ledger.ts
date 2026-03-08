@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Recipient, Transaction, Wallet, WalletSettings } from '@/lib/types';
+import type { Recipient, Transaction, UserAutofillProfile, Wallet, WalletSettings } from '@/lib/types';
 import { query } from '@/lib/server/db';
 
 const DEFAULT_SETTINGS: WalletSettings = {
@@ -42,8 +42,27 @@ type RecipientRow = {
   user_id: string;
   name: string;
   stripe_account_id: string;
+  default_currency: string | null;
+  notes: string | null;
   status: Recipient['status'] | null;
   created_at: string;
+};
+
+type AutofillProfileRow = {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  company_name: string | null;
+  billing_name: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state_region: string | null;
+  postal_code: string | null;
+  country: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type WebActionLogRow = {
@@ -54,6 +73,19 @@ type WebActionLogRow = {
   status: 'done' | 'error' | 'running';
   details: Record<string, unknown> | null;
   created_at: string;
+};
+
+type AgentTaskRow = {
+  id: string;
+  user_id: string;
+  task_type: string;
+  intent: string;
+  status: string;
+  input: Record<string, unknown> | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 function normalizeSettings(input: unknown): WalletSettings {
@@ -105,8 +137,29 @@ function rowToRecipient(row: RecipientRow): Recipient {
     userId: row.user_id,
     name: row.name,
     stripeAccountId: row.stripe_account_id,
+    defaultCurrency: (row.default_currency || 'usd').toUpperCase(),
+    notes: row.notes || undefined,
     status,
     createdAt: row.created_at,
+  };
+}
+
+function rowToAutofillProfile(row: AutofillProfileRow): UserAutofillProfile {
+  return {
+    userId: row.user_id,
+    fullName: row.full_name || undefined,
+    email: row.email || undefined,
+    phone: row.phone || undefined,
+    companyName: row.company_name || undefined,
+    billingName: row.billing_name || undefined,
+    addressLine1: row.address_line1 || undefined,
+    addressLine2: row.address_line2 || undefined,
+    city: row.city || undefined,
+    stateRegion: row.state_region || undefined,
+    postalCode: row.postal_code || undefined,
+    country: row.country || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -180,6 +233,8 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
           r.user_id,
           r.name,
           r.stripe_account_id,
+          r.default_currency,
+          r.notes,
           COALESCE(wr.status, 'approved') AS status,
           r.created_at::text AS created_at
         FROM recipients r
@@ -195,6 +250,8 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
           wr.user_id,
           wr.name,
           wr.stripe_account_id,
+          'usd'::text AS default_currency,
+          NULL::text AS notes,
           wr.status,
           wr.created_at::text AS created_at
         FROM wallet_recipients wr
@@ -206,7 +263,7 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
               AND r.user_id = wr.user_id
           )
       )
-      SELECT id, user_id, name, stripe_account_id, status, created_at
+      SELECT id, user_id, name, stripe_account_id, default_currency, notes, status, created_at
       FROM normalized
       ORDER BY created_at DESC
     `,
@@ -270,6 +327,7 @@ export async function addRecipient(
   name: string,
   stripeAccountId: string,
   status: Recipient['status'] = 'approved',
+  notes?: string,
 ): Promise<Recipient> {
   const id = randomUUID();
   const trimmedName = name.trim();
@@ -277,10 +335,10 @@ export async function addRecipient(
 
   await query(
     `
-      INSERT INTO recipients (id, user_id, name, stripe_account_id, default_currency)
-      VALUES ($1, $2, $3, $4, 'usd')
+      INSERT INTO recipients (id, user_id, name, stripe_account_id, default_currency, notes)
+      VALUES ($1, $2, $3, $4, 'usd', $5)
     `,
-    [id, userId, trimmedName, trimmedStripeAccountId],
+    [id, userId, trimmedName, trimmedStripeAccountId, notes?.trim() || null],
   );
 
   await query(
@@ -304,6 +362,8 @@ export async function addRecipient(
         r.user_id,
         r.name,
         r.stripe_account_id,
+        r.default_currency,
+        r.notes,
         COALESCE(wr.status, 'approved') AS status,
         r.created_at::text AS created_at
       FROM recipients r
@@ -334,7 +394,7 @@ export async function setRecipientStatus(
       SET status = $3,
           updated_at = NOW()
       WHERE id = $1 AND user_id = $2
-      RETURNING id, user_id, name, stripe_account_id, status, created_at::text
+      RETURNING id, user_id, name, stripe_account_id, 'usd'::text AS default_currency, NULL::text AS notes, status, created_at::text
     `,
     [recipientId, userId, status],
   );
@@ -346,7 +406,7 @@ export async function setRecipientStatus(
         SELECT id, user_id, name, stripe_account_id, $3
         FROM recipients
         WHERE id = $1 AND user_id = $2
-        RETURNING id, user_id, name, stripe_account_id, status, created_at::text
+        RETURNING id, user_id, name, stripe_account_id, 'usd'::text AS default_currency, NULL::text AS notes, status, created_at::text
       `,
       [recipientId, userId, status],
     );
@@ -372,6 +432,119 @@ export async function resolveRecipientByName(userId: string, rawName: string): P
   });
 
   return partial || null;
+}
+
+export async function getUserAutofillProfile(userId: string): Promise<UserAutofillProfile | null> {
+  const result = await query<AutofillProfileRow>(
+    `
+      SELECT
+        user_id,
+        full_name,
+        email,
+        phone,
+        company_name,
+        billing_name,
+        address_line1,
+        address_line2,
+        city,
+        state_region,
+        postal_code,
+        country,
+        created_at::text,
+        updated_at::text
+      FROM user_autofill_profiles
+      WHERE user_id = $1
+      LIMIT 1
+    `,
+    [userId],
+  );
+
+  if (!result.rows[0]) return null;
+  return rowToAutofillProfile(result.rows[0]);
+}
+
+export async function upsertUserAutofillProfile(
+  userId: string,
+  patch: Partial<Omit<UserAutofillProfile, 'userId' | 'createdAt' | 'updatedAt'>>,
+): Promise<UserAutofillProfile> {
+  const normalized = {
+    fullName: patch.fullName?.trim() || null,
+    email: patch.email?.trim() || null,
+    phone: patch.phone?.trim() || null,
+    companyName: patch.companyName?.trim() || null,
+    billingName: patch.billingName?.trim() || null,
+    addressLine1: patch.addressLine1?.trim() || null,
+    addressLine2: patch.addressLine2?.trim() || null,
+    city: patch.city?.trim() || null,
+    stateRegion: patch.stateRegion?.trim() || null,
+    postalCode: patch.postalCode?.trim() || null,
+    country: patch.country?.trim() || null,
+  };
+
+  const result = await query<AutofillProfileRow>(
+    `
+      INSERT INTO user_autofill_profiles (
+        user_id,
+        full_name,
+        email,
+        phone,
+        company_name,
+        billing_name,
+        address_line1,
+        address_line2,
+        city,
+        state_region,
+        postal_code,
+        country
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        full_name = COALESCE(EXCLUDED.full_name, user_autofill_profiles.full_name),
+        email = COALESCE(EXCLUDED.email, user_autofill_profiles.email),
+        phone = COALESCE(EXCLUDED.phone, user_autofill_profiles.phone),
+        company_name = COALESCE(EXCLUDED.company_name, user_autofill_profiles.company_name),
+        billing_name = COALESCE(EXCLUDED.billing_name, user_autofill_profiles.billing_name),
+        address_line1 = COALESCE(EXCLUDED.address_line1, user_autofill_profiles.address_line1),
+        address_line2 = COALESCE(EXCLUDED.address_line2, user_autofill_profiles.address_line2),
+        city = COALESCE(EXCLUDED.city, user_autofill_profiles.city),
+        state_region = COALESCE(EXCLUDED.state_region, user_autofill_profiles.state_region),
+        postal_code = COALESCE(EXCLUDED.postal_code, user_autofill_profiles.postal_code),
+        country = COALESCE(EXCLUDED.country, user_autofill_profiles.country),
+        updated_at = NOW()
+      RETURNING
+        user_id,
+        full_name,
+        email,
+        phone,
+        company_name,
+        billing_name,
+        address_line1,
+        address_line2,
+        city,
+        state_region,
+        postal_code,
+        country,
+        created_at::text,
+        updated_at::text
+    `,
+    [
+      userId,
+      normalized.fullName,
+      normalized.email,
+      normalized.phone,
+      normalized.companyName,
+      normalized.billingName,
+      normalized.addressLine1,
+      normalized.addressLine2,
+      normalized.city,
+      normalized.stateRegion,
+      normalized.postalCode,
+      normalized.country,
+    ],
+  );
+
+  return rowToAutofillProfile(result.rows[0]);
 }
 
 export async function markWebhookProcessed(eventId: string): Promise<boolean> {
@@ -508,6 +681,45 @@ export async function recordLedgerEntryUnique(entry: Omit<Transaction, 'id' | 'c
   }
 
   return recordLedgerEntry(entry);
+}
+
+export async function updateLedgerEntryStatus(params: {
+  userId: string;
+  entryId: string;
+  status: Transaction['status'];
+  stripeObjectId?: string;
+  descriptionSuffix?: string;
+  metadataPatch?: Record<string, string>;
+}): Promise<Transaction | null> {
+  const result = await query<LedgerRow>(
+    `
+      UPDATE ledger_entries
+      SET
+        status = $3,
+        provider_reference_id = COALESCE($4, provider_reference_id),
+        description = CASE
+          WHEN $5::text IS NULL THEN description
+          ELSE description || ' - ' || $5::text
+        END,
+        metadata = COALESCE(metadata, '{}'::jsonb) || COALESCE($6::jsonb, '{}'::jsonb)
+      WHERE id = $1
+        AND user_id = $2
+      RETURNING id, user_id, type, amount::text, currency, direction, status,
+                provider, provider_reference_id, stripe_event_id, description,
+                source_url, merchant, recipient_id, metadata, created_at::text
+    `,
+    [
+      params.entryId,
+      params.userId,
+      params.status,
+      params.stripeObjectId || null,
+      params.descriptionSuffix || null,
+      params.metadataPatch ? JSON.stringify(params.metadataPatch) : null,
+    ],
+  );
+
+  if (!result.rows[0]) return null;
+  return rowToTransaction(result.rows[0]);
 }
 
 export async function checkGuardrails(params: {
@@ -698,4 +910,59 @@ export async function recordAgentTask(params: {
   );
 
   return id;
+}
+
+export async function getLatestPendingAgentTask(params: {
+  userId: string;
+  taskType?: string;
+}): Promise<{
+  id: string;
+  userId: string;
+  taskType: string;
+  intent: string;
+  status: string;
+  input?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+} | null> {
+  const result = await query<AgentTaskRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        task_type,
+        intent,
+        status,
+        input,
+        result,
+        error,
+        created_at::text,
+        updated_at::text
+      FROM agent_tasks
+      WHERE user_id = $1
+        AND status IN ('awaiting_clarification', 'awaiting_approval')
+        AND ($2::text IS NULL OR task_type = $2)
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+    [params.userId, params.taskType || null],
+  );
+
+  if (!result.rows[0]) return null;
+
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    userId: row.user_id,
+    taskType: row.task_type,
+    intent: row.intent,
+    status: row.status,
+    input: row.input || undefined,
+    result: row.result || undefined,
+    error: row.error || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }

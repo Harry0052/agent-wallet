@@ -1,5 +1,6 @@
 export type TaskErrorCode =
   | 'VALIDATION_ERROR'
+  | 'CLAUDE_REASONING_FAILURE'
   | 'OPENAI_PLANNING_FAILURE'
   | 'TINYFISH_RESEARCH_FAILURE'
   | 'POLICY_FAILURE'
@@ -24,6 +25,7 @@ export function classifyTaskError(input: {
   if (input.validation) return 'VALIDATION_ERROR';
 
   const message = input.message.toLowerCase();
+  if (message.includes('claude') || message.includes('anthropic')) return 'CLAUDE_REASONING_FAILURE';
   if (message.includes('openai')) return 'OPENAI_PLANNING_FAILURE';
   if (message.includes('tinyfish') || message.includes('research') || message.includes('findings')) {
     return 'TINYFISH_RESEARCH_FAILURE';

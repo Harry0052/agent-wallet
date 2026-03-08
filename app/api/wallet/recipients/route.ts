@@ -31,7 +31,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { name?: string; stripeAccountId?: string; status?: Recipient['status'] };
+    const body = (await req.json()) as {
+      name?: string;
+      stripeAccountId?: string;
+      status?: Recipient['status'];
+      notes?: string;
+    };
     const name = (body.name || '').trim();
     const stripeAccountId = (body.stripeAccountId || '').trim();
 
@@ -39,7 +44,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'name and stripeAccountId are required' }, { status: 400 });
     }
 
-    const recipient = await addRecipient(getWalletUserId(), name, stripeAccountId, body.status || 'approved');
+    const recipient = await addRecipient(
+      getWalletUserId(),
+      name,
+      stripeAccountId,
+      body.status || 'approved',
+      body.notes,
+    );
     return NextResponse.json({ recipient });
   } catch (error) {
     return NextResponse.json(

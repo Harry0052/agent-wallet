@@ -1,20 +1,29 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, CheckCircle2, Clock3, Compass, Gavel, Landmark, ShieldCheck, Sparkles, XCircle } from 'lucide-react';
 import { useApp } from '@/lib/store';
-import { AgentLogData, AgentStep, ApprovalData, EvidenceData, EvidenceRecord, ReceiptData } from '@/lib/types';
+import { fetchProcurementResearchStatus } from '@/services/procurement';
+import {
+  AgentLogData, AgentStep, EvidenceData, EvidenceRecord, ProcurementFinding, ProcurementResearchLog, ProcurementTaskRecord,
+} from '@/lib/types';
 import { cn, domainFromUrl, firstUrlFromText, fmt, fmtTime } from '@/lib/utils';
 
 type RailCategory =
-  | 'planning'
-  | 'visiting-site'
-  | 'extracting-pricing'
-  | 'comparing-vendors'
-  | 'policy-check'
-  | 'approval-required'
-  | 'purchase-prep'
-  | 'ledger-update';
+  | 'parsing_intent'
+  | 'resolving_missing_fields'
+  | 'checking_recipient'
+  | 'researching_vendors'
+  | 'visiting_site'
+  | 'extracting_pricing'
+  | 'comparing_options'
+  | 'preparing_signup'
+  | 'filling_form'
+  | 'preparing_payment'
+  | 'policy_checks'
+  | 'awaiting_approval'
+  | 'completed'
+  | 'failed';
 
 interface RailLine {
   id: string;
@@ -28,48 +37,67 @@ interface RailLine {
 
 function labelForCategory(category: RailCategory): string {
   switch (category) {
-    case 'planning':
-      return 'Planning';
-    case 'visiting-site':
+    case 'parsing_intent':
+      return 'Parsing Intent';
+    case 'resolving_missing_fields':
+      return 'Resolving Missing Fields';
+    case 'checking_recipient':
+      return 'Checking Recipient';
+    case 'researching_vendors':
+      return 'Researching Vendors';
+    case 'visiting_site':
       return 'Visiting Site';
-    case 'extracting-pricing':
+    case 'extracting_pricing':
       return 'Extracting Pricing';
-    case 'comparing-vendors':
-      return 'Comparing Vendors';
-    case 'policy-check':
-      return 'Policy Check';
-    case 'approval-required':
-      return 'Approval Required';
-    case 'purchase-prep':
-      return 'Purchase Prep';
-    case 'ledger-update':
-      return 'Ledger Update';
+    case 'comparing_options':
+      return 'Comparing Options';
+    case 'preparing_signup':
+      return 'Preparing Sign-up';
+    case 'filling_form':
+      return 'Filling Form';
+    case 'preparing_payment':
+      return 'Preparing Payment';
+    case 'policy_checks':
+      return 'Policy Checks';
+    case 'awaiting_approval':
+      return 'Awaiting Approval';
+    case 'completed':
+      return 'Completed';
+    case 'failed':
+      return 'Failed';
     default:
       return 'Activity';
   }
 }
 
 function categoryForStep(step: AgentStep): RailCategory {
+  const lower = step.description.toLowerCase();
+  if (lower.includes('parsing') || lower.includes('intent')) return 'parsing_intent';
+  if (lower.includes('clarification') || lower.includes('missing')) return 'resolving_missing_fields';
+  if (lower.includes('recipient')) return 'checking_recipient';
   switch (step.type) {
     case 'plan':
-      return 'planning';
+      return 'researching_vendors';
     case 'search':
+      return 'researching_vendors';
     case 'visit':
-      return 'visiting-site';
+      return 'visiting_site';
     case 'extract':
-      return 'extracting-pricing';
+      return 'extracting_pricing';
     case 'compare':
     case 'select':
-      return 'comparing-vendors';
+      return 'comparing_options';
     case 'guardrail':
-      return 'policy-check';
+      return lower.includes('approval') ? 'awaiting_approval' : 'policy_checks';
     case 'checkout':
+      return lower.includes('signup') || lower.includes('sign-in') ? 'preparing_signup' : 'preparing_payment';
     case 'form-fill':
+      return 'filling_form';
     case 'confirm':
     case 'payment':
-      return 'purchase-prep';
+      return 'completed';
     default:
-      return 'planning';
+      return 'researching_vendors';
   }
 }
 
@@ -86,15 +114,15 @@ function statusForRail(isProcessing: boolean, status: string | undefined): {
 
 function iconForLine(line: RailLine) {
   if (line.status === 'error') return <XCircle size={12} />;
-  if (line.status === 'done' && line.category === 'ledger-update') return <Landmark size={12} />;
+  if (line.status === 'done' && line.category === 'completed') return <Landmark size={12} />;
   if (line.status === 'done') return <CheckCircle2 size={12} />;
-  if (line.category === 'approval-required') return <Gavel size={12} />;
+  if (line.category === 'awaiting_approval') return <Gavel size={12} />;
   return <Bot size={12} />;
 }
 
 function lineClass(line: RailLine): string {
   if (line.status === 'error') return 'border-[rgba(196,103,103,0.6)] bg-[rgba(196,103,103,0.14)] text-[var(--aw-danger)]';
-  if (line.category === 'approval-required') return 'border-[rgba(201,165,106,0.7)] bg-[rgba(201,165,106,0.2)] text-[#e6c892]';
+  if (line.category === 'awaiting_approval') return 'border-[rgba(201,165,106,0.7)] bg-[rgba(201,165,106,0.2)] text-[#e6c892]';
   if (line.status === 'done') return 'border-[rgba(88,166,132,0.6)] bg-[rgba(88,166,132,0.14)] text-[var(--aw-success)]';
   return 'border-[rgba(201,165,106,0.6)] bg-[rgba(201,165,106,0.16)] text-[#e6c892]';
 }
@@ -114,6 +142,34 @@ function stepToLine(step: AgentStep): RailLine {
   };
 }
 
+function mapProcurementLog(log: ProcurementResearchLog): RailLine {
+  const lower = log.message.toLowerCase();
+  let category: RailCategory = 'researching_vendors';
+
+  if (log.actionType === 'visit') category = 'visiting_site';
+  else if (log.actionType === 'extract') category = 'extracting_pricing';
+  else if (log.actionType === 'compare') category = 'comparing_options';
+  else if (log.actionType === 'form-fill') category = 'filling_form';
+  else if (log.actionType === 'guardrail') category = 'policy_checks';
+  else if (log.actionType === 'checkout') {
+    category = lower.includes('signup') || lower.includes('sign-in') ? 'preparing_signup' : 'preparing_payment';
+  } else if (log.actionType === 'plan') {
+    if (lower.includes('approval')) category = 'awaiting_approval';
+    else if (lower.includes('failed')) category = 'failed';
+    else category = 'researching_vendors';
+  }
+
+  return {
+    id: `research_log_${log.id}`,
+    timestamp: log.createdAt,
+    category,
+    title: labelForCategory(category),
+    detail: log.message,
+    domain: log.url ? domainFromUrl(log.url) : undefined,
+    status: log.status,
+  };
+}
+
 function dedupeEvidence(records: EvidenceRecord[]): EvidenceRecord[] {
   const seen = new Set<string>();
   const deduped: EvidenceRecord[] = [];
@@ -129,7 +185,53 @@ function dedupeEvidence(records: EvidenceRecord[]): EvidenceRecord[] {
 }
 
 export function AgentRail({ demoMode = false }: { demoMode?: boolean }) {
-  const { activeTask, messages, isProcessing } = useApp();
+  const { activeTask, messages, isProcessing, latestProcurementTask } = useApp();
+  const [realLogs, setRealLogs] = useState<ProcurementResearchLog[]>([]);
+  const [realFindings, setRealFindings] = useState<ProcurementFinding[]>([]);
+  const [liveTask, setLiveTask] = useState<ProcurementTaskRecord | null>(null);
+  const sinceRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!latestProcurementTask?.id) {
+      setRealLogs([]);
+      setRealFindings([]);
+      setLiveTask(null);
+      sinceRef.current = undefined;
+      return;
+    }
+
+    let cancelled = false;
+    const taskId = latestProcurementTask.id;
+
+    const run = async (incremental: boolean) => {
+      try {
+        const status = await fetchProcurementResearchStatus(taskId, incremental ? sinceRef.current : undefined);
+        if (cancelled) return;
+        setLiveTask(status.task);
+        setRealFindings(status.findings);
+        setRealLogs((prev) => {
+          if (!incremental) return status.logs;
+          const merged = [...prev, ...status.logs];
+          const seen = new Set<string>();
+          return merged.filter((log) => {
+            if (seen.has(log.id)) return false;
+            seen.add(log.id);
+            return true;
+          });
+        });
+        sinceRef.current = status.serverTime;
+      } catch {
+        // Keep current feed; no fake fallback entries.
+      }
+    };
+
+    void run(false);
+    const interval = window.setInterval(() => void run(true), 2200);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [latestProcurementTask?.id]);
 
   const stepLines = useMemo<RailLine[]>(() => {
     const mergedSteps: AgentStep[] = [];
@@ -156,60 +258,67 @@ export function AgentRail({ demoMode = false }: { demoMode?: boolean }) {
     return lines;
   }, [messages, activeTask]);
 
-  const syntheticLines = useMemo<RailLine[]>(() => {
-    const lines: RailLine[] = [];
+  const realLines = useMemo<RailLine[]>(() => realLogs.map(mapProcurementLog), [realLogs]);
 
-    for (const message of messages) {
-      if (message.type === 'evidence' && message.data) {
-        const data = message.data as EvidenceData;
-        if (!Array.isArray(data.findings)) continue;
-        const firstSource = data.findings[0];
-        lines.push({
-          id: `${message.id}_evidence`,
-          timestamp: message.timestamp,
-          category: 'extracting-pricing',
-          title: labelForCategory('extracting-pricing'),
-          detail: `${data.findings.length} live pricing finding${data.findings.length === 1 ? '' : 's'} captured.`,
-          domain: firstSource ? domainFromUrl(firstSource.sourceUrl) : undefined,
-          status: 'done',
-        });
-      }
-
-      if (message.type === 'approval' && message.data) {
-        const data = message.data as ApprovalData;
-        lines.push({
-          id: `${message.id}_approval`,
-          timestamp: message.timestamp,
-          category: 'approval-required',
-          title: labelForCategory('approval-required'),
-          detail: `${data.merchant} • ${data.item} • ${fmt(data.amount)}`,
-          status: 'info',
-        });
-      }
-
-      if (message.type === 'receipt' && message.data) {
-        const data = message.data as ReceiptData;
-        lines.push({
-          id: `${message.id}_receipt`,
-          timestamp: message.timestamp,
-          category: 'ledger-update',
-          title: labelForCategory('ledger-update'),
-          detail: `${data.merchant} posted. New balance ${fmt(data.newBalance)}.`,
-          status: 'done',
-        });
-      }
+  const stateLine = useMemo<RailLine | null>(() => {
+    if (!liveTask) return null;
+    if (liveTask.status === 'awaiting_approval') {
+      return {
+        id: `task_state_${liveTask.id}_${liveTask.updatedAt}`,
+        timestamp: liveTask.updatedAt,
+        category: 'awaiting_approval',
+        title: labelForCategory('awaiting_approval'),
+        detail: 'Workflow is paused for approval before continuing.',
+        status: 'info',
+      };
     }
-
-    return lines;
-  }, [messages]);
+    if (liveTask.status === 'failed') {
+      return {
+        id: `task_state_${liveTask.id}_${liveTask.updatedAt}`,
+        timestamp: liveTask.updatedAt,
+        category: 'failed',
+        title: labelForCategory('failed'),
+        detail: liveTask.error || 'Task failed.',
+        status: 'error',
+      };
+    }
+    if (liveTask.status === 'purchase_prepared') {
+      return {
+        id: `task_state_${liveTask.id}_${liveTask.updatedAt}`,
+        timestamp: liveTask.updatedAt,
+        category: 'completed',
+        title: labelForCategory('completed'),
+        detail: 'Autonomous flow completed and recorded in task state.',
+        status: 'done',
+      };
+    }
+    return null;
+  }, [liveTask]);
 
   const feed = useMemo(() => {
-    return [...stepLines, ...syntheticLines]
+    const terminal = stateLine ? [stateLine] : [];
+    return [...stepLines, ...realLines, ...terminal]
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
       .slice(0, demoMode ? 14 : 10);
-  }, [stepLines, syntheticLines, demoMode]);
+  }, [stepLines, realLines, stateLine, demoMode]);
 
   const evidence = useMemo(() => {
+    if (realFindings.length > 0) {
+      const mapped = realFindings.map((finding) => ({
+        vendorName: finding.vendorName,
+        planName: finding.planName,
+        price: finding.monthlyPrice ?? finding.annualPrice ?? 0,
+        billingFrequency: finding.billingFrequency,
+        keyFeatures: finding.notableFeatures,
+        sourceUrl: finding.pricingPageUrl,
+        extractedAt: finding.extractionTimestamp,
+      }));
+
+      return dedupeEvidence(mapped)
+        .sort((a, b) => Date.parse(b.extractedAt) - Date.parse(a.extractedAt))
+        .slice(0, demoMode ? 6 : 4);
+    }
+
     const records: EvidenceRecord[] = [];
     for (const message of messages) {
       if (message.type !== 'evidence' || !message.data) continue;
@@ -221,7 +330,7 @@ export function AgentRail({ demoMode = false }: { demoMode?: boolean }) {
     return dedupeEvidence(records)
       .sort((a, b) => Date.parse(b.extractedAt) - Date.parse(a.extractedAt))
       .slice(0, demoMode ? 6 : 4);
-  }, [messages, demoMode]);
+  }, [realFindings, messages, demoMode]);
 
   const railState = statusForRail(isProcessing, activeTask?.status);
 

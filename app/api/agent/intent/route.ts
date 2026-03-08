@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const status = error instanceof z.ZodError
       ? 400
-      : message.includes('OpenAI')
+      : message.includes('Claude') || message.includes('ANTHROPIC')
         ? 502
         : 500;
     const errorCode = classifyTaskError({

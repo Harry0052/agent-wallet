@@ -8,7 +8,9 @@
       "Bash(kill 3224)",
       "Bash(npm install server-only@latest)",
       "Bash(npx tsc --noEmit)",
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "Bash(lsof -ti:3000)",
+      "Bash(kill 18968)"
     ]
   }
 }

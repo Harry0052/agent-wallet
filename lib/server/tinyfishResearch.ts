@@ -8,12 +8,15 @@ export interface TinyFishProcurementFinding {
   monthlyPrice: number | null;
   annualPrice: number | null;
   billingFrequency: string;
+  contentAvailability: string | null;
+  notes: string | null;
   notableFeatures: string[];
   extractionTimestamp: string;
   raw: Record<string, unknown>;
 }
 
 interface TinyFishVendorResearchResponse {
+  candidates?: unknown;
   options?: unknown;
   pricing?: unknown;
   steps?: unknown;
@@ -106,6 +109,18 @@ function normalizeFindings(raw: unknown, vendorFallback: string): TinyFishProcur
         row.keyFeatures ?? row.features ?? row.highlights,
       );
 
+      const contentAvailability = typeof row.contentAvailability === 'string'
+        ? row.contentAvailability
+        : typeof row.availability === 'string'
+          ? row.availability
+          : null;
+
+      const notes = typeof row.notes === 'string'
+        ? row.notes
+        : typeof row.note === 'string'
+          ? row.note
+          : null;
+
       const extractionTimestamp = typeof row.extractedAt === 'string'
         ? row.extractedAt
         : new Date().toISOString();
@@ -121,12 +136,80 @@ function normalizeFindings(raw: unknown, vendorFallback: string): TinyFishProcur
         monthlyPrice,
         annualPrice,
         billingFrequency,
+        contentAvailability,
+        notes,
         notableFeatures,
         extractionTimestamp,
         raw: row,
       };
     })
     .filter((finding): finding is TinyFishProcurementFinding => Boolean(finding));
+}
+
+function normalizeVendorCandidates(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const names = raw.map((item) => {
+    if (typeof item === 'string') return item.trim();
+    if (item && typeof item === 'object') {
+      const row = item as Record<string, unknown>;
+      if (typeof row.vendor === 'string') return row.vendor.trim();
+      if (typeof row.vendorName === 'string') return row.vendorName.trim();
+      if (typeof row.name === 'string') return row.name.trim();
+    }
+    return '';
+  }).filter(Boolean);
+
+  return Array.from(new Set(names));
+}
+
+export async function discoverTinyFishVendorCandidates(input: {
+  goal: string;
+  category?: string | null;
+  existingTargets?: string[];
+  maxCandidates?: number;
+}): Promise<string[]> {
+  const apiKey = process.env.TINYFISH_API_KEY;
+  if (!apiKey) {
+    throw new Error('TINYFISH_API_KEY is not configured');
+  }
+
+  const base = process.env.TINYFISH_API_BASE_URL || 'https://api.tinyfish.ai/v1';
+  const path = process.env.TINYFISH_VENDOR_DISCOVERY_PATH || '/vendor-discovery';
+
+  const upstream = await fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      goal: input.goal,
+      category: input.category || undefined,
+      existingTargets: input.existingTargets || [],
+      maxCandidates: input.maxCandidates || 10,
+    }),
+    cache: 'no-store',
+  });
+
+  const rawText = await upstream.text();
+  let payload: TinyFishVendorResearchResponse;
+
+  try {
+    payload = JSON.parse(rawText) as TinyFishVendorResearchResponse;
+  } catch {
+    throw new Error(`TinyFish vendor discovery returned non-JSON response: ${rawText.slice(0, 240)}`);
+  }
+
+  if (!upstream.ok) {
+    throw new Error(payload.error || `TinyFish vendor discovery failed (${upstream.status})`);
+  }
+
+  const candidates = normalizeVendorCandidates(payload.candidates ?? payload.data?.candidates);
+  if (candidates.length === 0) {
+    throw new Error('TinyFish vendor discovery returned zero candidates');
+  }
+
+  return candidates.slice(0, input.maxCandidates || 10);
 }
 
 export async function runTinyFishVendorPricingResearch(input: {

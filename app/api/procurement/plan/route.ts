@@ -27,15 +27,15 @@ const RequestSchema = z.object({
 const PlanSchema = z.object({
   normalizedGoal: z.string().trim().min(1),
   category: z.string().trim().min(1),
-  targetVendorCandidates: z.array(z.string().trim().min(1)).max(12),
+  targetVendorCandidates: z.array(z.string().trim().min(1)).max(25),
   budgetConstraint: z.object({
     amount: z.number().nonnegative().nullable(),
     currency: z.literal('USD'),
     period: z.enum(['monthly', 'yearly', 'one_time', 'unknown']),
     rawText: z.string().optional(),
   }),
-  mustHaveFeatures: z.array(z.string().trim().min(1)).max(12),
-  comparisonCriteria: z.array(z.string().trim().min(1)).max(12),
+  mustHaveFeatures: z.array(z.string().trim().min(1)).max(25),
+  comparisonCriteria: z.array(z.string().trim().min(1)).max(25),
   clarificationNeeded: z.boolean(),
   followUpQuestions: z.array(z.string().trim().min(1)).max(3),
 }).superRefine((value, ctx) => {
@@ -81,7 +81,7 @@ function planningPrompt(userMessage: string, wallet?: z.infer<typeof WalletInput
     'You are the procurement planning layer for Agent Wallet.',
     'Return structured planning JSON only.',
     'Rules:',
-    '- OpenAI is for reasoning only; do not fabricate vendor prices, discounts, plan facts, feature claims, or availability facts.',
+    '- Claude is for reasoning only; do not fabricate vendor prices, discounts, plan facts, feature claims, or availability facts.',
     '- You may suggest vendor candidates by name, but do not include any price facts or assertions about those vendors.',
     '- Normalize the user goal and extract budget constraints if clearly stated.',
     '- If key inputs are missing, set clarificationNeeded=true and provide concise follow-up questions.',
@@ -165,38 +165,32 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
     if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is not configured');
+      throw new Error('CLAUDE_API_KEY is not configured (set ANTHROPIC_API_KEY or CLAUDE_API_KEY)');
     }
 
-    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-latest';
 
-    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
+    const completion = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model,
-        temperature: 0.1,
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'procurement_planning_output',
-            strict: true,
-            schema: responseJsonSchema(),
-          },
-        },
+        temperature: 0,
+        max_tokens: 1200,
         messages: [
           {
-            role: 'system',
-            content: 'You are a procurement reasoning planner that outputs only valid JSON matching the given schema.',
-          },
-          {
             role: 'user',
-            content: planningPrompt(userMessage, input.wallet),
+            content: [
+              'You are a procurement reasoning planner that outputs only valid JSON matching this schema:',
+              JSON.stringify(responseJsonSchema()),
+              planningPrompt(userMessage, input.wallet),
+            ].join('\n'),
           },
         ],
       }),
@@ -205,26 +199,32 @@ export async function POST(req: NextRequest) {
 
     const completionText = await completion.text();
     if (!completion.ok) {
-      throw new Error(`OpenAI planning request failed (${completion.status}): ${completionText.slice(0, 280)}`);
+      throw new Error(`Claude planning request failed (${completion.status}): ${completionText.slice(0, 280)}`);
     }
 
-    let parsedCompletion: { choices?: Array<{ message?: { content?: string } }> };
+    let parsedCompletion: { content?: Array<{ type?: string; text?: string }> };
     try {
-      parsedCompletion = JSON.parse(completionText) as { choices?: Array<{ message?: { content?: string } }> };
+      parsedCompletion = JSON.parse(completionText) as { content?: Array<{ type?: string; text?: string }> };
     } catch {
-      throw new Error('OpenAI returned a non-JSON payload for procurement planning');
+      throw new Error('Claude returned a non-JSON payload for procurement planning');
     }
 
-    const content = parsedCompletion.choices?.[0]?.message?.content;
+    const content = parsedCompletion.content
+      ?.filter((item) => item.type === 'text' && typeof item.text === 'string')
+      .map((item) => item.text as string)
+      .join('\n')
+      .trim();
     if (!content) {
-      throw new Error('OpenAI returned empty procurement planning content');
+      throw new Error('Claude returned empty procurement planning content');
     }
 
     let rawPlan: unknown;
     try {
-      rawPlan = JSON.parse(content);
+      const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      const jsonText = fenced?.[1]?.trim() || content;
+      rawPlan = JSON.parse(jsonText);
     } catch {
-      throw new Error('OpenAI planning content was not valid JSON');
+      throw new Error('Claude planning content was not valid JSON');
     }
 
     const plan = PlanSchema.parse(rawPlan);
@@ -289,6 +289,7 @@ export async function POST(req: NextRequest) {
     const status = error instanceof z.ZodError
       ? (taskId ? 502 : 400)
       : message.includes('OpenAI')
+        || message.includes('Claude')
         ? 502
         : 500;
 

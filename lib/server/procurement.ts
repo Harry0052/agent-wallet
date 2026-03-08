@@ -31,6 +31,8 @@ type ProcurementFindingRow = {
   monthly_price: string | null;
   annual_price: string | null;
   billing_frequency: string;
+  content_availability: string | null;
+  notes: string | null;
   notable_features: unknown;
   extraction_timestamp: string;
   created_at: string;
@@ -110,6 +112,8 @@ function rowToFinding(row: ProcurementFindingRow): ProcurementFinding {
     monthlyPrice: row.monthly_price !== null ? Number(row.monthly_price) : null,
     annualPrice: row.annual_price !== null ? Number(row.annual_price) : null,
     billingFrequency: row.billing_frequency,
+    contentAvailability: row.content_availability || null,
+    notes: row.notes || null,
     notableFeatures: toStringArray(row.notable_features),
     extractionTimestamp: row.extraction_timestamp,
     createdAt: row.created_at,
@@ -244,7 +248,7 @@ export async function listProcurementFindings(params: {
     `
       SELECT
         id, task_id, user_id, vendor_name, pricing_page_url, plan_name,
-        monthly_price::text, annual_price::text, billing_frequency, notable_features,
+        monthly_price::text, annual_price::text, billing_frequency, content_availability, notes, notable_features,
         extraction_timestamp::text, created_at::text
       FROM procurement_findings
       WHERE task_id = $1 AND user_id = $2
@@ -265,6 +269,8 @@ export async function createProcurementFinding(params: {
   monthlyPrice: number | null;
   annualPrice: number | null;
   billingFrequency: string;
+  contentAvailability?: string | null;
+  notes?: string | null;
   notableFeatures: string[];
   extractionTimestamp: string;
   raw?: Record<string, unknown>;
@@ -273,17 +279,17 @@ export async function createProcurementFinding(params: {
     `
       INSERT INTO procurement_findings (
         id, task_id, user_id, vendor_name, pricing_page_url,
-        plan_name, monthly_price, annual_price, billing_frequency,
+        plan_name, monthly_price, annual_price, billing_frequency, content_availability, notes,
         notable_features, extraction_timestamp, raw
       )
       VALUES (
         $1, $2, $3, $4, $5,
-        $6, $7, $8, $9,
-        $10::jsonb, $11::timestamptz, $12::jsonb
+        $6, $7, $8, $9, $10, $11,
+        $12::jsonb, $13::timestamptz, $14::jsonb
       )
       RETURNING
         id, task_id, user_id, vendor_name, pricing_page_url,
-        plan_name, monthly_price::text, annual_price::text, billing_frequency,
+        plan_name, monthly_price::text, annual_price::text, billing_frequency, content_availability, notes,
         notable_features, extraction_timestamp::text, created_at::text
     `,
     [
@@ -296,6 +302,8 @@ export async function createProcurementFinding(params: {
       params.monthlyPrice,
       params.annualPrice,
       params.billingFrequency,
+      params.contentAvailability || null,
+      params.notes || null,
       JSON.stringify(params.notableFeatures),
       params.extractionTimestamp,
       params.raw ? JSON.stringify(params.raw) : null,

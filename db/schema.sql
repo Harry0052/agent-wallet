@@ -22,11 +22,29 @@ CREATE TABLE IF NOT EXISTS recipients (
   name TEXT NOT NULL,
   stripe_account_id TEXT NOT NULL,
   default_currency TEXT NOT NULL DEFAULT 'usd',
+  notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_recipients_user_name
 ON recipients (user_id, lower(name));
+
+CREATE TABLE IF NOT EXISTS user_autofill_profiles (
+  user_id TEXT PRIMARY KEY,
+  full_name TEXT,
+  email TEXT,
+  phone TEXT,
+  company_name TEXT,
+  billing_name TEXT,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  city TEXT,
+  state_region TEXT,
+  postal_code TEXT,
+  country TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS ledger_entries (
   id TEXT PRIMARY KEY,
@@ -132,6 +150,8 @@ CREATE TABLE IF NOT EXISTS procurement_findings (
   monthly_price NUMERIC(12, 2),
   annual_price NUMERIC(12, 2),
   billing_frequency TEXT NOT NULL,
+  content_availability TEXT,
+  notes TEXT,
   notable_features JSONB NOT NULL,
   extraction_timestamp TIMESTAMPTZ NOT NULL,
   raw JSONB,

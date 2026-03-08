@@ -62,6 +62,8 @@ function optionFromFinding(finding: Awaited<ReturnType<typeof listProcurementFin
     monthlyPrice: finding.monthlyPrice,
     annualPrice: finding.annualPrice,
     billingFrequency: finding.billingFrequency,
+    contentAvailability: finding.contentAvailability || null,
+    notes: finding.notes || null,
     pricingPageUrl: finding.pricingPageUrl,
     notableFeatures: finding.notableFeatures,
     extractionTimestamp: finding.extractionTimestamp,
@@ -223,9 +225,15 @@ export async function POST(req: NextRequest) {
       budgetLimit: comparisonTask.budgetLimit,
       budgetAssessment: evaluation.budgetAssessment,
       noFitExplanation,
+      confidence: evaluation.confidence,
+      exceptions: evaluation.exceptions,
       winner: winner ? optionFromFinding(winner) : null,
       alternatives: alternatives.map(optionFromFinding),
       whyWinner: evaluation.winnerReasons,
+      evidenceLinks: Array.from(new Set([
+        ...(winner ? [winner.pricingPageUrl] : []),
+        ...alternatives.map((item) => item.pricingPageUrl),
+      ])),
       policy,
     };
 

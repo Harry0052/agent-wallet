@@ -3,9 +3,11 @@ import type { ProcurementFinding, ProcurementTaskRecord } from '@/lib/types';
 
 const EvaluationSchema = z.object({
   winnerFindingId: z.string().trim().min(1).nullable(),
-  alternativeFindingIds: z.array(z.string().trim().min(1)).max(3),
-  winnerReasons: z.array(z.string().trim().min(1)).max(5),
+  alternativeFindingIds: z.array(z.string().trim().min(1)).max(15),
+  winnerReasons: z.array(z.string().trim().min(1)).max(15),
   budgetAssessment: z.enum(['fits_budget', 'mixed', 'over_budget', 'unknown']),
+  confidence: z.number().min(0).max(1),
+  exceptions: z.array(z.string().trim().min(1)).max(15).default([]),
   noFitExplanation: z.string().trim().optional(),
 });
 
@@ -29,9 +31,18 @@ function responseJsonSchema() {
         type: 'string',
         enum: ['fits_budget', 'mixed', 'over_budget', 'unknown'],
       },
+      confidence: {
+        type: 'number',
+        minimum: 0,
+        maximum: 1,
+      },
+      exceptions: {
+        type: 'array',
+        items: { type: 'string' },
+      },
       noFitExplanation: { type: 'string' },
     },
-    required: ['winnerFindingId', 'alternativeFindingIds', 'winnerReasons', 'budgetAssessment'],
+    required: ['winnerFindingId', 'alternativeFindingIds', 'winnerReasons', 'budgetAssessment', 'confidence', 'exceptions'],
   };
 }
 
@@ -61,6 +72,8 @@ function evaluationPrompt(task: ProcurementTaskRecord, findings: ProcurementFind
     '- Rank by budget constraint, must-have features, billing structure, and category fit.',
     '- If no option fits budget, set winnerFindingId to null and explain in noFitExplanation.',
     '- winnerReasons must be concise and tied to provided finding data.',
+    '- confidence must reflect evidence quality and completeness of findings.',
+    '- exceptions should list caveats (missing availability, missing monthly price, blocked/failed vendors).',
     `Task goal: ${task.goal}`,
     `Category: ${task.category || task.planningOutput.category || 'unknown'}`,
     `Budget amount: ${task.budgetLimit === null ? 'not specified' : task.budgetLimit}`,
@@ -82,7 +95,7 @@ function normalizeSelection(
 
   const alternativeFindingIds = evaluation.alternativeFindingIds
     .filter((id) => findingIds.has(id) && id !== winner)
-    .slice(0, 3);
+    .slice(0, 10);
 
   return {
     ...evaluation,
@@ -95,41 +108,36 @@ export async function evaluateProcurementFindings(params: {
   task: ProcurementTaskRecord;
   findings: ProcurementFinding[];
 }): Promise<ProcurementEvaluation> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY is not configured');
+    throw new Error('CLAUDE_API_KEY is not configured (set ANTHROPIC_API_KEY or CLAUDE_API_KEY)');
   }
 
   if (params.findings.length === 0) {
     throw new Error('No findings available for comparison');
   }
 
-  const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
-  const completion = await fetch('https://api.openai.com/v1/chat/completions', {
+  const model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-latest';
+  const completion = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       model,
-      temperature: 0.1,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'procurement_comparison_output',
-          strict: true,
-          schema: responseJsonSchema(),
-        },
-      },
+      temperature: 0,
+      max_tokens: 1200,
       messages: [
         {
-          role: 'system',
-          content: 'You are a procurement evaluator that outputs only valid JSON matching the schema.',
-        },
-        {
           role: 'user',
-          content: evaluationPrompt(params.task, params.findings),
+          content: [
+            'You are a procurement evaluator that outputs only valid JSON matching this JSON schema.',
+            JSON.stringify(responseJsonSchema()),
+            '',
+            evaluationPrompt(params.task, params.findings),
+          ].join('\n'),
         },
       ],
     }),
@@ -138,26 +146,32 @@ export async function evaluateProcurementFindings(params: {
 
   const completionText = await completion.text();
   if (!completion.ok) {
-    throw new Error(`OpenAI comparison request failed (${completion.status}): ${completionText.slice(0, 280)}`);
+    throw new Error(`Claude comparison request failed (${completion.status}): ${completionText.slice(0, 280)}`);
   }
 
-  let parsedCompletion: { choices?: Array<{ message?: { content?: string } }> };
+  let parsedCompletion: { content?: Array<{ type?: string; text?: string }> };
   try {
-    parsedCompletion = JSON.parse(completionText) as { choices?: Array<{ message?: { content?: string } }> };
+    parsedCompletion = JSON.parse(completionText) as { content?: Array<{ type?: string; text?: string }> };
   } catch {
-    throw new Error('OpenAI returned non-JSON payload for procurement comparison');
+    throw new Error('Claude returned non-JSON payload envelope for procurement comparison');
   }
 
-  const content = parsedCompletion.choices?.[0]?.message?.content;
+  const content = parsedCompletion.content
+    ?.filter((item) => item.type === 'text' && typeof item.text === 'string')
+    .map((item) => item.text as string)
+    .join('\n')
+    .trim();
   if (!content) {
-    throw new Error('OpenAI returned empty procurement comparison content');
+    throw new Error('Claude returned empty procurement comparison content');
   }
 
   let rawEvaluation: unknown;
   try {
-    rawEvaluation = JSON.parse(content);
+    const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const jsonText = fenced?.[1]?.trim() || content;
+    rawEvaluation = JSON.parse(jsonText);
   } catch {
-    throw new Error('OpenAI procurement comparison content was not valid JSON');
+    throw new Error('Claude procurement comparison content was not valid JSON');
   }
 
   const parsed = EvaluationSchema.parse(rawEvaluation);
