@@ -35,6 +35,7 @@ export interface Transaction {
   currency: string;
   direction: TransactionDirection;
   stripeObjectId?: string;
+  stripeEventId?: string;
   description: string;
   merchant?: string;
   recipientId?: string;

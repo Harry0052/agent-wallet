@@ -1,4 +1,5 @@
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
-export { GET, POST } from '../webhook/route';
-
+export { POST } from '../webhook/route';

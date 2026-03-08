@@ -28,6 +28,7 @@ type LedgerRow = {
   status: Transaction['status'];
   provider: string | null;
   provider_reference_id: string | null;
+  stripe_event_id: string | null;
   description: string;
   source_url: string | null;
   merchant: string | null;
@@ -73,6 +74,7 @@ function rowToTransaction(row: LedgerRow): Transaction {
     currency: row.currency,
     direction: row.direction,
     stripeObjectId: row.provider_reference_id || undefined,
+    stripeEventId: row.stripe_event_id || undefined,
     description: row.description,
     merchant: row.merchant || undefined,
     recipientId: row.recipient_id || undefined,
@@ -161,8 +163,8 @@ export async function getWallet(userId: string): Promise<Wallet> {
   const txResult = await query<LedgerRow>(
     `
       SELECT id, user_id, type, amount::text, currency, direction, status,
-             provider, provider_reference_id, description, source_url, merchant,
-             recipient_id, metadata, created_at::text
+             provider, provider_reference_id, stripe_event_id, description,
+             source_url, merchant, recipient_id, metadata, created_at::text
       FROM ledger_entries
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -315,6 +317,7 @@ export async function recordTopupCredit(params: {
   currency: string;
   stripeObjectId: string;
   source: Transaction['source'];
+  stripeEventId?: string;
   description: string;
   metadata?: Record<string, string>;
 }): Promise<Transaction> {
@@ -325,6 +328,7 @@ export async function recordTopupCredit(params: {
     currency: params.currency,
     direction: 'credit',
     stripeObjectId: params.stripeObjectId,
+    stripeEventId: params.stripeEventId,
     description: params.description,
     status: 'succeeded',
     source: params.source,
@@ -339,13 +343,13 @@ export async function recordLedgerEntry(entry: Omit<Transaction, 'id' | 'created
     `
       INSERT INTO ledger_entries (
         id, user_id, type, amount, currency, direction, status,
-        provider, provider_reference_id, description, source_url,
-        merchant, recipient_id, metadata
+        provider, provider_reference_id, stripe_event_id, description,
+        source_url, merchant, recipient_id, metadata
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb)
       RETURNING id, user_id, type, amount::text, currency, direction, status,
-                provider, provider_reference_id, description, source_url, merchant,
-                recipient_id, metadata, created_at::text
+                provider, provider_reference_id, stripe_event_id, description,
+                source_url, merchant, recipient_id, metadata, created_at::text
     `,
     [
       id,
@@ -357,6 +361,7 @@ export async function recordLedgerEntry(entry: Omit<Transaction, 'id' | 'created
       entry.status,
       entry.source || null,
       entry.stripeObjectId || null,
+      entry.stripeEventId || null,
       entry.description,
       entry.sourceUrl || null,
       entry.merchant || null,
@@ -376,8 +381,8 @@ export async function recordLedgerEntryUnique(entry: Omit<Transaction, 'id' | 'c
   const existing = await query<LedgerRow>(
     `
       SELECT id, user_id, type, amount::text, currency, direction, status,
-             provider, provider_reference_id, description, source_url, merchant,
-             recipient_id, metadata, created_at::text
+             provider, provider_reference_id, stripe_event_id, description,
+             source_url, merchant, recipient_id, metadata, created_at::text
       FROM ledger_entries
       WHERE user_id = $1
         AND type = $2

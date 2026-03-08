@@ -86,6 +86,11 @@ export async function ensureSchema(): Promise<void> {
     `);
 
     await p.query(`
+      ALTER TABLE ledger_entries
+      ADD COLUMN IF NOT EXISTS stripe_event_id TEXT;
+    `);
+
+    await p.query(`
       CREATE TABLE IF NOT EXISTS stripe_webhook_events (
         id TEXT PRIMARY KEY,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
