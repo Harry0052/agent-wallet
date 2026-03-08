@@ -1,49 +1,47 @@
 'use client';
 
-import { ChatMessage as Msg, OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData } from '@/lib/types';
+import { ChatMessage as Msg, OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData, EvidenceData } from '@/lib/types';
 import { useApp } from '@/lib/store';
-import { fmt, fmtTime, cn } from '@/lib/utils';
-
-// ── Inline components for special message types ────────────
+import { fmt, fmtTime, cn, domainFromUrl } from '@/lib/utils';
 
 function OptionCards({ data }: { data: OptionsData }) {
   const { selectOption } = useApp();
 
   return (
-    <div className="space-y-2 mt-2">
-      {data.options.map((opt) => {
-        const isRec = opt.id === data.recommendedId;
+    <div className="space-y-2.5 mt-3">
+      {data.options.map((option) => {
+        const recommended = option.id === data.recommendedId;
         return (
           <button
-            key={opt.id}
-            onClick={() => selectOption(opt)}
+            key={option.id}
+            onClick={() => selectOption(option)}
             className={cn(
-              'w-full text-left p-3 rounded-lg border transition-all',
-              isRec
-                ? 'bg-green-600/10 border-green-600/50 hover:bg-green-600/20'
-                : 'bg-gray-700/30 border-gray-600/30 hover:bg-gray-700/50',
+              'w-full rounded-2xl border px-3.5 py-3 text-left transition-all duration-200',
+              recommended
+                ? 'border-[rgba(201,165,106,0.7)] bg-[rgba(201,165,106,0.14)] shadow-[0_10px_24px_rgba(201,165,106,0.18)]'
+                : 'border-[var(--aw-border)] bg-black/15 hover:border-[var(--aw-border-strong)] hover:bg-white/[0.04]'
             )}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-white text-sm">{opt.name}</span>
-                  {isRec && (
-                    <span className="text-[10px] uppercase tracking-wider bg-green-600/30 text-green-300 px-1.5 py-0.5 rounded">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-[var(--aw-text)]">{option.name}</span>
+                  {recommended && (
+                    <span className="rounded-full border border-[rgba(201,165,106,0.6)] bg-[rgba(201,165,106,0.22)] px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[#e6cb9d]">
                       Best Match
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">{opt.item}</p>
-                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                  {opt.distance && <span>{opt.distance}</span>}
-                  {opt.rating && <span>{'*'.repeat(Math.round(opt.rating))} {opt.rating}</span>}
-                  {opt.tags && opt.tags.slice(0, 2).map((t) => (
-                    <span key={t} className="text-gray-500">{t}</span>
+                <p className="mt-0.5 text-sm text-[var(--aw-text-soft)]">{option.item}</p>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--aw-text-muted)] flex-wrap">
+                  {option.distance && <span>{option.distance}</span>}
+                  {option.rating && <span>{option.rating.toFixed(1)} rating</span>}
+                  {option.tags && option.tags.slice(0, 2).map((tag) => (
+                    <span key={tag} className="rounded-full border border-[var(--aw-border)] px-1.5 py-0.5">{tag}</span>
                   ))}
                 </div>
               </div>
-              <p className="text-lg font-bold text-white whitespace-nowrap">{fmt(opt.price)}</p>
+              <p className="text-base font-semibold text-[#ecd8b4] whitespace-nowrap">{fmt(option.price)}</p>
             </div>
           </button>
         );
@@ -56,24 +54,24 @@ function ApprovalCard({ data }: { data: ApprovalData }) {
   const { approveTask, rejectTask } = useApp();
 
   return (
-    <div className="mt-2 bg-yellow-600/10 border border-yellow-600/40 rounded-lg p-3 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium text-white text-sm">{data.merchant}</p>
-          <p className="text-xs text-gray-400">{data.item}</p>
+    <div className="mt-3 rounded-2xl border border-[rgba(201,165,106,0.56)] bg-[rgba(201,165,106,0.13)] p-3.5 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--aw-text)] truncate">{data.merchant}</p>
+          <p className="text-xs text-[var(--aw-text-soft)] truncate">{data.item}</p>
         </div>
-        <p className="text-xl font-bold text-white">{fmt(data.amount)}</p>
+        <p className="text-lg font-semibold text-[#ecd8b4]">{fmt(data.amount)}</p>
       </div>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => approveTask(data.taskId)}
-          className="flex-1 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-semibold text-white transition-colors"
+          className="aw-button-primary py-2 text-xs"
         >
           Approve
         </button>
         <button
           onClick={() => rejectTask(data.taskId)}
-          className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-300 transition-colors"
+          className="aw-button-secondary py-2 text-xs"
         >
           Reject
         </button>
@@ -84,20 +82,20 @@ function ApprovalCard({ data }: { data: ApprovalData }) {
 
 function ReceiptCard({ data }: { data: ReceiptData }) {
   return (
-    <div className="mt-2 bg-green-600/10 border border-green-600/40 rounded-lg p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium text-white text-sm">{data.merchant}</p>
-          <p className="text-xs text-gray-400">{data.item}</p>
+    <div className="mt-3 rounded-2xl border border-[rgba(88,166,132,0.6)] bg-[rgba(88,166,132,0.14)] p-3.5 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--aw-text)] truncate">{data.merchant}</p>
+          <p className="text-xs text-[var(--aw-text-soft)] truncate">{data.item}</p>
         </div>
-        <p className="text-lg font-bold text-green-300">-{fmt(data.amount)}</p>
+        <p className="text-sm font-semibold text-[#9cd0ba]">-{fmt(data.amount)}</p>
       </div>
-      <div className="border-t border-green-600/30 pt-2 space-y-1 text-xs">
-        <div className="flex justify-between text-gray-400">
+      <div className="space-y-1 border-t border-[rgba(88,166,132,0.45)] pt-2 text-xs">
+        <div className="flex justify-between text-[var(--aw-text-soft)]">
           <span>Previous balance</span>
           <span>{fmt(data.previousBalance)}</span>
         </div>
-        <div className="flex justify-between text-white font-medium">
+        <div className="flex justify-between text-[var(--aw-text)] font-medium">
           <span>New balance</span>
           <span>{fmt(data.newBalance)}</span>
         </div>
@@ -110,91 +108,116 @@ function FundingCard({ data }: { data: FundingData }) {
   const { startFunding } = useApp();
 
   return (
-    <div className="mt-2 bg-blue-600/10 border border-blue-600/40 rounded-lg p-3 space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="mt-3 rounded-2xl border border-[rgba(201,165,106,0.5)] bg-[rgba(201,165,106,0.1)] p-3.5 space-y-3">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="font-medium text-white text-sm">Wallet top-up</p>
-          <p className="text-xs text-gray-400">Stripe checkout with Apple Pay support</p>
+          <p className="text-sm font-semibold text-[var(--aw-text)]">Wallet Top-Up</p>
+          <p className="text-xs text-[var(--aw-text-soft)]">Stripe Checkout (Apple Pay if enabled)</p>
         </div>
-        <p className="text-xl font-bold text-white">{fmt(data.amount)}</p>
+        <p className="text-lg font-semibold text-[#ecd8b4]">{fmt(data.amount)}</p>
       </div>
       <button
         onClick={() => void startFunding(data.amount)}
-        className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-semibold text-white transition-colors"
+        className="aw-button-primary w-full py-2 text-sm"
       >
-        Continue to Stripe
+        Continue To Stripe
       </button>
     </div>
   );
 }
 
 function AgentLog({ data }: { data: AgentLogData }) {
-  const icons: Record<string, string> = {
-    search: 'Search', visit: 'Visit', extract: 'Extract', compare: 'Compare',
-    select: 'Select', checkout: 'Checkout', 'form-fill': 'Form', confirm: 'Confirm', plan: 'Plan', guardrail: 'Guardrail', payment: 'Payment',
-  };
-
   return (
-    <div className="mt-2 space-y-1.5 text-xs border-l-2 border-blue-600/40 pl-3">
-      {data.steps.map((s) => (
-        <div key={s.id} className="flex items-start gap-2 text-gray-400">
-          <span className="flex-shrink-0 text-[10px] uppercase tracking-wide text-gray-500 min-w-[56px]">
-            {icons[s.type] || 'Step'}
-          </span>
-          <span className="flex-1">{s.description}</span>
+    <div className="mt-3 space-y-2 rounded-2xl border border-[var(--aw-border)] bg-black/20 p-3">
+      {data.steps.map((step) => (
+        <div key={step.id} className="flex items-start gap-2">
+          <span
+            className={cn(
+              'mt-1 h-2 w-2 rounded-full',
+              step.status === 'error' ? 'bg-[var(--aw-danger)]' : step.status === 'done' ? 'bg-[var(--aw-success)]' : 'aw-dot-live'
+            )}
+          />
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">{step.type}</p>
+            <p className="text-xs text-[var(--aw-text-soft)] leading-5">{step.description}</p>
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-function ThinkingIndicator() {
+function EvidencePanel({ data }: { data: EvidenceData }) {
   return (
-    <div className="flex items-center gap-1.5 mt-1">
-      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+    <div className="mt-3 space-y-2">
+      {data.findings.slice(0, 4).map((finding, index) => {
+        const features = Array.isArray(finding.keyFeatures) ? finding.keyFeatures : [];
+        return (
+          <div key={`${finding.vendorName}_${finding.planName}_${finding.extractedAt}_${index}`} className="rounded-xl border border-[var(--aw-border)] bg-black/20 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">
+                {domainFromUrl(finding.sourceUrl) || 'source'}
+              </p>
+              <p className="text-xs text-[#e7d0a8]">{fmt(finding.price)} / {finding.billingFrequency}</p>
+            </div>
+            <p className="mt-1 text-sm font-semibold text-[var(--aw-text)]">{finding.vendorName} · {finding.planName}</p>
+            {features.length > 0 && (
+              <p className="mt-1 text-xs text-[var(--aw-text-soft)]">{features.slice(0, 2).join(' • ')}</p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// ── Main component ─────────────────────────────────────────
+function ThinkingIndicator() {
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <div className="h-1.5 w-1.5 rounded-full bg-[#dfc08a] animate-pulse" />
+      <div className="h-1.5 w-1.5 rounded-full bg-[#dfc08a] animate-pulse" style={{ animationDelay: '0.2s' }} />
+      <div className="h-1.5 w-1.5 rounded-full bg-[#dfc08a] animate-pulse" style={{ animationDelay: '0.4s' }} />
+    </div>
+  );
+}
+
+function renderMessageText(content: string) {
+  return content.split(/(\*\*[^*]+\*\*)/g).map((part, index) => (
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={index} className="font-semibold text-[#f5dfb6]">{part.slice(2, -2)}</strong>
+      : part
+  ));
+}
 
 export function ChatMessageBubble({ message }: { message: Msg }) {
   const isUser = message.role === 'user';
 
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
-      <div
+      <article
         className={cn(
-          'max-w-[85%] rounded-2xl px-4 py-2.5',
+          'max-w-[90%] rounded-[20px] border px-4 py-3 md:max-w-[85%]',
           isUser
-            ? 'bg-blue-600 text-white rounded-br-md'
-            : 'bg-gray-800 text-gray-100 rounded-bl-md border border-gray-700/50',
+            ? 'border-[rgba(201,165,106,0.56)] bg-[linear-gradient(145deg,rgba(201,165,106,0.24),rgba(201,165,106,0.08))] text-[var(--aw-text)]'
+            : 'border-[var(--aw-border)] bg-black/20 text-[var(--aw-text)]'
         )}
       >
-        {/* Text content — render bold markdown */}
         <p className="text-sm leading-relaxed whitespace-pre-wrap">
-          {message.content.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-            part.startsWith('**') && part.endsWith('**')
-              ? <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
-              : part
-          )}
+          {renderMessageText(message.content)}
         </p>
 
-        {/* Special content */}
         {message.type === 'thinking' && <ThinkingIndicator />}
         {message.type === 'options' && message.data && <OptionCards data={message.data as OptionsData} />}
         {message.type === 'approval' && message.data && <ApprovalCard data={message.data as ApprovalData} />}
         {message.type === 'receipt' && message.data && <ReceiptCard data={message.data as ReceiptData} />}
         {message.type === 'funding' && message.data && <FundingCard data={message.data as FundingData} />}
         {message.type === 'agent-log' && message.data && <AgentLog data={message.data as AgentLogData} />}
+        {message.type === 'evidence' && message.data && <EvidencePanel data={message.data as EvidenceData} />}
 
-        {/* Timestamp */}
-        <p className={cn('text-[10px] mt-1', isUser ? 'text-blue-200' : 'text-gray-500')}>
+        <p className={cn('mt-1.5 text-[10px]', isUser ? 'text-[#ead7b6]' : 'text-[var(--aw-text-muted)]')}>
           {fmtTime(message.timestamp)}
         </p>
-      </div>
+      </article>
     </div>
   );
 }

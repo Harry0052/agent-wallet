@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { CreditCard, History, Settings2 } from 'lucide-react';
 import { useApp } from '@/lib/store';
 import { fmt } from '@/lib/utils';
 import { getDailySpent, getMonthlySpent } from '@/services/wallet';
@@ -11,9 +12,9 @@ export function WalletCard() {
   const [amount, setAmount] = useState('');
 
   const handleAdd = () => {
-    const val = parseFloat(amount);
-    if (val > 0) {
-      addFunds(val);
+    const value = parseFloat(amount);
+    if (value > 0) {
+      addFunds(value);
       setAmount('');
       setShowAdd(false);
     }
@@ -21,89 +22,91 @@ export function WalletCard() {
 
   const dailySpent = getDailySpent(wallet);
   const monthlySpent = getMonthlySpent(wallet);
-  const pct = wallet.settings.monthlyBudget > 0
+  const usagePct = wallet.settings.monthlyBudget > 0
     ? Math.min((monthlySpent / wallet.settings.monthlyBudget) * 100, 100)
     : 0;
 
   return (
-    <div className="bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700/50 rounded-2xl p-5 space-y-4">
-      {/* Balance */}
-      <div className="text-center space-y-1">
-        <p className="text-xs uppercase tracking-wider text-gray-400">Wallet Balance</p>
-        <p className="text-4xl font-bold text-white">{fmt(wallet.balance)}</p>
+    <section className="aw-surface p-5 space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="aw-kicker">Wallet Core</p>
+          <p className="mt-1 text-3xl font-semibold tracking-tight text-[var(--aw-text)]">{fmt(wallet.balance)}</p>
+        </div>
+        <span className="aw-status-chip" data-state={wallet.balance > 0 ? 'ok' : 'alert'}>
+          {wallet.balance > 0 ? 'Funded' : 'Needs Funds'}
+        </span>
       </div>
 
-      {/* Monthly budget bar */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-xs text-gray-400">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-[var(--aw-text-soft)]">
           <span>Monthly spend</span>
           <span>{fmt(monthlySpent)} / {fmt(wallet.settings.monthlyBudget)}</span>
         </div>
-        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${pct}%`,
-              background: pct > 80 ? '#ef4444' : pct > 50 ? '#f59e0b' : '#22c55e',
-            }}
-          />
+        <div className="aw-progress">
+          <span style={{ width: `${usagePct}%` }} />
         </div>
       </div>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="bg-gray-700/30 rounded-lg py-2">
-          <p className="text-xs text-gray-400">Max tx</p>
-          <p className="text-sm font-semibold text-white">{fmt(wallet.settings.maxTransaction)}</p>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-xl border border-[var(--aw-border)] bg-black/15 px-3 py-2.5">
+          <p className="text-[var(--aw-text-muted)]">Max transaction</p>
+          <p className="mt-1 text-sm font-semibold text-[var(--aw-text)]">{fmt(wallet.settings.maxTransaction)}</p>
         </div>
-        <div className="bg-gray-700/30 rounded-lg py-2">
-          <p className="text-xs text-gray-400">Daily limit</p>
-          <p className="text-sm font-semibold text-white">{fmt(dailySpent)} / {fmt(wallet.settings.dailyLimit)}</p>
+        <div className="rounded-xl border border-[var(--aw-border)] bg-black/15 px-3 py-2.5">
+          <p className="text-[var(--aw-text-muted)]">Daily limit</p>
+          <p className="mt-1 text-sm font-semibold text-[var(--aw-text)]">{fmt(dailySpent)} / {fmt(wallet.settings.dailyLimit)}</p>
         </div>
       </div>
 
-      {/* Add funds */}
       {showAdd ? (
-        <div className="flex gap-2">
+        <div className="space-y-2">
           <input
             type="number"
             min="1"
-            placeholder="Amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            className="flex-1 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:border-green-500 focus:outline-none"
+            placeholder="Top-up amount"
+            className="aw-input h-10 text-sm"
             autoFocus
           />
-          <button onClick={handleAdd} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium text-white transition-colors">
-            Add
-          </button>
-          <button onClick={() => setShowAdd(false)} className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 transition-colors">
-            Cancel
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={handleAdd} className="aw-button-primary h-10 text-sm">Continue</button>
+            <button onClick={() => setShowAdd(false)} className="aw-button-secondary h-10 text-sm">Cancel</button>
+          </div>
         </div>
       ) : (
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             onClick={() => setShowAdd(true)}
-            className="flex-1 py-2 bg-green-600/20 hover:bg-green-600/30 border border-green-600/50 rounded-lg text-sm font-medium text-green-300 transition-colors"
+            className="aw-button-ghost h-10 text-xs"
           >
-            + Fund (Stripe)
+            <span className="inline-flex items-center gap-1">
+              <CreditCard size={12} />
+              Fund
+            </span>
           </button>
           <button
             onClick={toggleHistory}
-            className="flex-1 py-2 bg-gray-700/50 hover:bg-gray-700 border border-gray-600/50 rounded-lg text-sm text-gray-300 transition-colors"
+            className="aw-button-secondary h-10 text-xs"
           >
-            History
+            <span className="inline-flex items-center gap-1">
+              <History size={12} />
+              Ledger
+            </span>
           </button>
           <button
             onClick={toggleSettings}
-            className="py-2 px-3 bg-gray-700/50 hover:bg-gray-700 border border-gray-600/50 rounded-lg text-sm text-gray-300 transition-colors"
+            className="aw-button-secondary h-10 text-xs"
           >
-            Settings
+            <span className="inline-flex items-center gap-1">
+              <Settings2 size={12} />
+              Guardrails
+            </span>
           </button>
         </div>
       )}
-    </div>
+    </section>
   );
 }

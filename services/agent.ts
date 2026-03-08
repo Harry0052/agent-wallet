@@ -1,6 +1,6 @@
 import {
   ChatMessage, AgentTask, VendorOption,
-  OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData,
+  OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData, EvidenceData,
 } from '@/lib/types';
 import { uid, delay } from '@/lib/utils';
 import * as tinyfish from './tinyfish';
@@ -9,7 +9,7 @@ import { buildReasoningPlan, type ReasoningPlan } from './reasoning';
 import type { Wallet } from '@/lib/types';
 
 interface ParsedIntent {
-  action: 'buy' | 'send' | 'fund' | 'balance' | 'history' | 'settings' | 'help' | 'unknown';
+  action: 'buy' | 'procurement' | 'send' | 'fund' | 'balance' | 'history' | 'settings' | 'help' | 'unknown';
   query: string;
   amount?: number;
   maxBudget?: number;
@@ -49,6 +49,14 @@ export function parseIntent(text: string): ParsedIntent {
 
   if (/^(help|what can|how do|commands)/i.test(lower)) {
     return { action: 'help', query: text };
+  }
+
+  const procurementPhrase = /(compare|best|cheapest|find)\b.*\b(tool|software|platform|crm|service|suite|vendor|solution|app)s?\b/i.test(lower);
+  const procurementBudget = /\bunder\s+\$?\d+(?:\.\d{1,2})?\s*(?:\/\s*(month|mo|monthly|year|annual|yearly))?/i.test(lower);
+  const procurementScope = /\b(note-?taking|outreach|crm|pipeline|email|procurement|saas|subscription)\b/i.test(lower);
+
+  if (procurementPhrase || (procurementBudget && procurementScope)) {
+    return { action: 'procurement', query: text };
   }
 
   if (/buy|order|get|find|subscribe|purchase|book|rent|grab|pick.?up|coffee|lunch|parking/i.test(lower)) {
@@ -162,10 +170,17 @@ export async function handleBuyFlow(
   await delay(120);
   cb.addMessage(msg('assistant', 'Searching live options with TinyFish...', 'thinking'));
 
-  const { options, steps: searchSteps } = await tinyfish.searchOptions(reasoning.searchQuery, location, resolvedBudget);
+  const { options, pricing, steps: searchSteps } = await tinyfish.searchOptions(reasoning.searchQuery, location, resolvedBudget);
   task.steps.push(...searchSteps);
 
   cb.updateLastMessage('Here is what TinyFish found:', { steps: searchSteps } as AgentLogData);
+
+  cb.addMessage(msg(
+    'assistant',
+    `TinyFish extracted ${pricing.length} live pricing evidence point${pricing.length === 1 ? '' : 's'}.`,
+    'evidence',
+    { findings: pricing } as EvidenceData,
+  ));
 
   if (options.length === 0) {
     cb.addMessage(msg('assistant', `No options were found within $${resolvedBudget.toFixed(2)}.`));
@@ -304,6 +319,7 @@ export async function completePurchase(
       sourceUrl: option.url,
       description: `${option.item} from ${option.name}`,
       approved: true,
+      idempotencyKey: task.id,
     });
 
     cb.setWallet(result.wallet);
@@ -350,6 +366,7 @@ export async function completeSendFlow(
       recipientName: option.name,
       description: `Direct send to ${option.name}`,
       approved: true,
+      idempotencyKey: task.id,
     });
 
     cb.setWallet(result.wallet);
@@ -406,6 +423,8 @@ export function handleHelp(cb: AgentCallbacks): void {
   cb.addMessage(msg(
     'assistant',
     `Try:\n` +
+      `- "Find the best AI note-taking tool under $15/month"\n` +
+      `- "Compare email outreach tools under $50/month"\n` +
       `- "Buy me coffee"\n` +
       `- "Send $10 to Alice"\n` +
       `- "Add $20"\n` +

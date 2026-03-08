@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWalletUserId } from '@/lib/server/ledger';
 import { getEnabledCheckoutMethods, getStripeClient } from '@/lib/server/stripe';
+import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 
 export const runtime = 'nodejs';
 
@@ -10,15 +11,17 @@ export async function POST(req: NextRequest) {
     const amount = Number(body.amount);
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json({ error: 'Invalid top-up amount' }, { status: 400 });
+      return NextResponse.json(apiError('VALIDATION_ERROR', 'Invalid top-up amount', true), { status: 400 });
     }
 
     const cents = Math.round(amount * 100);
     if (cents < 50) {
-      return NextResponse.json({ error: 'Minimum top-up is $0.50' }, { status: 400 });
+      return NextResponse.json(apiError('VALIDATION_ERROR', 'Minimum top-up is $0.50', true), { status: 400 });
     }
 
     const userId = getWalletUserId();
+    logServerEvent('info', 'funding.session.started', { userId, amount });
+
     const stripe = getStripeClient();
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -50,17 +53,27 @@ export async function POST(req: NextRequest) {
     });
 
     if (!session.url) {
-      return NextResponse.json({ error: 'Unable to create Stripe checkout URL' }, { status: 500 });
+      logServerEvent('error', 'funding.session.missing_url', {
+        userId,
+        sessionId: session.id,
+      });
+      return NextResponse.json(apiError('STRIPE_FAILURE', 'Unable to create Stripe checkout URL', true), { status: 500 });
     }
+
+    logServerEvent('info', 'funding.session.created', {
+      userId,
+      sessionId: session.id,
+    });
 
     return NextResponse.json({
       checkoutUrl: session.url,
       sessionId: session.id,
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create Stripe session' },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : 'Failed to create Stripe session';
+    const classified = classifyTaskError({ message });
+    const errorCode = classified === 'UNKNOWN_FAILURE' ? 'STRIPE_FAILURE' : classified;
+    logServerEvent('error', 'funding.session.failed', { errorCode, message });
+    return NextResponse.json(apiError(errorCode, message, true), { status: 500 });
   }
 }

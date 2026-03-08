@@ -3,17 +3,20 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import {
   Wallet, WalletSettings, ChatMessage, AgentTask,
-  VendorOption, ApprovalData,
+  VendorOption, ApprovalData, ProcurementPlan, ProcurementTaskRecord,
 } from '@/lib/types';
 import { uid } from '@/lib/utils';
 import * as walletService from '@/services/wallet';
 import * as agent from '@/services/agent';
 import * as fundingService from '@/services/funding';
+import * as procurementService from '@/services/procurement';
 
 interface AppState {
   wallet: Wallet;
   messages: ChatMessage[];
   activeTask: AgentTask | null;
+  latestProcurementTask: ProcurementTaskRecord | null;
+  latestProcurementPlan: ProcurementPlan | null;
   showSettings: boolean;
   showHistory: boolean;
   isProcessing: boolean;
@@ -43,6 +46,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [wallet, setWallet] = useState<Wallet>(walletService.getDefaultWallet);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeTask, setActiveTask] = useState<AgentTask | null>(null);
+  const [latestProcurementTask, setLatestProcurementTask] = useState<ProcurementTaskRecord | null>(null);
+  const [latestProcurementPlan, setLatestProcurementPlan] = useState<ProcurementPlan | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -222,6 +227,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       switch (intent.action) {
+        case 'procurement': {
+          await refreshWallet();
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: 'Building a procurement plan with structured reasoning...',
+            type: 'thinking',
+            timestamp: new Date().toISOString(),
+          });
+
+          const planning = await procurementService.planProcurementTask(intent.query, walletRef.current);
+          setLatestProcurementTask(planning.task);
+          setLatestProcurementPlan(planning.planning);
+          setActiveTask(null);
+
+          if (planning.planning.clarificationNeeded) {
+            const questions = planning.planning.followUpQuestions.length > 0
+              ? planning.planning.followUpQuestions.map((q) => `- ${q}`).join('\n')
+              : '- Please clarify your required features and budget cadence.';
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: `Procurement plan requires clarification:\n${questions}`,
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: `Procurement plan ready for **${planning.planning.category}**. Review the planning panel for criteria, vendors, and budget framing.`,
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+          }
+          break;
+        }
         case 'buy': {
           await refreshWallet();
           const location = walletRef.current.settings.requireLocation ? 'San Francisco, CA' : undefined;
@@ -269,7 +311,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           addMessage({
             id: uid(),
             role: 'assistant',
-            content: 'Try: "Buy me coffee", "Send $5 to Alice", "Add $20", or "What\'s my balance?"',
+            content: 'Try: "Find the best AI note-taking tool under $15/month", "Buy me coffee", "Send $5 to Alice", or "Add $20".',
             type: 'text',
             timestamp: new Date().toISOString(),
           });
@@ -397,6 +439,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     wallet,
     messages,
     activeTask,
+    latestProcurementTask,
+    latestProcurementPlan,
     showSettings,
     showHistory,
     isProcessing,

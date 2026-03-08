@@ -1,6 +1,19 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { Cormorant_Garamond, Manrope } from 'next/font/google';
 import './globals.css';
+
+const bodyFont = Manrope({
+  subsets: ['latin'],
+  variable: '--font-manrope',
+  weight: ['400', '500', '600', '700'],
+});
+
+const displayFont = Cormorant_Garamond({
+  subsets: ['latin'],
+  variable: '--font-display',
+  weight: ['500', '600', '700'],
+});
 
 export const metadata: Metadata = {
   title: 'Agent Wallet',
@@ -10,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-gray-950 text-white antialiased h-screen overflow-hidden">
+      <body className={`${bodyFont.variable} ${displayFont.variable} aw-body antialiased h-screen overflow-hidden`}>
         {children}
       </body>
     </html>

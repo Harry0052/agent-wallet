@@ -23,7 +23,15 @@ export interface WalletSettings {
   blockedMerchants: string[];    // always denied
 }
 
-export type TransactionType = 'topup' | 'receive' | 'send' | 'payout' | 'refund' | 'reversal';
+export type TransactionType =
+  | 'topup'
+  | 'receive'
+  | 'send'
+  | 'payout'
+  | 'refund'
+  | 'reversal'
+  | 'procurement_commitment'
+  | 'subscription_savings_projection';
 export type TransactionDirection = 'credit' | 'debit';
 export type TransactionStatus = 'pending' | 'succeeded' | 'failed' | 'canceled';
 
@@ -64,6 +72,7 @@ export type MessageType =
   | 'receipt'        // purchase receipt
   | 'funding'        // add-funds request
   | 'agent-log'      // TinyFish action log
+  | 'evidence'       // TinyFish extracted evidence
   | 'thinking';      // agent "thinking" indicator
 
 export interface ChatMessage {
@@ -71,7 +80,7 @@ export interface ChatMessage {
   role: MessageRole;
   content: string;
   type: MessageType;
-  data?: OptionsData | ApprovalData | ReceiptData | AgentLogData | FundingData;
+  data?: OptionsData | ApprovalData | ReceiptData | AgentLogData | FundingData | EvidenceData;
   timestamp: string;
 }
 
@@ -113,6 +122,212 @@ export interface FundingData {
 
 export interface AgentLogData {
   steps: AgentStep[];
+}
+
+export interface EvidenceRecord {
+  vendorName: string;
+  planName: string;
+  price: number;
+  billingFrequency: string;
+  keyFeatures: string[];
+  sourceUrl: string;
+  extractedAt: string;
+}
+
+export interface EvidenceData {
+  findings: EvidenceRecord[];
+}
+
+// -- Procurement ---------------------------------------------
+
+export interface ProcurementBudgetConstraint {
+  amount: number | null;
+  currency: 'USD';
+  period: 'monthly' | 'yearly' | 'one_time' | 'unknown';
+  rawText?: string;
+}
+
+export interface ProcurementPlan {
+  normalizedGoal: string;
+  category: string;
+  targetVendorCandidates: string[];
+  budgetConstraint: ProcurementBudgetConstraint;
+  mustHaveFeatures: string[];
+  comparisonCriteria: string[];
+  clarificationNeeded: boolean;
+  followUpQuestions: string[];
+}
+
+export interface ProcurementTaskRecord {
+  id: string;
+  userId: string;
+  taskType: string;
+  status:
+  | 'planning'
+  | 'planned'
+  | 'needs_clarification'
+  | 'researching'
+  | 'researched'
+  | 'comparing'
+  | 'awaiting_approval'
+  | 'purchase_preparing'
+  | 'purchase_prepared'
+  | 'rejected'
+  | 'failed';
+  goal: string;
+  budgetLimit: number | null;
+  category: string | null;
+  targetVendors: string[];
+  comparisonCriteria: string[];
+  mustHaveFeatures: string[];
+  findings: Record<string, unknown> | null;
+  recommendation: Record<string, unknown> | null;
+  planningOutput: ProcurementPlan;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProcurementFinding {
+  id: string;
+  taskId: string;
+  userId: string;
+  vendorName: string;
+  pricingPageUrl: string;
+  planName: string;
+  monthlyPrice: number | null;
+  annualPrice: number | null;
+  billingFrequency: string;
+  notableFeatures: string[];
+  extractionTimestamp: string;
+  createdAt: string;
+}
+
+export interface ProcurementResearchLog {
+  id: string;
+  taskId: string;
+  actionType: string;
+  status: 'running' | 'done' | 'error';
+  message: string;
+  url?: string;
+  phase?: string;
+  event?: string;
+  code?: string;
+  createdAt: string;
+}
+
+export interface ProcurementLifecycleState {
+  phase: 'planning' | 'researching' | 'comparing' | 'approval' | 'purchase_prep' | 'subscription_ops' | 'failed';
+  canRetry: boolean;
+  retryHint?: string;
+}
+
+export interface ProcurementRecommendationOption {
+  findingId: string;
+  vendorName: string;
+  planName: string;
+  monthlyPrice: number | null;
+  annualPrice: number | null;
+  billingFrequency: string;
+  pricingPageUrl: string;
+  notableFeatures: string[];
+  extractionTimestamp: string;
+}
+
+export interface ProcurementPolicyCheck {
+  key: string;
+  label: string;
+  passed: boolean;
+  blocking: boolean;
+  detail: string;
+}
+
+export interface ProcurementPolicyResult {
+  allowed: boolean;
+  approvalRequired: boolean;
+  amountEvaluated: number | null;
+  amountBasis: 'monthly' | 'annual' | 'unknown';
+  currency: 'USD';
+  checks: ProcurementPolicyCheck[];
+  reason?: string;
+  evaluatedAt: string;
+}
+
+export interface ProcurementApprovalState {
+  decision: 'approved' | 'rejected';
+  decidedAt: string;
+}
+
+export interface ProcurementLedgerPreview {
+  entryId: string;
+  type: 'procurement_commitment';
+  status: 'pending';
+  amount: number;
+  currency: string;
+  description: string;
+}
+
+export interface ProcurementPurchasePrepState {
+  status: 'running' | 'prepared' | 'failed';
+  preparedAt?: string;
+  checkoutUrl?: string;
+  proofUrls: string[];
+  pendingLedgerEntry?: ProcurementLedgerPreview;
+  error?: string;
+}
+
+export interface ProcurementRecommendationRecord {
+  engineVersion: string;
+  generatedAt: string;
+  goal: string;
+  budgetLimit: number | null;
+  budgetAssessment: 'fits_budget' | 'mixed' | 'over_budget' | 'unknown';
+  noFitExplanation: string | null;
+  winner: ProcurementRecommendationOption | null;
+  alternatives: ProcurementRecommendationOption[];
+  whyWinner: string[];
+  policy: ProcurementPolicyResult | null;
+  approval?: ProcurementApprovalState;
+  purchasePrep?: ProcurementPurchasePrepState;
+}
+
+export type SubscriptionOperationType =
+  | 'inspect_billing'
+  | 'renewal_check'
+  | 'downgrade'
+  | 'cancel'
+  | 'switch_billing';
+
+export type SubscriptionOperationStatus = 'running' | 'completed' | 'blocked' | 'failed';
+
+export interface ActiveSubscriptionTask {
+  taskId: string;
+  title: string;
+  vendorName: string;
+  planName: string;
+  amount: number | null;
+  amountBasis: 'monthly' | 'annual' | 'unknown';
+  billingFrequency: string;
+  sourceUrl: string;
+  approvedAt?: string;
+  taskStatus: ProcurementTaskRecord['status'];
+}
+
+export interface SubscriptionActionRecord {
+  id: string;
+  userId: string;
+  taskId: string;
+  operation: SubscriptionOperationType;
+  status: SubscriptionOperationStatus;
+  summary?: string;
+  evidenceUrls: string[];
+  projectedSavings: number | null;
+  projectedSavingsBasis: 'monthly' | 'annual' | 'unknown';
+  currency: string | null;
+  renewalDate?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // -- Agent / TinyFish ----------------------------------------

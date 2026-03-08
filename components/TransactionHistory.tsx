@@ -1,49 +1,143 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useApp } from '@/lib/store';
-import { fmt, fmtFull } from '@/lib/utils';
+import { Transaction } from '@/lib/types';
+import { cn, fmt, fmtFull } from '@/lib/utils';
+
+function toTitleCase(value: string): string {
+  return value
+    .split(/[-_ ]+/)
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(' ');
+}
+
+function deriveVendor(tx: Transaction): string {
+  if (tx.merchant) return tx.merchant;
+
+  const sendMatch = tx.description.match(/send to\s+(.+)$/i);
+  if (sendMatch) return sendMatch[1].trim();
+
+  const fromMatch = tx.description.match(/from\s+(.+)$/i);
+  if (fromMatch) return fromMatch[1].trim();
+
+  if (tx.type === 'topup') return 'Stripe Funding';
+  return 'N/A';
+}
+
+function deriveTaskTitle(tx: Transaction): string {
+  if (tx.metadata?.taskTitle) return tx.metadata.taskTitle;
+
+  if (tx.type === 'topup') return 'Wallet Top-Up';
+  if (tx.type === 'send') return 'Recipient Transfer';
+  if (tx.type === 'payout') return 'Vendor Purchase';
+  if (tx.type === 'procurement_commitment') return 'Procurement Purchase Preparation';
+  if (tx.type === 'subscription_savings_projection') return 'Subscription Savings Projection';
+
+  return tx.description.length > 56 ? `${tx.description.slice(0, 56)}...` : tx.description;
+}
+
+function decisionSummary(tx: Transaction): string {
+  if (tx.type === 'procurement_commitment' && tx.status === 'pending') {
+    return 'Purchase flow prepared on live web. Awaiting explicit payment action before any settled debit.';
+  }
+
+  if (tx.type === 'subscription_savings_projection' && tx.status === 'pending') {
+    return 'Projected savings from live subscription operation. Informational only until billing changes are realized.';
+  }
+
+  if (tx.status === 'pending') {
+    return 'Awaiting settlement confirmation from payment rails.';
+  }
+
+  if (tx.status === 'failed' || tx.status === 'canceled') {
+    return 'Action did not settle; no completed ledger outcome.';
+  }
+
+  if (tx.direction === 'credit') {
+    return `Credit posted${tx.source ? ` via ${tx.source}` : ''}.`;
+  }
+
+  return `Debit settled${tx.source ? ` via ${tx.source}` : ''}.`;
+}
 
 export function TransactionHistory() {
   const { wallet, showHistory, toggleHistory } = useApp();
 
+  const transactions = useMemo(
+    () => [...wallet.transactions].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+    [wallet.transactions],
+  );
+
   if (!showHistory) return null;
 
-  const txns = wallet.transactions;
-
   return (
-    <div className="bg-gray-800/90 border border-gray-700/50 rounded-2xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-white text-sm">Transaction History</h3>
-        <button onClick={toggleHistory} className="text-gray-400 hover:text-white text-sm transition-colors">
-          Close
-        </button>
+    <section className="aw-surface p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="aw-kicker">Decision Ledger</p>
+          <h3 className="text-sm font-semibold text-[var(--aw-text)]">Financial Audit Trail</h3>
+        </div>
+        <button onClick={toggleHistory} className="aw-button-secondary px-3 py-1.5 text-xs">Close</button>
       </div>
 
-      {txns.length === 0 ? (
-        <p className="text-xs text-gray-500 text-center py-4">No transactions yet</p>
+      {transactions.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[var(--aw-border)] bg-black/10 px-3 py-6 text-center text-sm text-[var(--aw-text-muted)]">
+          No ledger entries yet
+        </div>
       ) : (
-        <div className="space-y-2 max-h-80 overflow-y-auto">
-          {txns.map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between py-2 border-b border-gray-700/30 last:border-0">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white truncate">{tx.description}</p>
-                <p className="text-[10px] text-gray-500">
-                  {fmtFull(tx.createdAt)}
-                  {tx.source ? ` • ${tx.source}` : ''}
-                </p>
-              </div>
-              <div className="text-right ml-3">
-                <p className={`text-sm font-semibold ${tx.direction === 'credit' ? 'text-green-400' : 'text-white'}`}>
-                  {tx.direction === 'credit' ? '+' : '-'}{fmt(tx.amount)}
-                </p>
-                <p className={`text-[10px] ${tx.status === 'succeeded' ? 'text-gray-500' : 'text-yellow-400'}`}>
-                  {tx.status}
-                </p>
-              </div>
-            </div>
-          ))}
+        <div className="aw-scroll max-h-[28rem] overflow-y-auto space-y-2 pr-1">
+          <div className="grid grid-cols-[1.45fr_0.9fr_0.9fr] gap-2 px-2 text-[10px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">
+            <span>Timestamp / Task</span>
+            <span>Action / Vendor</span>
+            <span className="text-right">Amount / Status</span>
+          </div>
+
+          {transactions.map((tx) => {
+            const vendor = deriveVendor(tx);
+            const taskTitle = deriveTaskTitle(tx);
+            const actionLabel = toTitleCase(tx.type);
+
+            return (
+              <article key={tx.id} className="animate-sheet-rise rounded-xl border border-[var(--aw-border)] bg-black/15 px-3 py-2.5">
+                <div className="grid grid-cols-[1.45fr_0.9fr_0.9fr] gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-[var(--aw-text-muted)]">{fmtFull(tx.createdAt)}</p>
+                    <p className="mt-1 truncate text-sm font-medium text-[var(--aw-text)]">{taskTitle}</p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.06em] text-[var(--aw-text-soft)]">{actionLabel}</p>
+                    <p className="mt-1 truncate text-sm text-[var(--aw-text-muted)]">{vendor}</p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-[var(--aw-text)]">
+                      {tx.direction === 'credit' ? '+' : '-'}{fmt(tx.amount)}
+                    </p>
+                    <p
+                      className={cn(
+                        'mt-1 text-[10px] uppercase tracking-[0.08em]',
+                        tx.status === 'pending'
+                          ? 'text-[#e2c28d]'
+                          : tx.status === 'failed' || tx.status === 'canceled'
+                            ? 'text-[rgba(245,180,180,0.9)]'
+                            : 'text-[var(--aw-text-muted)]'
+                      )}
+                    >
+                      {tx.status}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-2 border-t border-[var(--aw-border)] pt-2">
+                  <p className="text-[11px] text-[var(--aw-text-soft)]">{decisionSummary(tx)}</p>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
-    </div>
+    </section>
   );
 }

@@ -40,6 +40,20 @@ export function fmtFull(dateString: string): string {
   });
 }
 
+export function domainFromUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+}
+
+export function firstUrlFromText(text: string): string | undefined {
+  const match = text.match(/https?:\/\/[^\s)]+/i);
+  return match ? match[0] : undefined;
+}
+
 export function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }

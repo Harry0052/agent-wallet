@@ -18,6 +18,7 @@ export interface SendMoneyPayload {
   sourceUrl?: string;
   description?: string;
   approved?: boolean;
+  idempotencyKey?: string;
 }
 
 export interface SendMoneyResult {
@@ -29,7 +30,11 @@ export interface SendMoneyResult {
 function jsonOrThrow<T>(res: Response): Promise<T> {
   return res.json().then((body) => {
     if (!res.ok) {
-      throw new Error((body as { error?: string }).error || 'Request failed');
+      const parsed = body as { error?: string; errorCode?: string };
+      if (parsed.errorCode && parsed.error) {
+        throw new Error(`${parsed.errorCode}: ${parsed.error}`);
+      }
+      throw new Error(parsed.error || 'Request failed');
     }
     return body as T;
   });

@@ -6,7 +6,11 @@ export interface FundingSession {
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   const body = await res.json();
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || 'Request failed');
+    const parsed = body as { error?: string; errorCode?: string };
+    if (parsed.errorCode && parsed.error) {
+      throw new Error(`${parsed.errorCode}: ${parsed.error}`);
+    }
+    throw new Error(parsed.error || 'Request failed');
   }
   return body as T;
 }

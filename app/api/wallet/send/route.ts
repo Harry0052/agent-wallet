@@ -4,8 +4,10 @@ import {
   getWallet,
   getWalletUserId,
   recordLedgerEntry,
+  recordLedgerEntryUnique,
 } from '@/lib/server/ledger';
 import { getStripeClient } from '@/lib/server/stripe';
+import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 
 export const runtime = 'nodejs';
 
@@ -23,20 +25,25 @@ export async function POST(req: NextRequest) {
       sourceUrl?: string;
       description?: string;
       approved?: boolean;
+      idempotencyKey?: string;
     };
 
     const amount = Number(body.amount);
     attemptedAmount = Number.isFinite(amount) ? amount : 0;
     if (!Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json({ error: 'Valid amount is required' }, { status: 400 });
+      return NextResponse.json(apiError('VALIDATION_ERROR', 'Valid amount is required', true), { status: 400 });
     }
 
     const wallet = await getWallet(userId);
     attemptedCurrency = wallet.currency.toLowerCase();
     if (amount >= wallet.settings.approvalThreshold && body.approved !== true) {
       return NextResponse.json(
-        { error: `Approval required for amounts at/above $${wallet.settings.approvalThreshold.toFixed(2)}` },
-        { status: 400 },
+        apiError(
+          'POLICY_FAILURE',
+          `Approval required for amounts at/above $${wallet.settings.approvalThreshold.toFixed(2)}`,
+          true,
+        ),
+        { status: 409 },
       );
     }
 
@@ -49,23 +56,40 @@ export async function POST(req: NextRequest) {
     });
 
     if (!check.allowed || !check.recipient) {
-      return NextResponse.json({ error: check.reason || 'Transfer blocked by guardrails' }, { status: 400 });
+      return NextResponse.json(
+        apiError('POLICY_FAILURE', check.reason || 'Transfer blocked by guardrails', true),
+        { status: 409 },
+      );
     }
 
-    const stripe = getStripeClient();
-    const transfer = await stripe.transfers.create({
-      amount: Math.round(amount * 100),
+    const idempotencyKeyHeader = req.headers.get('x-idempotency-key');
+    const idempotencyKey = (idempotencyKeyHeader || body.idempotencyKey || '').trim() || undefined;
+
+    logServerEvent('info', 'wallet.send.started', {
+      userId,
+      amount,
       currency: wallet.currency.toLowerCase(),
-      destination: check.recipient.stripeAccountId,
-      description: body.description || `Wallet send to ${check.recipient.name}`,
-      metadata: {
-        wallet_action: 'send',
-        wallet_user_id: userId,
-        wallet_recipient_id: check.recipient.id,
-      },
+      recipientId: check.recipient.id,
+      hasIdempotencyKey: Boolean(idempotencyKey),
     });
 
-    const transaction = await recordLedgerEntry({
+    const stripe = getStripeClient();
+    const transfer = await stripe.transfers.create(
+      {
+        amount: Math.round(amount * 100),
+        currency: wallet.currency.toLowerCase(),
+        destination: check.recipient.stripeAccountId,
+        description: body.description || `Wallet send to ${check.recipient.name}`,
+        metadata: {
+          wallet_action: 'send',
+          wallet_user_id: userId,
+          wallet_recipient_id: check.recipient.id,
+        },
+      },
+      idempotencyKey ? { idempotencyKey } : undefined,
+    );
+
+    const transaction = await recordLedgerEntryUnique({
       userId,
       type: 'send',
       amount,
@@ -84,23 +108,49 @@ export async function POST(req: NextRequest) {
     });
 
     const updatedWallet = await getWallet(userId);
+    logServerEvent('info', 'wallet.send.completed', {
+      userId,
+      transferId: transfer.id,
+      ledgerEntryId: transaction.id,
+      amount,
+    });
     return NextResponse.json({ wallet: updatedWallet, transaction, payoutStatus: 'succeeded' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to send money';
+    const classified = classifyTaskError({ message });
+    const errorCode = classified === 'UNKNOWN_FAILURE' ? 'STRIPE_FAILURE' : classified;
+    const status = errorCode === 'STRIPE_FAILURE' ? 502 : 500;
 
     if (attemptedAmount > 0) {
-      await recordLedgerEntry({
-        userId,
-        type: 'send',
-        amount: attemptedAmount,
-        currency: attemptedCurrency,
-        direction: 'debit',
-        description: `Send failed: ${message}`,
-        status: 'failed',
-        source: 'connect-transfer',
-      });
+      try {
+        await recordLedgerEntry({
+          userId,
+          type: 'send',
+          amount: attemptedAmount,
+          currency: attemptedCurrency,
+          direction: 'debit',
+          description: `Send failed: ${message}`,
+          status: 'failed',
+          source: 'connect-transfer',
+          metadata: {
+            error_code: errorCode,
+          },
+        });
+      } catch (persistError) {
+        logServerEvent('error', 'wallet.send.persist_failure', {
+          userId,
+          attemptedAmount,
+          error: persistError instanceof Error ? persistError.message : String(persistError),
+        });
+      }
     }
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    logServerEvent('error', 'wallet.send.failed', {
+      userId,
+      attemptedAmount,
+      errorCode,
+      message,
+    });
+    return NextResponse.json(apiError(errorCode, message, true), { status });
   }
 }

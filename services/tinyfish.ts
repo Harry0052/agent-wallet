@@ -1,4 +1,4 @@
-import type { AgentStep, VendorOption } from '@/lib/types';
+import type { AgentStep, EvidenceRecord, VendorOption } from '@/lib/types';
 
 interface TinyFishApiResponse<T> {
   ok: boolean;
@@ -7,19 +7,9 @@ interface TinyFishApiResponse<T> {
   error?: string;
 }
 
-interface LivePricingRecord {
-  vendorName: string;
-  planName: string;
-  price: number;
-  billingFrequency: string;
-  keyFeatures: string[];
-  sourceUrl: string;
-  extractedAt: string;
-}
-
 interface VendorResearchResult {
   options: VendorOption[];
-  pricing: LivePricingRecord[];
+  pricing: EvidenceRecord[];
 }
 
 async function callTinyFish<T>(action: string, payload: unknown): Promise<TinyFishApiResponse<T>> {
@@ -66,7 +56,7 @@ export async function searchOptions(
   intent: string,
   location?: string,
   maxBudget?: number,
-): Promise<{ options: VendorOption[]; steps: AgentStep[] }> {
+) : Promise<{ options: VendorOption[]; pricing: EvidenceRecord[]; steps: AgentStep[] }> {
   const { result, steps } = await runVendorResearchTask({
     query: intent,
     location,
@@ -75,6 +65,7 @@ export async function searchOptions(
 
   return {
     options: result.options,
+    pricing: result.pricing,
     steps,
   };
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import { ArrowUpRight } from 'lucide-react';
 import { useApp } from '@/lib/store';
 import { ChatMessageBubble } from './ChatMessage';
 
@@ -10,12 +11,10 @@ export function ChatInterface() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -24,6 +23,12 @@ export function ChatInterface() {
     if (!input.trim() || isProcessing) return;
     sendMessage(input.trim());
     setInput('');
+  };
+
+  const handleSuggestion = (suggestion: string) => {
+    if (isProcessing) return;
+    setInput(suggestion);
+    sendMessage(suggestion);
   };
 
   const suggestions = [
@@ -35,49 +40,53 @@ export function ChatInterface() {
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+    <div className="flex h-full flex-col">
+      <div className="aw-scroll flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5 space-y-4">
         {messages.map((msg) => (
           <ChatMessageBubble key={msg.id} message={msg} />
         ))}
         <div ref={bottomRef} />
       </div>
 
-      {/* Quick suggestions (only when few messages) */}
       {messages.length <= 2 && (
-        <div className="px-4 pb-2 flex flex-wrap gap-2">
-          {suggestions.map((s) => (
-            <button
-              key={s}
-              onClick={() => { setInput(s); sendMessage(s); }}
-              className="text-xs px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full text-gray-300 transition-colors"
-            >
-              {s}
-            </button>
-          ))}
+        <div className="px-4 pb-3 md:px-5">
+          <p className="aw-kicker mb-2">Quick Commands</p>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => handleSuggestion(suggestion)}
+                className="aw-button-secondary px-3 py-1.5 text-xs"
+                disabled={isProcessing}
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Input */}
-      <div className="p-4 border-t border-gray-800">
-        <div className="flex gap-2">
+      <div className="border-t border-[var(--aw-border)] bg-black/20 px-4 py-3 md:px-5 md:py-4">
+        <div className="flex items-center gap-2 md:gap-3">
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder={isProcessing ? 'Working on it...' : 'What do you need?'}
+            placeholder={isProcessing ? 'Running real execution...' : 'Ask Agent Wallet to buy, send, fund, or review spend.'}
             disabled={isProcessing}
-            className="flex-1 bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition-colors disabled:opacity-50"
+            className="aw-input h-11 text-sm disabled:opacity-60"
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isProcessing}
-            className="px-5 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-white font-medium transition-colors"
+            className="aw-button-primary h-11 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Send
+            <span className="inline-flex items-center gap-1.5">
+              Execute
+              <ArrowUpRight size={14} />
+            </span>
           </button>
         </div>
       </div>

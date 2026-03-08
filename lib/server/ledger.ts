@@ -46,6 +46,16 @@ type RecipientRow = {
   created_at: string;
 };
 
+type WebActionLogRow = {
+  id: string;
+  task_id: string | null;
+  action_type: string;
+  url: string | null;
+  status: 'done' | 'error' | 'running';
+  details: Record<string, unknown> | null;
+  created_at: string;
+};
+
 function normalizeSettings(input: unknown): WalletSettings {
   const raw = (input && typeof input === 'object') ? (input as Partial<WalletSettings>) : {};
   const merged = { ...DEFAULT_SETTINGS, ...raw };
@@ -479,6 +489,58 @@ export async function recordWebAction(params: {
       params.details ? JSON.stringify(params.details) : null,
     ],
   );
+}
+
+export async function listWebActionsForTask(params: {
+  userId: string;
+  taskId: string;
+  since?: string;
+  limit?: number;
+}): Promise<Array<{
+  id: string;
+  taskId: string;
+  actionType: string;
+  url?: string;
+  status: 'done' | 'error' | 'running';
+  details?: Record<string, unknown>;
+  createdAt: string;
+}>> {
+  const limit = Math.min(Math.max(params.limit ?? 100, 1), 300);
+
+  const result = params.since
+    ? await query<WebActionLogRow>(
+      `
+        SELECT id, task_id, action_type, url, status, details, created_at::text
+        FROM web_action_logs
+        WHERE user_id = $1
+          AND task_id = $2
+          AND created_at > $3::timestamptz
+        ORDER BY created_at ASC
+        LIMIT ${limit}
+      `,
+      [params.userId, params.taskId, params.since],
+    )
+    : await query<WebActionLogRow>(
+      `
+        SELECT id, task_id, action_type, url, status, details, created_at::text
+        FROM web_action_logs
+        WHERE user_id = $1
+          AND task_id = $2
+        ORDER BY created_at ASC
+        LIMIT ${limit}
+      `,
+      [params.userId, params.taskId],
+    );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    taskId: row.task_id || params.taskId,
+    actionType: row.action_type,
+    url: row.url || undefined,
+    status: row.status,
+    details: row.details || undefined,
+    createdAt: row.created_at,
+  }));
 }
 
 export async function recordApprovalDecision(params: {

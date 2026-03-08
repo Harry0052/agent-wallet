@@ -10,6 +10,7 @@ import {
 } from '@/lib/server/ledger';
 import { getStripeWebhookSecret, validateCriticalServerEnv } from '@/lib/server/env';
 import { getStripeClient } from '@/lib/server/stripe';
+import { apiError, logServerEvent } from '@/lib/server/observability';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,10 @@ async function resolveFundingSource(
     if (details?.type === 'cashapp') return 'cashapp';
     if (details?.card?.wallet?.type === 'apple_pay') return 'apple-pay';
   } catch (err) {
-    console.warn('[stripe-webhook] resolveFundingSource failed, defaulting to stripe:', err);
+    logServerEvent('warn', 'stripe.webhook.resolve_funding_source_failed', {
+      paymentIntentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return 'stripe';
@@ -44,9 +48,11 @@ export async function POST(req: NextRequest) {
   try {
     validateCriticalServerEnv();
   } catch (error) {
-    console.error('[stripe-webhook] Server env misconfiguration:', error);
+    logServerEvent('error', 'stripe.webhook.env_invalid', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json(
-      { error: 'Server configuration error' },
+      apiError('STRIPE_FAILURE', 'Server configuration error', true),
       { status: 500 },
     );
   }
@@ -55,9 +61,9 @@ export async function POST(req: NextRequest) {
   // 400 → permanent client error, Stripe will not retry.
   const signature = req.headers.get('stripe-signature');
   if (!signature) {
-    console.error('[stripe-webhook] Missing stripe-signature header');
+    logServerEvent('error', 'stripe.webhook.signature_missing', {});
     return NextResponse.json(
-      { error: 'Missing stripe-signature header' },
+      apiError('VALIDATION_ERROR', 'Missing stripe-signature header', false),
       { status: 400 },
     );
   }
@@ -73,9 +79,9 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error('[stripe-webhook] Signature verification failed:', msg);
+    logServerEvent('error', 'stripe.webhook.signature_invalid', { error: msg });
     return NextResponse.json(
-      { error: `Webhook signature verification failed: ${msg}` },
+      apiError('VALIDATION_ERROR', `Webhook signature verification failed: ${msg}`, false),
       { status: 400 },
     );
   }
@@ -83,11 +89,14 @@ export async function POST(req: NextRequest) {
   // ── Step 3: Process verified event ────────────────────────────
   // 500 → server-side failure, Stripe will retry.
   try {
-    console.log(`[stripe-webhook] Processing event=${event.id} type=${event.type}`);
+    logServerEvent('info', 'stripe.webhook.processing', {
+      eventId: event.id,
+      eventType: event.type,
+    });
 
     const seen = await hasWebhookBeenProcessed(event.id);
     if (seen) {
-      console.log(`[stripe-webhook] Duplicate event ${event.id}, skipping`);
+      logServerEvent('info', 'stripe.webhook.duplicate', { eventId: event.id });
       return NextResponse.json({ received: true, duplicate: true });
     }
 
@@ -139,9 +148,12 @@ export async function POST(req: NextRequest) {
               : undefined,
           });
 
-          console.log(
-            `[stripe-webhook] Recorded topup credit: userId=${userId} amount=${amount} source=${source} event=${event.id}`,
-          );
+          logServerEvent('info', 'stripe.webhook.topup_recorded', {
+            userId,
+            amount,
+            source,
+            eventId: event.id,
+          });
         }
       }
     }
@@ -181,9 +193,13 @@ export async function POST(req: NextRequest) {
               metadata: { payment_intent_id: paymentIntent.id },
             });
 
-            console.log(
-              `[stripe-webhook] Recorded PI topup credit: userId=${userId} amount=${amount} source=${source} event=${event.id}`,
-            );
+            logServerEvent('info', 'stripe.webhook.payment_intent_topup_recorded', {
+              userId,
+              amount,
+              source,
+              eventId: event.id,
+              paymentIntentId: paymentIntent.id,
+            });
           }
         }
       }
@@ -209,22 +225,26 @@ export async function POST(req: NextRequest) {
           source: 'stripe',
         });
 
-        console.log(
-          `[stripe-webhook] Recorded refund: userId=${userId} amount=${amount} event=${event.id}`,
-        );
+        logServerEvent('info', 'stripe.webhook.refund_recorded', {
+          userId,
+          amount,
+          eventId: event.id,
+          chargeId: charge.id,
+        });
       }
     }
 
     await markWebhookProcessed(event.id);
-    console.log(`[stripe-webhook] Done: event=${event.id}`);
+    logServerEvent('info', 'stripe.webhook.completed', { eventId: event.id, eventType: event.type });
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error(
-      `[stripe-webhook] Processing failed for event ${event.id}:`,
-      error,
-    );
+    logServerEvent('error', 'stripe.webhook.failed', {
+      eventId: event.id,
+      eventType: event.type,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json(
-      { error: 'Webhook processing failed' },
+      apiError('STRIPE_FAILURE', 'Webhook processing failed', true),
       { status: 500 },
     );
   }
