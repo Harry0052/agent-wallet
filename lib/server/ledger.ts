@@ -285,6 +285,30 @@ export async function hasWebhookBeenProcessed(eventId: string): Promise<boolean>
   return Boolean(result.rows[0]);
 }
 
+export async function hasSuccessfulTopupForPaymentIntent(
+  userId: string,
+  paymentIntentId: string,
+): Promise<boolean> {
+  const result = await query<{ id: string }>(
+    `
+      SELECT id
+      FROM ledger_entries
+      WHERE user_id = $1
+        AND type = 'topup'
+        AND status = 'succeeded'
+        AND (
+          provider_reference_id = $2
+          OR provider_reference_id = $3
+          OR metadata->>'payment_intent_id' = $4
+        )
+      LIMIT 1
+    `,
+    [userId, paymentIntentId, `pi:${paymentIntentId}`, paymentIntentId],
+  );
+
+  return Boolean(result.rows[0]);
+}
+
 export async function recordTopupCredit(params: {
   userId: string;
   amount: number;

@@ -1,15 +1,8 @@
 import { Pool, type QueryResult, type QueryResultRow } from 'pg';
+import { getDatabaseUrl } from '@/lib/server/env';
 
 let pool: Pool | null = null;
 let schemaInitPromise: Promise<void> | null = null;
-
-function getDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error('DATABASE_URL is not configured');
-  }
-  return url;
-}
 
 function getPool(): Pool {
   if (pool) return pool;

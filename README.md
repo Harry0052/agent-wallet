@@ -85,9 +85,20 @@ npm install
 npm run dev
 ```
 
+Local env setup:
+
+```bash
+cp .env.example .env.local
+```
+
 Stripe webhook forwarding:
 
 ```bash
 stripe listen --forward-to localhost:3000/api/stripe/webhook
 ```
 
+Compatibility endpoint also supported:
+
+```bash
+/api/stripe/webhooks
+```
