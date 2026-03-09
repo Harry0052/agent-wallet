@@ -52,6 +52,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [procurementRunning, setProcurementRunning] = useState(false);
 
   const walletRef = useRef(wallet);
   walletRef.current = wallet;
@@ -270,191 +271,197 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [addMessage, callbacks]);
 
   const runAutonomousProcurementMission = useCallback(async (userPrompt: string) => {
-    await refreshWallet();
+    setProcurementRunning(true);
 
-    addMessage({
-      id: uid(),
-      role: 'assistant',
-      content: 'Building a structured procurement mission plan...',
-      type: 'thinking',
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      await refreshWallet();
 
-    const planning = await procurementService.planProcurementTask(userPrompt, walletRef.current);
-    setLatestProcurementTask(planning.task);
-    setLatestProcurementPlan(planning.planning);
-    setActiveTask(null);
-
-    if (planning.planning.clarificationNeeded) {
-      const questions = planning.planning.followUpQuestions.length > 0
-        ? planning.planning.followUpQuestions.map((q) => `- ${q}`).join('\n')
-        : '- Please clarify your required features and budget cadence.';
       addMessage({
         id: uid(),
         role: 'assistant',
-        content: `I need a few details before I run live research:\n${questions}`,
-        type: 'text',
+        content: 'Building a structured procurement mission plan...',
+        type: 'thinking',
         timestamp: new Date().toISOString(),
       });
-      return;
-    }
 
-    addMessage({
-      id: uid(),
-      role: 'assistant',
-      content: `Plan ready for **${planning.planning.category}**. Starting live TinyFish research across ${planning.planning.targetVendorCandidates.length} candidate services.`,
-      type: 'text',
-      timestamp: new Date().toISOString(),
-    });
+      const planning = await procurementService.planProcurementTask(userPrompt, walletRef.current);
+      setLatestProcurementTask(planning.task);
+      setLatestProcurementPlan(planning.planning);
+      setActiveTask(null);
 
-    await procurementService.startProcurementResearch(planning.task.id);
-
-    const waitForTaskStatus = async (
-      taskId: string,
-      done: (status: ProcurementTaskRecord['status']) => boolean,
-      timeoutMs = 300000,
-    ) => {
-      const startedAt = Date.now();
-      let cursor: string | undefined;
-
-      while ((Date.now() - startedAt) < timeoutMs) {
-        const status = await procurementService.fetchProcurementResearchStatus(taskId, cursor);
-        cursor = status.serverTime;
-        setLatestProcurementTask(status.task);
-        if (done(status.task.status)) return status;
-        await new Promise((resolve) => setTimeout(resolve, 2200));
+      if (planning.planning.clarificationNeeded) {
+        const questions = planning.planning.followUpQuestions.length > 0
+          ? planning.planning.followUpQuestions.map((q) => `- ${q}`).join('\n')
+          : '- Please clarify your required features and budget cadence.';
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: `I need a few details before I run live research:\n${questions}`,
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        return;
       }
 
-      throw new Error(`Timed out waiting for procurement task ${taskId} to advance`);
-    };
-
-    const researchStatus = await waitForTaskStatus(
-      planning.task.id,
-      (status) => [
-        'researched',
-        'awaiting_approval',
-        'purchase_preparing',
-        'purchase_prepared',
-        'needs_clarification',
-        'failed',
-        'rejected',
-      ].includes(status),
-    );
-
-    if (researchStatus.task.status === 'failed') {
-      throw new Error(researchStatus.task.error || 'TinyFish research failed');
-    }
-
-    if (researchStatus.task.status === 'needs_clarification') {
       addMessage({
         id: uid(),
         role: 'assistant',
-        content: researchStatus.task.error
-          ? `I hit a blocker and need input: ${researchStatus.task.error}`
-          : 'I need one clarification before continuing the mission.',
+        content: `Plan ready for **${planning.planning.category}**. Starting live TinyFish research across ${planning.planning.targetVendorCandidates.length} candidate services.`,
         type: 'text',
         timestamp: new Date().toISOString(),
       });
-      return;
-    }
 
-    addMessage({
-      id: uid(),
-      role: 'assistant',
-      content: 'Live findings collected. Comparing options and applying policy checks now.',
-      type: 'thinking',
-      timestamp: new Date().toISOString(),
-    });
+      await procurementService.startProcurementResearch(planning.task.id);
 
-    const compared = await procurementService.compareProcurementFindings(planning.task.id);
-    setLatestProcurementTask(compared.task);
+      const waitForTaskStatus = async (
+        taskId: string,
+        done: (status: ProcurementTaskRecord['status']) => boolean,
+        timeoutMs = 300000,
+      ) => {
+        const startedAt = Date.now();
+        let cursor: string | undefined;
 
-    const winner = compared.recommendation.winner;
-    const policy = compared.recommendation.policy;
-    if (!winner) {
+        while ((Date.now() - startedAt) < timeoutMs) {
+          const status = await procurementService.fetchProcurementResearchStatus(taskId, cursor);
+          cursor = status.serverTime;
+          setLatestProcurementTask(status.task);
+          if (done(status.task.status)) return status;
+          await new Promise((resolve) => setTimeout(resolve, 2200));
+        }
+
+        throw new Error(`Timed out waiting for procurement task ${taskId} to advance`);
+      };
+
+      const researchStatus = await waitForTaskStatus(
+        planning.task.id,
+        (status) => [
+          'researched',
+          'awaiting_approval',
+          'purchase_preparing',
+          'purchase_prepared',
+          'needs_clarification',
+          'failed',
+          'rejected',
+        ].includes(status),
+      );
+
+      if (researchStatus.task.status === 'failed') {
+        throw new Error(researchStatus.task.error || 'TinyFish research failed');
+      }
+
+      if (researchStatus.task.status === 'needs_clarification') {
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: researchStatus.task.error
+            ? `I hit a blocker and need input: ${researchStatus.task.error}`
+            : 'I need one clarification before continuing the mission.',
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       addMessage({
         id: uid(),
         role: 'assistant',
-        content: compared.recommendation.noFitExplanation || 'No option fit the budget and policy constraints from live findings.',
-        type: 'text',
+        content: 'Live findings collected. Comparing options and applying policy checks now.',
+        type: 'thinking',
         timestamp: new Date().toISOString(),
       });
-      return;
-    }
 
-    if (!policy || !policy.allowed) {
+      const compared = await procurementService.compareProcurementFindings(planning.task.id);
+      setLatestProcurementTask(compared.task);
+
+      const winner = compared.recommendation.winner;
+      const policy = compared.recommendation.policy;
+      if (!winner) {
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: compared.recommendation.noFitExplanation || 'No option fit the budget and policy constraints from live findings.',
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (!policy || !policy.allowed) {
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: policy?.reason || 'Recommendation is blocked by spend policy checks.',
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const monthlyPrice = winner.monthlyPrice !== null ? `$${winner.monthlyPrice.toFixed(2)}/month` : 'monthly price unavailable';
       addMessage({
         id: uid(),
         role: 'assistant',
-        content: policy?.reason || 'Recommendation is blocked by spend policy checks.',
+        content: `Top recommendation: **${winner.vendorName} — ${winner.planName}** (${monthlyPrice}). Evidence: ${winner.pricingPageUrl}`,
         type: 'text',
         timestamp: new Date().toISOString(),
       });
-      return;
-    }
 
-    const monthlyPrice = winner.monthlyPrice !== null ? `$${winner.monthlyPrice.toFixed(2)}/month` : 'monthly price unavailable';
-    addMessage({
-      id: uid(),
-      role: 'assistant',
-      content: `Top recommendation: **${winner.vendorName} — ${winner.planName}** (${monthlyPrice}). Evidence: ${winner.pricingPageUrl}`,
-      type: 'text',
-      timestamp: new Date().toISOString(),
-    });
+      if (policy.approvalRequired) {
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: 'Approval is required before I continue into signup and payment execution.',
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
 
-    if (policy.approvalRequired) {
       addMessage({
         id: uid(),
         role: 'assistant',
-        content: 'Approval is required before I continue into signup and payment execution.',
-        type: 'text',
+        content: 'Policy allows autonomous continuation. Starting signup and payment preparation now.',
+        type: 'thinking',
         timestamp: new Date().toISOString(),
       });
-      return;
+
+      await procurementService.submitProcurementApproval(planning.task.id, 'approved');
+
+      const purchaseStatus = await waitForTaskStatus(
+        planning.task.id,
+        (status) => ['purchase_prepared', 'needs_clarification', 'failed', 'rejected'].includes(status),
+        360000,
+      );
+
+      if (purchaseStatus.task.status === 'purchase_prepared') {
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: `Autonomous execution completed for **${winner.vendorName} ${winner.planName}**. Purchase prep and payment routing finished with real ledger/audit updates.`,
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        await refreshWallet();
+        return;
+      }
+
+      if (purchaseStatus.task.status === 'needs_clarification') {
+        addMessage({
+          id: uid(),
+          role: 'assistant',
+          content: purchaseStatus.task.error
+            ? `Execution paused for required input: ${purchaseStatus.task.error}`
+            : 'Execution paused for a required clarification or security checkpoint.',
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      throw new Error(purchaseStatus.task.error || 'Autonomous execution did not complete');
+    } finally {
+      setProcurementRunning(false);
     }
-
-    addMessage({
-      id: uid(),
-      role: 'assistant',
-      content: 'Policy allows autonomous continuation. Starting signup and payment preparation now.',
-      type: 'thinking',
-      timestamp: new Date().toISOString(),
-    });
-
-    await procurementService.submitProcurementApproval(planning.task.id, 'approved');
-
-    const purchaseStatus = await waitForTaskStatus(
-      planning.task.id,
-      (status) => ['purchase_prepared', 'needs_clarification', 'failed', 'rejected'].includes(status),
-      360000,
-    );
-
-    if (purchaseStatus.task.status === 'purchase_prepared') {
-      addMessage({
-        id: uid(),
-        role: 'assistant',
-        content: `Autonomous execution completed for **${winner.vendorName} ${winner.planName}**. Purchase prep and payment routing finished with real ledger/audit updates.`,
-        type: 'text',
-        timestamp: new Date().toISOString(),
-      });
-      await refreshWallet();
-      return;
-    }
-
-    if (purchaseStatus.task.status === 'needs_clarification') {
-      addMessage({
-        id: uid(),
-        role: 'assistant',
-        content: purchaseStatus.task.error
-          ? `Execution paused for required input: ${purchaseStatus.task.error}`
-          : 'Execution paused for a required clarification or security checkpoint.',
-        type: 'text',
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
-
-    throw new Error(purchaseStatus.task.error || 'Autonomous execution did not complete');
   }, [addMessage, refreshWallet]);
 
   // -----------------------------------------------------------------------
@@ -674,205 +681,241 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // -----------------------------------------------------------------
       // Route to intent handler
       // -----------------------------------------------------------------
-      switch (parsed.intent) {
-        case 'procurement_task':
-        case 'compare_and_buy':
-        case 'signup_and_prepare_checkout': {
-          await runAutonomousProcurementMission(text);
-          break;
-        }
 
-        case 'send_money': {
-          await refreshWallet();
+      // FIX: When the server already resolved send_money with a recipient,
+      // use the server-provided data directly instead of re-resolving
+      // against potentially stale local wallet state.
+      if (orchestration.route === 'send_money_approval' && orchestration.sendMoney) {
+        await refreshWallet();
+        const { amount, recipientName, recipientId } = orchestration.sendMoney;
 
-          const amount = parsed.amount;
-          const recipientHint = parsed.recipient_name?.trim() || null;
+        // Server already validated recipient + guardrails. Build the approval task.
+        const resolvedRecipient = walletRef.current.recipients.find((r) => r.id === recipientId)
+          || { id: recipientId, userId: '', name: recipientName, stripeAccountId: '', status: 'approved' as const, createdAt: '' };
 
-          // Missing amount
-          if (amount === null || amount <= 0) {
-            addMessage({
-              id: uid(),
-              role: 'assistant',
-              content: recipientHint
-                ? `How much should I send to ${recipientHint}?`
-                : 'How much should I send, and to whom?',
-              type: 'text',
-              timestamp: new Date().toISOString(),
-            });
-            break;
-          }
-
-          // Missing recipient
-          if (!recipientHint) {
-            addMessage({
-              id: uid(),
-              role: 'assistant',
-              content: `I can send $${amount.toFixed(2)}. Who should receive it?`,
-              type: 'text',
-              timestamp: new Date().toISOString(),
-            });
-            break;
-          }
-
-          // Try to resolve recipient
-          const recipient = agent.resolveRecipient(walletRef.current, recipientHint);
-
-          if (recipient) {
-            // Recipient found — autonomously execute
-            const task = await agent.executeSendMoney({
-              amount,
-              recipientName: recipientHint,
-              recipient,
-              wallet: walletRef.current,
-              cb: callbacks,
-            });
-            setActiveTask(task);
-          } else {
-            // Recipient not found — initiate inline creation flow
-            const pendingTask = agent.createTask(text, 'send', amount);
-            pendingTask.taskState = 'resolving_recipient';
-            pendingTask.pendingRecipientName = recipientHint;
-            pendingTask.pendingAmount = amount;
-            setActiveTask(pendingTask);
-
-            const approvedRecipients = walletRef.current.recipients.filter((r) => r.status === 'approved');
-            if (approvedRecipients.length === 0) {
+        const task = await agent.executeSendMoney({
+          amount,
+          recipientName,
+          recipient: resolvedRecipient,
+          wallet: walletRef.current,
+          cb: callbacks,
+        });
+        setActiveTask(task);
+      } else {
+        switch (parsed.intent) {
+          case 'procurement_task':
+          case 'compare_and_buy': {
+            // Run procurement in the background so the user is not blocked
+            void runAutonomousProcurementMission(text).catch((err) => {
               addMessage({
                 id: uid(),
                 role: 'assistant',
-                content: `I don't see "${recipientHint}" in your recipients. Would you like me to add them so I can send the $${amount.toFixed(2)}?`,
+                content: err instanceof Error ? `Procurement failed: ${err.message}` : 'Procurement mission failed.',
+                type: 'text',
+                timestamp: new Date().toISOString(),
+              });
+            });
+            break;
+          }
+
+          case 'signup_and_prepare_checkout': {
+            // If server already set up signup route, show status. Otherwise fall to procurement.
+            if (orchestration.route === 'signup_and_prepare_checkout' && orchestration.signup?.merchant) {
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: `Starting sign-up and checkout preparation for **${orchestration.signup.merchant}**. TinyFish will handle the browser workflow autonomously.`,
                 type: 'text',
                 timestamp: new Date().toISOString(),
               });
             } else {
-              const recipientsList = approvedRecipients.slice(0, 5).map((c) => c.name).join(', ');
+              // Need full procurement pipeline
+              void runAutonomousProcurementMission(text).catch((err) => {
+                addMessage({
+                  id: uid(),
+                  role: 'assistant',
+                  content: err instanceof Error ? `Procurement failed: ${err.message}` : 'Procurement mission failed.',
+                  type: 'text',
+                  timestamp: new Date().toISOString(),
+                });
+              });
+            }
+            break;
+          }
+
+          case 'send_money': {
+            // Server should have handled this via send_money_approval route above.
+            // This branch only fires if the server returned a non-approval route for send_money
+            // (shouldn't happen, but handle gracefully).
+            await refreshWallet();
+
+            const amount = parsed.amount;
+            const recipientHint = parsed.recipient_name?.trim() || null;
+
+            if (amount === null || amount <= 0) {
               addMessage({
                 id: uid(),
                 role: 'assistant',
-                content: `I don't see "${recipientHint}" in your recipients (available: ${recipientsList}). Want me to add them so I can complete the $${amount.toFixed(2)} transfer?`,
+                content: recipientHint
+                  ? `How much should I send to ${recipientHint}?`
+                  : 'How much should I send, and to whom?',
                 type: 'text',
                 timestamp: new Date().toISOString(),
               });
+              break;
             }
-          }
-          break;
-        }
 
-        case 'fund_wallet': {
-          const amount = parsed.amount;
-          if (amount === null || amount <= 0) {
-            addMessage({
-              id: uid(),
-              role: 'assistant',
-              content: 'How much should I add to your wallet?',
-              type: 'text',
-              timestamp: new Date().toISOString(),
-            });
-            break;
-          }
-
-          agent.handleFundFlow({
-            action: 'fund',
-            query: text,
-            amount,
-          }, callbacks);
-          break;
-        }
-
-        case 'review_spend':
-          await refreshWallet();
-          setShowHistory(true);
-          agent.handleBalanceFlow(callbacks);
-          break;
-
-        case 'cancel_subscription': {
-          const merchant = parsed.merchant?.trim();
-          if (!merchant) {
-            addMessage({
-              id: uid(),
-              role: 'assistant',
-              content: 'Which subscription should I cancel?',
-              type: 'text',
-              timestamp: new Date().toISOString(),
-            });
-            break;
-          }
-
-          addMessage({
-            id: uid(),
-            role: 'assistant',
-            content: `Looking up your ${merchant} subscription...`,
-            type: 'thinking',
-            timestamp: new Date().toISOString(),
-          });
-
-          const status = await subscriptionService.fetchSubscriptionStatus();
-          if (status.activeSubscriptions.length === 0) {
-            setMessages((prev) => {
-              const copy = [...prev];
-              const last = copy[copy.length - 1];
-              if (last && last.role === 'assistant' && last.type === 'thinking') {
-                copy[copy.length - 1] = {
-                  ...last,
-                  content: 'No active approved subscriptions found to cancel.',
-                  type: 'text',
-                };
-              }
-              return copy;
-            });
-            break;
-          }
-
-          const normalizedMerchant = merchant.toLowerCase();
-          const target = status.activeSubscriptions.find((subscription) => {
-            const vendor = subscription.vendorName.toLowerCase();
-            return vendor === normalizedMerchant
-              || vendor.includes(normalizedMerchant)
-              || normalizedMerchant.includes(vendor);
-          });
-
-          if (!target) {
-            const list = status.activeSubscriptions.slice(0, 6).map((subscription) => subscription.vendorName).join(', ');
-            setMessages((prev) => {
-              const copy = [...prev];
-              const last = copy[copy.length - 1];
-              if (last && last.role === 'assistant' && last.type === 'thinking') {
-                copy[copy.length - 1] = {
-                  ...last,
-                  content: `I couldn't match "${merchant}" to an active subscription. Available: ${list}.`,
-                  type: 'text',
-                };
-              }
-              return copy;
-            });
-            break;
-          }
-
-          const result = await subscriptionService.runSubscriptionOperation({
-            taskId: target.taskId,
-            operation: 'cancel',
-          });
-
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            if (last && last.role === 'assistant' && last.type === 'thinking') {
-              copy[copy.length - 1] = {
-                ...last,
-                content: result.started
-                  ? `Launching cancellation for ${target.vendorName}. TinyFish will handle the browser workflow autonomously.`
-                  : `Cancellation for ${target.vendorName} is already running.`,
+            if (!recipientHint) {
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: `I can send $${amount.toFixed(2)}. Who should receive it?`,
                 type: 'text',
-              };
+                timestamp: new Date().toISOString(),
+              });
+              break;
             }
-            return copy;
-          });
-          break;
-        }
 
-        default:
-          agent.handleHelp(callbacks);
-          break;
+            // Try local resolution as fallback
+            const recipient = agent.resolveRecipient(walletRef.current, recipientHint);
+
+            if (recipient) {
+              const task = await agent.executeSendMoney({
+                amount,
+                recipientName: recipientHint,
+                recipient,
+                wallet: walletRef.current,
+                cb: callbacks,
+              });
+              setActiveTask(task);
+            } else {
+              const pendingTask = agent.createTask(text, 'send', amount);
+              pendingTask.taskState = 'resolving_recipient';
+              pendingTask.pendingRecipientName = recipientHint;
+              pendingTask.pendingAmount = amount;
+              setActiveTask(pendingTask);
+
+              const approvedRecipients = walletRef.current.recipients.filter((r) => r.status === 'approved');
+              if (approvedRecipients.length === 0) {
+                addMessage({
+                  id: uid(),
+                  role: 'assistant',
+                  content: `I don't see "${recipientHint}" in your recipients. Would you like me to add them so I can send the $${amount.toFixed(2)}?`,
+                  type: 'text',
+                  timestamp: new Date().toISOString(),
+                });
+              } else {
+                const recipientsList = approvedRecipients.slice(0, 5).map((c) => c.name).join(', ');
+                addMessage({
+                  id: uid(),
+                  role: 'assistant',
+                  content: `I don't see "${recipientHint}" in your recipients (available: ${recipientsList}). Want me to add them so I can complete the $${amount.toFixed(2)} transfer?`,
+                  type: 'text',
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            }
+            break;
+          }
+
+          case 'fund_wallet': {
+            const amount = parsed.amount;
+            if (amount === null || amount <= 0) {
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: 'How much should I add to your wallet?',
+                type: 'text',
+                timestamp: new Date().toISOString(),
+              });
+              break;
+            }
+
+            agent.handleFundFlow({
+              action: 'fund',
+              query: text,
+              amount,
+            }, callbacks);
+            break;
+          }
+
+          case 'review_spend':
+            await refreshWallet();
+            setShowHistory(true);
+            if (orchestration.reviewSpend) {
+              callbacks.addMessage({
+                id: uid(),
+                role: 'assistant',
+                content:
+                  `Balance: **$${orchestration.reviewSpend.balance.toFixed(2)}**\n\n` +
+                  `Daily spent: $${orchestration.reviewSpend.dailySpent.toFixed(2)}\n` +
+                  `Monthly spent: $${orchestration.reviewSpend.monthlySpent.toFixed(2)}`,
+                type: 'text',
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              agent.handleBalanceFlow(callbacks);
+            }
+            break;
+
+          case 'cancel_subscription': {
+            // Server already resolved the subscription target — use its data
+            if (orchestration.cancelSubscription) {
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: `Launching cancellation for **${orchestration.cancelSubscription.vendorName}**...`,
+                type: 'thinking',
+                timestamp: new Date().toISOString(),
+              });
+
+              const cancelResult = await subscriptionService.runSubscriptionOperation({
+                taskId: orchestration.cancelSubscription.taskId,
+                operation: 'cancel',
+              });
+
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last && last.role === 'assistant' && last.type === 'thinking') {
+                  copy[copy.length - 1] = {
+                    ...last,
+                    content: cancelResult.started
+                      ? `Cancellation launched for ${orchestration.cancelSubscription!.vendorName}. TinyFish will handle the browser workflow autonomously.`
+                      : `Cancellation for ${orchestration.cancelSubscription!.vendorName} is already running.`,
+                    type: 'text',
+                  };
+                }
+                return copy;
+              });
+            } else {
+              // Server didn't resolve target — prompt user
+              const merchant = parsed.merchant?.trim();
+              if (!merchant) {
+                addMessage({
+                  id: uid(),
+                  role: 'assistant',
+                  content: 'Which subscription should I cancel?',
+                  type: 'text',
+                  timestamp: new Date().toISOString(),
+                });
+              } else {
+                addMessage({
+                  id: uid(),
+                  role: 'assistant',
+                  content: `I couldn't match "${merchant}" to an active subscription. Check the Subscriptions panel for available options.`,
+                  type: 'text',
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            }
+            break;
+          }
+
+          default:
+            agent.handleHelp(callbacks);
+            break;
+        }
       }
     } catch (error) {
       addMessage({

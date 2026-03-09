@@ -74,7 +74,7 @@ export function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder={isProcessing ? 'Running real execution...' : 'Ask Agent Wallet to buy, send, fund, or review spend.'}
+            placeholder={isProcessing ? 'Processing your request...' : 'Ask Agent Wallet to buy, send, fund, or review spend.'}
             disabled={isProcessing}
             className="aw-input h-11 text-sm disabled:opacity-60"
           />
