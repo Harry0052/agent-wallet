@@ -5,6 +5,12 @@ import { getWalletUserId } from '@/lib/server/ledger';
 import { createProcurementTask, updateProcurementTask } from '@/lib/server/procurement';
 import { apiError, classifyTaskError, logServerEvent, type TaskErrorCode } from '@/lib/server/observability';
 import { callClaudeMessagesApi } from '@/lib/server/claude';
+import {
+  buildVendorClarificationQuestion,
+  deriveVendorCandidatesFromContext,
+  sanitizeVendorTargets,
+  validateVendorTarget,
+} from '@/lib/server/vendorTargeting';
 
 export const runtime = 'nodejs';
 
@@ -40,11 +46,30 @@ const PlanSchema = z.object({
   clarificationNeeded: z.boolean(),
   followUpQuestions: z.array(z.string().trim().min(1)).max(3),
 }).superRefine((value, ctx) => {
+  value.targetVendorCandidates.forEach((vendor, index) => {
+    const validation = validateVendorTarget(vendor);
+    if (!validation.valid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Invalid vendor target "${vendor}": ${validation.reason || 'malformed value'}`,
+        path: ['targetVendorCandidates', index],
+      });
+    }
+  });
+
   if (value.clarificationNeeded && value.followUpQuestions.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'followUpQuestions is required when clarificationNeeded is true',
       path: ['followUpQuestions'],
+    });
+  }
+
+  if (!value.clarificationNeeded && value.targetVendorCandidates.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'targetVendorCandidates is required when clarificationNeeded is false',
+      path: ['targetVendorCandidates'],
     });
   }
 });
@@ -84,6 +109,8 @@ function planningPrompt(userMessage: string, wallet?: z.infer<typeof WalletInput
     'Rules:',
     '- Claude is for reasoning only; do not fabricate vendor prices, discounts, plan facts, feature claims, or availability facts.',
     '- You may suggest vendor candidates by name, but do not include any price facts or assertions about those vendors.',
+    '- candidate_vendors must contain only concrete vendor/service names (or explicit target URLs), never the full user sentence.',
+    '- If you are uncertain about candidate_vendors, leave it empty and set clarification_needed=true with one useful question.',
     '- Normalize the user goal and extract budget constraints if clearly stated.',
     '- If key inputs are missing, set clarificationNeeded=true and provide concise follow-up questions.',
     '- Keep comparisonCriteria and mustHaveFeatures concise and decision-ready.',
@@ -97,46 +124,46 @@ function responseJsonSchema() {
     type: 'object',
     additionalProperties: false,
     properties: {
-      normalizedGoal: { type: 'string' },
+      normalized_goal: { type: 'string' },
       category: { type: 'string' },
-      targetVendorCandidates: {
+      candidate_vendors: {
         type: 'array',
         items: { type: 'string' },
       },
-      budgetConstraint: {
+      budget_limit: {
         type: 'object',
         additionalProperties: false,
         properties: {
           amount: { type: ['number', 'null'] },
           currency: { type: 'string', enum: ['USD'] },
           period: { type: 'string', enum: ['monthly', 'yearly', 'one_time', 'unknown'] },
-          rawText: { type: 'string' },
+          raw_text: { type: 'string' },
         },
-        required: ['amount', 'currency', 'period', 'rawText'],
+        required: ['amount', 'currency', 'period', 'raw_text'],
       },
-      mustHaveFeatures: {
+      must_have_features: {
         type: 'array',
         items: { type: 'string' },
       },
-      comparisonCriteria: {
+      comparison_criteria: {
         type: 'array',
         items: { type: 'string' },
       },
-      clarificationNeeded: { type: 'boolean' },
-      followUpQuestions: {
+      clarification_needed: { type: 'boolean' },
+      follow_up_questions: {
         type: 'array',
         items: { type: 'string' },
       },
     },
     required: [
-      'normalizedGoal',
+      'normalized_goal',
       'category',
-      'targetVendorCandidates',
-      'budgetConstraint',
-      'mustHaveFeatures',
-      'comparisonCriteria',
-      'clarificationNeeded',
-      'followUpQuestions',
+      'candidate_vendors',
+      'budget_limit',
+      'must_have_features',
+      'comparison_criteria',
+      'clarification_needed',
+      'follow_up_questions',
     ],
   };
 }
@@ -146,12 +173,26 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function pickValue(record: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+      return record[key];
+    }
+  }
+  return undefined;
+}
+
 function toStringArray(value: unknown, max: number): string[] {
   if (!Array.isArray(value)) return [];
   const items = value
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean);
   return Array.from(new Set(items)).slice(0, max);
+}
+
+function toStringOrEmpty(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim();
 }
 
 function toNumberOrNull(value: unknown): number | null {
@@ -173,32 +214,61 @@ function normalizeBudgetPeriod(value: unknown): 'monthly' | 'yearly' | 'one_time
 
 function normalizeProcurementPlan(rawPlan: unknown, userMessage: string): ProcurementPlan {
   const raw = asRecord(rawPlan);
-  const budgetRaw = asRecord(raw.budgetConstraint);
-  const followUpQuestions = toStringArray(raw.followUpQuestions, 3);
-  const clarificationNeeded = typeof raw.clarificationNeeded === 'boolean'
-    ? raw.clarificationNeeded
-    : followUpQuestions.length > 0;
+  const normalizedGoal = toStringOrEmpty(pickValue(raw, ['normalizedGoal', 'normalized_goal'])) || userMessage;
+  const category = toStringOrEmpty(pickValue(raw, ['category'])) || 'general';
+  const budgetValue = pickValue(raw, ['budgetConstraint', 'budget_limit']);
+  const budgetRaw = asRecord(budgetValue);
+
+  const rawCandidates = toStringArray(
+    pickValue(raw, ['targetVendorCandidates', 'candidate_vendors']),
+    25,
+  );
+  const validCandidates = sanitizeVendorTargets(rawCandidates, 25);
+  const derivedCandidates = deriveVendorCandidatesFromContext({
+    goal: normalizedGoal,
+    category,
+    maxCandidates: 8,
+  });
+  const candidateVendors = validCandidates.length > 0 ? validCandidates : derivedCandidates;
+
+  const rawFollowUps = toStringArray(pickValue(raw, ['followUpQuestions', 'follow_up_questions']), 3);
+  const clarificationNeededBase = typeof pickValue(raw, ['clarificationNeeded', 'clarification_needed']) === 'boolean'
+    ? Boolean(pickValue(raw, ['clarificationNeeded', 'clarification_needed']))
+    : rawFollowUps.length > 0;
+  const clarificationNeeded = clarificationNeededBase || candidateVendors.length === 0;
+  const followUpQuestions = clarificationNeeded
+    ? (rawFollowUps.length > 0
+      ? rawFollowUps
+      : [buildVendorClarificationQuestion({ goal: normalizedGoal, category })])
+    : rawFollowUps;
+
+  const comparisonCriteria = toStringArray(
+    pickValue(raw, ['comparisonCriteria', 'comparison_criteria']),
+    25,
+  );
+  const mustHaveFeatures = toStringArray(
+    pickValue(raw, ['mustHaveFeatures', 'must_have_features']),
+    25,
+  );
 
   return {
-    normalizedGoal: typeof raw.normalizedGoal === 'string' && raw.normalizedGoal.trim().length > 0
-      ? raw.normalizedGoal.trim()
-      : userMessage,
-    category: typeof raw.category === 'string' && raw.category.trim().length > 0
-      ? raw.category.trim()
-      : 'general',
-    targetVendorCandidates: toStringArray(raw.targetVendorCandidates, 25),
+    normalizedGoal,
+    category,
+    targetVendorCandidates: candidateVendors,
     budgetConstraint: {
-      amount: toNumberOrNull(budgetRaw.amount),
+      amount: toNumberOrNull(
+        typeof budgetValue === 'number' || typeof budgetValue === 'string'
+          ? budgetValue
+          : budgetRaw.amount,
+      ),
       currency: 'USD',
       period: normalizeBudgetPeriod(budgetRaw.period),
-      rawText: typeof budgetRaw.rawText === 'string' ? budgetRaw.rawText : '',
+      rawText: toStringOrEmpty(pickValue(budgetRaw, ['rawText', 'raw_text'])),
     },
-    mustHaveFeatures: toStringArray(raw.mustHaveFeatures, 25),
-    comparisonCriteria: toStringArray(raw.comparisonCriteria, 25),
+    mustHaveFeatures,
+    comparisonCriteria,
     clarificationNeeded,
-    followUpQuestions: clarificationNeeded
-      ? (followUpQuestions.length > 0 ? followUpQuestions : ['What are your must-have features and deal-breakers?'])
-      : followUpQuestions,
+    followUpQuestions,
   };
 }
 

@@ -612,14 +612,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(orchestration.lifecycle) && orchestration.lifecycle.length > 0) {
         const lifecycleSteps = orchestration.lifecycle.map((snapshot, index) => {
           const isLast = index === orchestration.lifecycle!.length - 1;
+          const note = snapshot.note.toLowerCase();
+          const isPolicyFailure = note.includes('policy') || note.includes('guardrail')
+            || note.includes('blocked by guardrails') || note.includes('blocked by policy');
           const type: AgentStep['type'] = snapshot.state === 'awaiting_approval'
             ? 'guardrail'
             : snapshot.state === 'executing'
-              ? 'checkout'
+              ? (orchestration.toolRoute === 'stripe_wallet' ? 'payment' : 'checkout')
               : snapshot.state === 'completed'
                 ? 'confirm'
                 : snapshot.state === 'failed'
-                  ? 'guardrail'
+                  ? (isPolicyFailure
+                    ? 'guardrail'
+                    : orchestration.toolRoute === 'stripe_wallet'
+                      ? 'payment'
+                      : orchestration.toolRoute === 'tinyfish'
+                        ? 'checkout'
+                        : 'plan')
                   : 'plan';
           const status: AgentStep['status'] = snapshot.state === 'failed'
             ? 'error'

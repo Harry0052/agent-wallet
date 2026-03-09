@@ -94,6 +94,12 @@ export async function runAgentRuntime(input: AgentRuntimeInput): Promise<AgentRu
             'failed',
             executionResult.message || `Execution failed for ${routeDecision.toolRoute}`,
           );
+        } else if (executionResult.status === 'needs_input') {
+          lifecycle = transitionState(
+            lifecycle,
+            'needs_clarification',
+            executionResult.message || `Execution needs additional input for ${routeDecision.toolRoute}`,
+          );
         } else {
           lifecycle = transitionState(
             lifecycle,

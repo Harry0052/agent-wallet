@@ -5,7 +5,7 @@ const transitionMap: Record<AgentTaskState, Set<AgentTaskState>> = {
   parsing: new Set(['needs_clarification', 'ready_to_execute', 'failed']),
   needs_clarification: new Set(['parsing', 'failed']),
   ready_to_execute: new Set(['executing', 'awaiting_approval', 'completed', 'failed']),
-  executing: new Set(['awaiting_approval', 'completed', 'failed']),
+  executing: new Set(['needs_clarification', 'awaiting_approval', 'completed', 'failed']),
   awaiting_approval: new Set(['executing', 'completed', 'failed']),
   completed: new Set([]),
   failed: new Set([]),
@@ -42,4 +42,3 @@ export function transitionState(
 
   return [...lifecycle, snapshot(to, note)];
 }
-

@@ -8,6 +8,11 @@ import {
   updateProcurementTask,
 } from '@/lib/server/procurement';
 import { discoverTinyFishVendorCandidates, runTinyFishVendorPricingResearch } from '@/lib/server/tinyfishResearch';
+import {
+  buildVendorClarificationQuestion,
+  findInvalidVendorTargets,
+  sanitizeVendorTargets,
+} from '@/lib/server/vendorTargeting';
 
 function firstMeaningfulMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
@@ -117,17 +122,36 @@ export async function runProcurementResearchTask(params: {
     throw new Error('Task requires clarification before live vendor research can run');
   }
 
-  const plannedTargets = task.targetVendors.map((vendor) => vendor.trim()).filter(Boolean);
+  const plannedTargetsRaw = task.targetVendors.map((vendor) => vendor.trim()).filter(Boolean);
+  const invalidPlannedTargets = findInvalidVendorTargets(plannedTargetsRaw);
+  const plannedTargets = sanitizeVendorTargets(plannedTargetsRaw, 10);
   let workingVendors = [...plannedTargets];
   const discoveryErrors: string[] = [];
 
+  if (invalidPlannedTargets.length > 0) {
+    await appendLog({
+      userId: task.userId,
+      taskId: task.id,
+      actionType: 'plan',
+      status: 'error',
+      phase: 'planning',
+      event: 'vendor_targets_invalid',
+      code: 'VENDOR_TARGETS_INVALID',
+      message: `discarded ${invalidPlannedTargets.length} malformed vendor target(s) from planning output`,
+      details: {
+        invalidTargets: invalidPlannedTargets,
+      },
+    });
+  }
+
   try {
-    const discovered = await discoverTinyFishVendorCandidates({
+    const discoveredRaw = await discoverTinyFishVendorCandidates({
       goal: task.goal,
       category: task.category,
       existingTargets: plannedTargets,
       maxCandidates: 10,
     });
+    const discovered = sanitizeVendorTargets(discoveredRaw, 10);
     workingVendors = Array.from(new Set([...plannedTargets, ...discovered]));
     await appendLog({
       userId: task.userId,
@@ -156,16 +180,21 @@ export async function runProcurementResearchTask(params: {
   }
 
   if (workingVendors.length === 0) {
+    const clarificationQuestion = buildVendorClarificationQuestion({
+      goal: task.goal,
+      category: task.category,
+    });
     await persistTaskUpdate(task, {
-      status: 'failed',
+      status: 'needs_clarification',
       findings: {
         vendorsRequested: 0,
         vendorsResearched: 0,
         plansCollected: 0,
         discoveryErrors,
+        invalidTargets: invalidPlannedTargets,
       },
       recommendation: null,
-      error: `[TINYFISH_RESEARCH_FAILURE] No vendor candidates available. ${discoveryErrors.join(' | ')}`,
+      error: `[NEEDS_CLARIFICATION] ${clarificationQuestion}`,
     });
 
     await appendLog({
@@ -176,7 +205,7 @@ export async function runProcurementResearchTask(params: {
       phase: 'planning',
       event: 'research_blocked_no_targets',
       code: 'RESEARCH_BLOCKED_NO_TARGETS',
-      message: 'research blocked: no vendor candidates were available from plan or discovery',
+      message: `research blocked: no valid vendor candidates were available from plan or discovery. ${clarificationQuestion}`,
     });
 
     return;

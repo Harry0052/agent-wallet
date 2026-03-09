@@ -9,12 +9,36 @@ import {
   type TinyFishProcurementFinding,
   runTinyFishVendorPricingResearch,
 } from '@/lib/server/tinyfishResearch';
+import {
+  buildVendorClarificationQuestion,
+  deriveVendorCandidatesFromContext,
+  sanitizeVendorTargets,
+} from '@/lib/server/vendorTargeting';
+
+function fallbackDiscoveryCandidates(orchestration: AgentOrchestrationResult): string[] {
+  const goal = orchestration.procurement?.goal || orchestration.message || '';
+  const category = orchestration.intent.intent === 'compare_and_buy' ? 'compare_and_buy' : 'procurement';
+  const inferredFromContext = deriveVendorCandidatesFromContext({
+    goal,
+    category,
+    maxCandidates: 5,
+  });
+
+  return sanitizeVendorTargets([
+    orchestration.intent.merchant,
+    orchestration.signup?.merchant || null,
+    ...inferredFromContext,
+  ]
+    .map((name) => (typeof name === 'string' ? name.trim() : ''))
+    .filter((name): name is string => Boolean(name)), 5);
+}
 
 async function runProcurementExecution(params: {
   orchestration: AgentOrchestrationResult;
 }): Promise<AgentExecutionResult> {
   const goal = params.orchestration.procurement?.goal || params.orchestration.message;
   const budgetLimit = params.orchestration.intent.budget_limit;
+  let discoveryWarning: string | null = null;
 
   let candidates: string[] = [];
   try {
@@ -24,15 +48,25 @@ async function runProcurementExecution(params: {
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'vendor discovery failed';
-    return {
-      status: 'failed',
-      message: `Live vendor discovery is temporarily unavailable: ${reason}. Try again in a minute.`,
-      candidates: [],
-    };
+    const fallback = fallbackDiscoveryCandidates(params.orchestration);
+    if (fallback.length === 0) {
+      const clarification = buildVendorClarificationQuestion({
+        goal,
+        category: params.orchestration.intent.intent === 'compare_and_buy' ? 'compare_and_buy' : 'procurement',
+      });
+      return {
+        status: 'needs_input',
+        message: `Live vendor discovery is temporarily unavailable: ${reason}. ${clarification}`,
+        candidates: [],
+      };
+    }
+    candidates = fallback;
+    discoveryWarning = reason;
   }
 
   const researchTargets = candidates.slice(0, 3);
   const findings: TinyFishProcurementFinding[] = [];
+  const vendorResearchFailures: string[] = [];
 
   for (const vendor of researchTargets) {
     try {
@@ -47,14 +81,35 @@ async function runProcurementExecution(params: {
       findings.push(...research.findings);
     } catch {
       // Continue researching other candidates; partial results are still useful.
+      vendorResearchFailures.push(vendor);
     }
   }
 
   if (findings.length === 0) {
+    if (discoveryWarning && researchTargets.length > 0) {
+      const attempted = researchTargets.join(', ');
+      const clarification = buildVendorClarificationQuestion({
+        goal,
+        category: params.orchestration.intent.intent === 'compare_and_buy' ? 'compare_and_buy' : 'procurement',
+      });
+      return {
+        status: 'needs_input',
+        message: `Live discovery is unavailable and I could not extract pricing for fallback vendor target(s): ${attempted}. ${clarification}`,
+        candidates: researchTargets,
+        discoveryWarning,
+        attemptedVendors: researchTargets,
+        failedVendors: vendorResearchFailures,
+      };
+    }
+
     return {
       status: 'failed',
-      message: 'TinyFish could not extract usable pricing findings for this request.',
+      message: discoveryWarning
+        ? 'TinyFish could not extract usable pricing findings for fallback vendor targets.'
+        : 'TinyFish could not extract usable pricing findings for this request.',
       candidates: researchTargets,
+      discoveryWarning,
+      failedVendors: vendorResearchFailures,
     };
   }
 
@@ -67,9 +122,12 @@ async function runProcurementExecution(params: {
 
   return {
     status: 'success',
-    message: `TinyFish researched ${researchTargets.length} vendors and found ${findings.length} plans.`,
+    message: discoveryWarning
+      ? `TinyFish researched ${researchTargets.length} fallback vendor(s) and found ${findings.length} plans. Live vendor discovery is temporarily unavailable.`
+      : `TinyFish researched ${researchTargets.length} vendors and found ${findings.length} plans.`,
     candidates: researchTargets,
     topMatches: ranked.slice(0, 5),
+    discoveryWarning,
   };
 }
 
