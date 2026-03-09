@@ -52,7 +52,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [_procurementRunning, setProcurementRunning] = useState(false);
 
   const walletRef = useRef(wallet);
   walletRef.current = wallet;
