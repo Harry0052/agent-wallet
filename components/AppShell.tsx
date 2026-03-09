@@ -64,7 +64,7 @@ export function AppShell() {
   };
 
   return (
-    <div className="aw-shell h-screen flex flex-col">
+    <div className="aw-shell min-h-screen xl:h-screen flex flex-col">
       <header className="shrink-0 px-3 pt-3 pb-2 md:px-6 md:pt-6 md:pb-4">
         <div className="aw-surface-elevated px-4 py-3 md:px-6 md:py-4">
           <div className="flex flex-wrap items-center gap-4 md:gap-5 justify-between">
