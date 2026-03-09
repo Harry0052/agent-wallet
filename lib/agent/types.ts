@@ -18,6 +18,12 @@ export type AgentToolRoute =
   | 'stripe_wallet'
   | 'database_query';
 
+export interface AgentExecutionResult {
+  status: 'success' | 'failed' | 'queued' | 'noop' | 'pending_checkout' | 'needs_input';
+  message?: string;
+  [key: string]: unknown;
+}
+
 export interface AgentRuntimeInput {
   userId: string;
   prompt: string;
@@ -33,5 +39,6 @@ export interface AgentRuntimeResult extends AgentOrchestrationResult {
   intent: AgentIntent;
   taskState: AgentTaskState;
   toolRoute: AgentToolRoute;
+  executionResult: AgentExecutionResult | null;
   lifecycle: AgentStateSnapshot[];
 }

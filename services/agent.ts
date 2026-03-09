@@ -83,6 +83,11 @@ export interface AgentOrchestrationResult {
   };
   taskState?: 'received' | 'parsing' | 'needs_clarification' | 'ready_to_execute' | 'executing' | 'awaiting_approval' | 'completed' | 'failed';
   toolRoute?: 'reason' | 'ask_clarification' | 'tinyfish' | 'stripe_wallet' | 'database_query';
+  executionResult?: {
+    status: 'success' | 'failed' | 'queued' | 'noop' | 'pending_checkout' | 'needs_input';
+    message?: string;
+    [key: string]: unknown;
+  } | null;
   lifecycle?: Array<{
     state: 'received' | 'parsing' | 'needs_clarification' | 'ready_to_execute' | 'executing' | 'awaiting_approval' | 'completed' | 'failed';
     at: string;

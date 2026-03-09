@@ -52,7 +52,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [procurementRunning, setProcurementRunning] = useState(false);
 
   const walletRef = useRef(wallet);
   walletRef.current = wallet;
@@ -271,8 +270,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [addMessage, callbacks]);
 
   const runAutonomousProcurementMission = useCallback(async (userPrompt: string) => {
-    setProcurementRunning(true);
-
     try {
       await refreshWallet();
 
@@ -460,7 +457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       throw new Error(purchaseStatus.task.error || 'Autonomous execution did not complete');
     } finally {
-      setProcurementRunning(false);
+      // Procurement flow completion is surfaced via task status updates and chat logs.
     }
   }, [addMessage, refreshWallet]);
 
@@ -686,21 +683,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // use the server-provided data directly instead of re-resolving
       // against potentially stale local wallet state.
       if (orchestration.route === 'send_money_approval' && orchestration.sendMoney) {
-        await refreshWallet();
-        const { amount, recipientName, recipientId } = orchestration.sendMoney;
+        const runtimeExecution = orchestration.executionResult;
+        const needsApproval = orchestration.status === 'awaiting_approval';
 
-        // Server already validated recipient + guardrails. Build the approval task.
-        const resolvedRecipient = walletRef.current.recipients.find((r) => r.id === recipientId)
-          || { id: recipientId, userId: '', name: recipientName, stripeAccountId: '', status: 'approved' as const, createdAt: '' };
+        if (needsApproval || !runtimeExecution || runtimeExecution.status === 'noop' || runtimeExecution.status === 'needs_input') {
+          await refreshWallet();
+          const { amount, recipientName, recipientId } = orchestration.sendMoney;
 
-        const task = await agent.executeSendMoney({
-          amount,
-          recipientName,
-          recipient: resolvedRecipient,
-          wallet: walletRef.current,
-          cb: callbacks,
-        });
-        setActiveTask(task);
+          const resolvedRecipient = walletRef.current.recipients.find((r) => r.id === recipientId)
+            || { id: recipientId, userId: '', name: recipientName, stripeAccountId: '', status: 'approved' as const, createdAt: '' };
+
+          const task = await agent.executeSendMoney({
+            amount,
+            recipientName,
+            recipient: resolvedRecipient,
+            wallet: walletRef.current,
+            cb: callbacks,
+          });
+          setActiveTask(task);
+        } else if (runtimeExecution.status === 'success') {
+          await refreshWallet();
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: typeof runtimeExecution.message === 'string'
+              ? runtimeExecution.message
+              : `Transfer completed for ${orchestration.sendMoney.recipientName}.`,
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          });
+          setActiveTask(null);
+        } else {
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: typeof runtimeExecution.message === 'string'
+              ? runtimeExecution.message
+              : 'Transfer execution failed.',
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          });
+          setActiveTask(null);
+        }
       } else {
         switch (parsed.intent) {
           case 'procurement_task':
@@ -819,6 +843,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
 
           case 'fund_wallet': {
+            const runtimeExecution = orchestration.executionResult;
+            if (
+              runtimeExecution?.status === 'pending_checkout'
+              && typeof runtimeExecution.checkoutUrl === 'string'
+            ) {
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: typeof runtimeExecution.message === 'string'
+                  ? runtimeExecution.message
+                  : 'Funding checkout is ready. Redirecting now.',
+                type: 'text',
+                timestamp: new Date().toISOString(),
+              });
+              window.location.assign(runtimeExecution.checkoutUrl);
+              break;
+            }
+
+            if (runtimeExecution?.status === 'failed') {
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: typeof runtimeExecution.message === 'string'
+                  ? runtimeExecution.message
+                  : 'Funding setup failed.',
+                type: 'text',
+                timestamp: new Date().toISOString(),
+              });
+              break;
+            }
+
             const amount = parsed.amount;
             if (amount === null || amount <= 0) {
               addMessage({

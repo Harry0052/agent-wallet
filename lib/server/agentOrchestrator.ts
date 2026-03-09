@@ -373,26 +373,31 @@ export async function orchestrateAgentMessage(params: {
       };
     }
 
+    const approvalRequired = intent.amount >= wallet.settings.approvalThreshold;
+
     await persistAgentTask({
       userId: params.userId,
       taskId,
       taskType: 'send_money',
       intent: params.message,
-      status: 'awaiting_approval',
+      status: approvalRequired ? 'awaiting_approval' : 'ready',
       input: intent,
       result: {
         amount: intent.amount,
         recipientId: resolvedRecipient.id,
         recipientName: resolvedRecipient.name,
+        approvalRequired,
       },
     });
 
     return {
       route: 'send_money_approval',
       taskId,
-      status: 'awaiting_approval',
+      status: approvalRequired ? 'awaiting_approval' : 'ready',
       intent,
-      message: `I found ${resolvedRecipient.name} in your recipients list. Send $${intent.amount.toFixed(2)}?`,
+      message: approvalRequired
+        ? `I found ${resolvedRecipient.name} in your recipients list. Send $${intent.amount.toFixed(2)}?`
+        : `I found ${resolvedRecipient.name} in your recipients list. Sending $${intent.amount.toFixed(2)} now.`,
       sendMoney: {
         amount: intent.amount,
         recipientName: resolvedRecipient.name,
