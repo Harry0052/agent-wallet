@@ -141,6 +141,67 @@ function responseJsonSchema() {
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function toStringArray(value: unknown, max: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const items = value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+  return Array.from(new Set(items)).slice(0, max);
+}
+
+function toNumberOrNull(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/[$,\s]/g, ''));
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return null;
+}
+
+function normalizeBudgetPeriod(value: unknown): 'monthly' | 'yearly' | 'one_time' | 'unknown' {
+  if (typeof value !== 'string') return 'unknown';
+  if (value === 'monthly' || value === 'yearly' || value === 'one_time' || value === 'unknown') {
+    return value;
+  }
+  return 'unknown';
+}
+
+function normalizeProcurementPlan(rawPlan: unknown, userMessage: string): ProcurementPlan {
+  const raw = asRecord(rawPlan);
+  const budgetRaw = asRecord(raw.budgetConstraint);
+  const followUpQuestions = toStringArray(raw.followUpQuestions, 3);
+  const clarificationNeeded = typeof raw.clarificationNeeded === 'boolean'
+    ? raw.clarificationNeeded
+    : followUpQuestions.length > 0;
+
+  return {
+    normalizedGoal: typeof raw.normalizedGoal === 'string' && raw.normalizedGoal.trim().length > 0
+      ? raw.normalizedGoal.trim()
+      : userMessage,
+    category: typeof raw.category === 'string' && raw.category.trim().length > 0
+      ? raw.category.trim()
+      : 'general',
+    targetVendorCandidates: toStringArray(raw.targetVendorCandidates, 25),
+    budgetConstraint: {
+      amount: toNumberOrNull(budgetRaw.amount),
+      currency: 'USD',
+      period: normalizeBudgetPeriod(budgetRaw.period),
+      rawText: typeof budgetRaw.rawText === 'string' ? budgetRaw.rawText : '',
+    },
+    mustHaveFeatures: toStringArray(raw.mustHaveFeatures, 25),
+    comparisonCriteria: toStringArray(raw.comparisonCriteria, 25),
+    clarificationNeeded,
+    followUpQuestions: clarificationNeeded
+      ? (followUpQuestions.length > 0 ? followUpQuestions : ['What are your must-have features and deal-breakers?'])
+      : followUpQuestions,
+  };
+}
+
 export async function POST(req: NextRequest) {
   let taskId: string | undefined;
   let requestedGoal = '';
@@ -213,7 +274,7 @@ export async function POST(req: NextRequest) {
       throw new Error('Claude planning content was not valid JSON');
     }
 
-    const plan = PlanSchema.parse(rawPlan);
+    const plan = PlanSchema.parse(normalizeProcurementPlan(rawPlan, userMessage));
     const status: 'planned' | 'needs_clarification' = plan.clarificationNeeded ? 'needs_clarification' : 'planned';
 
     const task = await updateProcurementTask({
