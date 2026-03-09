@@ -4,6 +4,7 @@ import type { ProcurementPlan } from '@/lib/types';
 import { getWalletUserId } from '@/lib/server/ledger';
 import { createProcurementTask, updateProcurementTask } from '@/lib/server/procurement';
 import { apiError, classifyTaskError, logServerEvent, type TaskErrorCode } from '@/lib/server/observability';
+import { callClaudeMessagesApi } from '@/lib/server/claude';
 
 export const runtime = 'nodejs';
 
@@ -170,37 +171,22 @@ export async function POST(req: NextRequest) {
       throw new Error('CLAUDE_API_KEY is not configured (set ANTHROPIC_API_KEY or CLAUDE_API_KEY)');
     }
 
-    const model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-latest';
-
-    const completion = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        max_tokens: 1200,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              'You are a procurement reasoning planner that outputs only valid JSON matching this schema:',
-              JSON.stringify(responseJsonSchema()),
-              planningPrompt(userMessage, input.wallet),
-            ].join('\n'),
-          },
-        ],
-      }),
-      cache: 'no-store',
+    const { raw: completionText } = await callClaudeMessagesApi({
+      apiKey,
+      operation: 'planning request',
+      maxTokens: 1200,
+      temperature: 0,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            'You are a procurement reasoning planner that outputs only valid JSON matching this schema:',
+            JSON.stringify(responseJsonSchema()),
+            planningPrompt(userMessage, input.wallet),
+          ].join('\n'),
+        },
+      ],
     });
-
-    const completionText = await completion.text();
-    if (!completion.ok) {
-      throw new Error(`Claude planning request failed (${completion.status}): ${completionText.slice(0, 280)}`);
-    }
 
     let parsedCompletion: { content?: Array<{ type?: string; text?: string }> };
     try {

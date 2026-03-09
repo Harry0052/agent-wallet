@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ProcurementFinding, ProcurementTaskRecord } from '@/lib/types';
+import { callClaudeMessagesApi } from '@/lib/server/claude';
 
 const EvaluationSchema = z.object({
   winnerFindingId: z.string().trim().min(1).nullable(),
@@ -117,37 +118,23 @@ export async function evaluateProcurementFindings(params: {
     throw new Error('No findings available for comparison');
   }
 
-  const model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-latest';
-  const completion = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      max_tokens: 1200,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            'You are a procurement evaluator that outputs only valid JSON matching this JSON schema.',
-            JSON.stringify(responseJsonSchema()),
-            '',
-            evaluationPrompt(params.task, params.findings),
-          ].join('\n'),
-        },
-      ],
-    }),
-    cache: 'no-store',
+  const { raw: completionText } = await callClaudeMessagesApi({
+    apiKey,
+    operation: 'comparison request',
+    maxTokens: 1200,
+    temperature: 0,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          'You are a procurement evaluator that outputs only valid JSON matching this JSON schema.',
+          JSON.stringify(responseJsonSchema()),
+          '',
+          evaluationPrompt(params.task, params.findings),
+        ].join('\n'),
+      },
+    ],
   });
-
-  const completionText = await completion.text();
-  if (!completion.ok) {
-    throw new Error(`Claude comparison request failed (${completion.status}): ${completionText.slice(0, 280)}`);
-  }
 
   let parsedCompletion: { content?: Array<{ type?: string; text?: string }> };
   try {

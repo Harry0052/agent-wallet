@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { callClaudeMessagesApi } from '@/lib/server/claude';
 
 const AgentIntentSchema = z.object({
   intent: z.enum([
@@ -118,32 +119,18 @@ export async function parseAgentIntent(
     throw new Error('CLAUDE_API_KEY is not configured (set ANTHROPIC_API_KEY or CLAUDE_API_KEY)');
   }
 
-  const model = process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-latest';
-  const completion = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 700,
-      temperature: 0,
-      messages: [
-        {
-          role: 'user',
-          content: parserPrompt(message, options?.context),
-        },
-      ],
-    }),
-    cache: 'no-store',
+  const { raw } = await callClaudeMessagesApi({
+    apiKey,
+    operation: 'intent parsing',
+    maxTokens: 700,
+    temperature: 0,
+    messages: [
+      {
+        role: 'user',
+        content: parserPrompt(message, options?.context),
+      },
+    ],
   });
-
-  const raw = await completion.text();
-  if (!completion.ok) {
-    throw new Error(`Claude intent parsing failed (${completion.status}): ${raw.slice(0, 280)}`);
-  }
 
   let parsedResponse: { content?: Array<{ type?: string; text?: string }> };
   try {
