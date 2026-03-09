@@ -62,6 +62,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const recipient = check.recipient;
+    if (recipient.sendMethod === 'cash_app') {
+      const message = recipient.cashAppCashtag
+        ? `Cash App recipient ${recipient.name} is saved (${recipient.cashAppCashtag}), but automated Cash App execution is not implemented yet.`
+        : `Cash App recipient ${recipient.name} is missing a cashtag.`;
+      return NextResponse.json(apiError('INVALID_STATE', message, true), { status: 501 });
+    }
+
+    if (recipient.sendMethod === 'bank') {
+      const message = recipient.bankReference
+        ? `Bank recipient ${recipient.name} is saved (${recipient.bankReference}), but automated bank send execution is not implemented yet.`
+        : `Bank recipient ${recipient.name} is missing a bank reference.`;
+      return NextResponse.json(apiError('INVALID_STATE', message, true), { status: 501 });
+    }
+
+    const stripeDestination = recipient.stripeAccountId;
+    if (!stripeDestination) {
+      return NextResponse.json(
+        apiError('VALIDATION_ERROR', `Stripe recipient ${recipient.name} is missing a Stripe account id`, true),
+        { status: 409 },
+      );
+    }
+
     const idempotencyKeyHeader = req.headers.get('x-idempotency-key');
     const idempotencyKey = (idempotencyKeyHeader || body.idempotencyKey || '').trim() || undefined;
 
@@ -69,7 +92,7 @@ export async function POST(req: NextRequest) {
       userId,
       amount,
       currency: wallet.currency.toLowerCase(),
-      recipientId: check.recipient.id,
+      recipientId: recipient.id,
       hasIdempotencyKey: Boolean(idempotencyKey),
     });
 
@@ -78,12 +101,12 @@ export async function POST(req: NextRequest) {
       {
         amount: Math.round(amount * 100),
         currency: wallet.currency.toLowerCase(),
-        destination: check.recipient.stripeAccountId,
-        description: body.description || `Wallet send to ${check.recipient.name}`,
+        destination: stripeDestination,
+        description: body.description || `Wallet send to ${recipient.name}`,
         metadata: {
           wallet_action: 'send',
           wallet_user_id: userId,
-          wallet_recipient_id: check.recipient.id,
+          wallet_recipient_id: recipient.id,
         },
       },
       idempotencyKey ? { idempotencyKey } : undefined,
@@ -96,14 +119,14 @@ export async function POST(req: NextRequest) {
       currency: wallet.currency.toLowerCase(),
       direction: 'debit',
       stripeObjectId: transfer.id,
-      description: body.description || `Sent to ${check.recipient.name}`,
+      description: body.description || `Sent to ${recipient.name}`,
       merchant: body.merchant,
-      recipientId: check.recipient.id,
+      recipientId: recipient.id,
       status: 'succeeded',
       source: 'connect-transfer',
       sourceUrl: body.sourceUrl,
       metadata: {
-        recipient_name: check.recipient.name,
+        recipient_name: recipient.name,
       },
     });
 

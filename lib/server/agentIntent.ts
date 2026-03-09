@@ -11,6 +11,12 @@ const INTENT_VALUES = [
   'cancel_subscription',
 ] as const;
 
+const DELIVERY_METHOD_VALUES = [
+  'cash_app',
+  'stripe_connected',
+  'bank',
+] as const;
+
 const PROFILE_FIELD_VALUES = [
   'full_name',
   'email',
@@ -30,7 +36,11 @@ const AgentIntentSchema = z.object({
   amount: z.number().nonnegative().nullable(),
   currency: z.literal('USD'),
   recipient_name: z.string().trim().min(1).nullable(),
+  delivery_method: z.enum(DELIVERY_METHOD_VALUES).nullable().optional(),
   recipient_stripe_account_id: z.string().trim().regex(/^acct_[A-Za-z0-9]+$/).nullable().optional(),
+  cash_app_cashtag: z.string().trim().regex(/^\$[A-Za-z][A-Za-z0-9_]{1,}$/).nullable().optional(),
+  bank_reference: z.string().trim().min(2).nullable().optional(),
+  funding_source: z.string().trim().min(1).nullable().optional(),
   merchant: z.string().trim().min(1).nullable(),
   description: z.string().trim().min(1),
   budget_limit: z.number().nonnegative().nullable(),
@@ -83,6 +93,9 @@ function parserPrompt(message: string, context?: string): string {
     '- For send_money: extract the person/nickname/relationship as recipient_name exactly as stated.',
     '  "pay my fiancee" → recipient_name: "my fiancee"',
     '  "send liz five" → recipient_name: "liz"',
+    '  Extract delivery_method if present: cash_app, stripe_connected, bank.',
+    '  Extract cash_app_cashtag if provided (starts with $ and includes letters).',
+    '  Extract bank_reference if user provides a bank reference/account hint.',
     '  Natural language amounts: "a dollar" → 1, "five" → 5, "twenty" → 20, "a hundred" → 100.',
     '- For procurement_task: extract budget from "under $X/mo" or similar as budget_limit.',
     '  merchant = the specific product/service name if mentioned.',
@@ -91,7 +104,7 @@ function parserPrompt(message: string, context?: string): string {
     '- required_profile_fields should include only fields needed to continue sign-up/checkout prep.',
     '- profile_updates should include any profile fields explicitly provided by the user message.',
     '- If context indicates pending clarification, interpret the message as clarification for that pending task.',
-    '- missing_fields must include actionable blockers (amount, recipient_name, recipient_account, merchant).',
+    '- missing_fields must include only actionable blockers (amount, recipient_name, recipient_delivery_method, cash_app_cashtag, bank_reference, recipient_stripe_account_id, merchant).',
     '- currency must always be USD.',
     '- confidence must be between 0 and 1.',
     '',
@@ -248,6 +261,13 @@ function extractBudgetFromMessage(message: string): number | null {
 }
 
 function extractRecipientFromMessage(message: string): string | null {
+  const directWithAmount = message.match(
+    /\b(?:send|pay|transfer)\s+(.+?)\s+(?:\$?\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|twenty|thirty|forty|fifty|hundred)\b/i,
+  );
+  if (directWithAmount?.[1]) {
+    return directWithAmount[1].trim().replace(/[.,!?]+$/, '');
+  }
+
   const toMatch = message.match(/\bto\s+([A-Za-z][A-Za-z0-9'._-]*(?:\s+[A-Za-z][A-Za-z0-9'._-]*){0,2})\b/i);
   if (toMatch?.[1]) {
     return toMatch[1].trim().replace(/[.,!?]+$/, '');
@@ -258,6 +278,53 @@ function extractRecipientFromMessage(message: string): string | null {
     return directMatch[1].trim().replace(/[.,!?]+$/, '');
   }
 
+  return null;
+}
+
+function normalizeDeliveryMethod(value: string | null): AgentIntent['delivery_method'] {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, '_');
+  if (normalized === 'cashapp' || normalized === 'cash_app') return 'cash_app';
+  if (normalized === 'stripe' || normalized === 'stripe_connected' || normalized === 'stripe_recipient') return 'stripe_connected';
+  if (normalized === 'bank' || normalized === 'ach' || normalized === 'wire') return 'bank';
+  return null;
+}
+
+function extractDeliveryMethodFromMessage(message: string): AgentIntent['delivery_method'] {
+  const lower = message.toLowerCase();
+  if (/\bcash\s*app\b|\bcashtag\b/.test(lower)) return 'cash_app';
+  if (/\bacct_[a-z0-9]+\b/.test(lower)) return 'stripe_connected';
+  if (/\bstripe\b/.test(lower) && /\b(recipient|account|connected)\b/.test(lower)) return 'stripe_connected';
+  if (/\b(bank|ach|wire)\b/.test(lower)) return 'bank';
+  return null;
+}
+
+function extractCashAppCashtagFromMessage(message: string): string | null {
+  const cashtagMatch = message.match(/\$[A-Za-z][A-Za-z0-9_]{1,}/);
+  return cashtagMatch?.[0] || null;
+}
+
+function extractBankReferenceFromMessage(message: string): string | null {
+  const explicit = message.match(
+    /\b(?:bank(?:\s+reference)?|bank\s+account|ach|wire)\b[^A-Za-z0-9]*(?:is|:)?\s*([A-Za-z0-9._#*-]{3,})/i,
+  );
+  if (explicit?.[1]) {
+    return explicit[1];
+  }
+
+  const ending = message.match(/\baccount\s*(?:ending|ends?)\s*(?:in|with)?\s*([0-9]{3,6})\b/i);
+  if (ending?.[1]) {
+    return `ending ${ending[1]}`;
+  }
+
+  return null;
+}
+
+function extractFundingSourceFromMessage(message: string): string | null {
+  const lower = message.toLowerCase();
+  if (/\bfrom\s+my\s+wallet\b/.test(lower)) return 'wallet_balance';
+  if (/\bfrom\s+(?:my\s+)?(?:card|debit|credit)\b/.test(lower)) return 'card';
+  if (/\bfrom\s+(?:my\s+)?bank\b/.test(lower)) return 'bank';
   return null;
 }
 
@@ -364,21 +431,42 @@ function normalizeMissingFields(
   intent: AgentIntent['intent'],
   amount: number | null,
   recipientName: string | null,
+  deliveryMethod: AgentIntent['delivery_method'],
+  recipientStripeAccountId: string | null,
+  cashAppCashtag: string | null,
+  bankReference: string | null,
   merchant: string | null,
 ): string[] {
   const explicit = readStringArray(raw, ['missing_fields', 'missingFields']);
+  const aliasMap: Record<string, string> = {
+    recipient_account: 'recipient_delivery_method',
+    recipient_method: 'recipient_delivery_method',
+    payment_method: 'recipient_delivery_method',
+    recipient_account_id: 'recipient_stripe_account_id',
+    cashtag: 'cash_app_cashtag',
+  };
   const list = explicit.length > 0 ? explicit : [];
+  const normalized = list.map((field) => aliasMap[field] || field);
 
   if (intent === 'send_money') {
-    if (amount === null || amount <= 0) list.push('amount');
-    if (!recipientName) list.push('recipient_name');
+    if (amount === null || amount <= 0) normalized.push('amount');
+    if (!recipientName) normalized.push('recipient_name');
+    if (!deliveryMethod) {
+      normalized.push('recipient_delivery_method');
+    } else if (deliveryMethod === 'cash_app' && !cashAppCashtag) {
+      normalized.push('cash_app_cashtag');
+    } else if (deliveryMethod === 'stripe_connected' && !recipientStripeAccountId) {
+      normalized.push('recipient_stripe_account_id');
+    } else if (deliveryMethod === 'bank' && !bankReference) {
+      normalized.push('bank_reference');
+    }
   } else if (intent === 'fund_wallet') {
-    if (amount === null || amount <= 0) list.push('amount');
+    if (amount === null || amount <= 0) normalized.push('amount');
   } else if ((intent === 'cancel_subscription' || intent === 'signup_and_prepare_checkout') && !merchant) {
-    list.push('merchant');
+    normalized.push('merchant');
   }
 
-  return Array.from(new Set(list)).slice(0, 8);
+  return Array.from(new Set(normalized)).slice(0, 8);
 }
 
 function normalizeIntentPayload(parsedIntent: unknown, message: string): AgentIntent {
@@ -399,6 +487,17 @@ function normalizeIntentPayload(parsedIntent: unknown, message: string): AgentIn
   const recipientName = readString(raw, ['recipient_name', 'recipientName', 'recipient', 'payee'])
     || (intent === 'send_money' ? extractRecipientFromMessage(message) : null);
 
+  const deliveryMethodCandidate = readString(raw, [
+    'delivery_method',
+    'deliveryMethod',
+    'send_method',
+    'sendMethod',
+    'recipient_delivery_method',
+    'recipientDeliveryMethod',
+  ]);
+  const deliveryMethod = normalizeDeliveryMethod(deliveryMethodCandidate)
+    || (intent === 'send_money' ? extractDeliveryMethodFromMessage(message) : null);
+
   const merchant = readString(raw, ['merchant', 'vendor', 'service'])
     || extractMerchantFromMessage(intent, message);
 
@@ -406,18 +505,38 @@ function normalizeIntentPayload(parsedIntent: unknown, message: string): AgentIn
   const validStripeAccountId = recipientStripeAccountId && /^acct_[A-Za-z0-9]+$/.test(recipientStripeAccountId)
     ? recipientStripeAccountId
     : null;
+  const cashAppCashtag = readString(raw, ['cash_app_cashtag', 'cashAppCashtag'])
+    || (intent === 'send_money' ? extractCashAppCashtagFromMessage(message) : null);
+  const bankReference = readString(raw, ['bank_reference', 'bankReference'])
+    || (intent === 'send_money' ? extractBankReferenceFromMessage(message) : null);
+  const fundingSource = readString(raw, ['funding_source', 'fundingSource'])
+    || extractFundingSourceFromMessage(message);
 
   const confidence = clampConfidence(readNumber(raw, ['confidence']));
   const requiredProfileFields = normalizeRequiredProfileFields(raw);
   const profileUpdates = normalizeProfileUpdates(raw);
-  const missingFields = normalizeMissingFields(raw, intent, amount, recipientName, merchant);
+  const missingFields = normalizeMissingFields(
+    raw,
+    intent,
+    amount,
+    recipientName,
+    deliveryMethod,
+    validStripeAccountId,
+    cashAppCashtag,
+    bankReference,
+    merchant,
+  );
 
   return AgentIntentSchema.parse({
     intent,
     amount: amount !== null && amount >= 0 ? amount : null,
     currency: 'USD',
     recipient_name: recipientName,
+    delivery_method: deliveryMethod,
     recipient_stripe_account_id: validStripeAccountId,
+    cash_app_cashtag: cashAppCashtag,
+    bank_reference: bankReference,
+    funding_source: fundingSource,
     merchant,
     description: readString(raw, ['description', 'summary']) || message.trim(),
     budget_limit: budgetLimit !== null && budgetLimit >= 0 ? budgetLimit : null,

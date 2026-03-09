@@ -57,7 +57,11 @@ export interface Recipient {
   id: string;
   userId: string;
   name: string;
-  stripeAccountId: string;
+  sendMethod: 'cash_app' | 'stripe_connected' | 'bank';
+  stripeAccountId?: string | null;
+  cashAppCashtag?: string | null;
+  bankReference?: string | null;
+  aliases?: string[];
   defaultCurrency?: string;
   notes?: string;
   status: 'approved' | 'blocked' | 'pending';

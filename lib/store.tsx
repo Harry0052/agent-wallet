@@ -700,7 +700,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const { amount, recipientName, recipientId } = orchestration.sendMoney;
 
           const resolvedRecipient = walletRef.current.recipients.find((r) => r.id === recipientId)
-            || { id: recipientId, userId: '', name: recipientName, stripeAccountId: '', status: 'approved' as const, createdAt: '' };
+            || {
+              id: recipientId,
+              userId: '',
+              name: recipientName,
+              sendMethod: orchestration.sendMoney.sendMethod || 'stripe_connected',
+              stripeAccountId: null,
+              cashAppCashtag: null,
+              bankReference: null,
+              aliases: [],
+              status: 'approved' as const,
+              createdAt: '',
+            };
 
           const task = await agent.executeSendMoney({
             amount,

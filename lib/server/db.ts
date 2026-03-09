@@ -123,7 +123,11 @@ export async function ensureSchema(): Promise<void> {
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
-        stripe_account_id TEXT NOT NULL,
+        send_method TEXT NOT NULL DEFAULT 'stripe_connected',
+        stripe_account_id TEXT,
+        cash_app_cashtag TEXT,
+        bank_reference TEXT,
+        aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
         default_currency TEXT NOT NULL DEFAULT 'usd',
         notes TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -133,6 +137,36 @@ export async function ensureSchema(): Promise<void> {
     await p.query(`
       ALTER TABLE recipients
       ADD COLUMN IF NOT EXISTS notes TEXT;
+    `);
+
+    await p.query(`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS send_method TEXT NOT NULL DEFAULT 'stripe_connected';
+    `);
+
+    await p.query(`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS cash_app_cashtag TEXT;
+    `);
+
+    await p.query(`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS bank_reference TEXT;
+    `);
+
+    await p.query(`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS aliases JSONB NOT NULL DEFAULT '[]'::jsonb;
+    `);
+
+    await p.query(`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    `);
+
+    await p.query(`
+      ALTER TABLE recipients
+      ALTER COLUMN stripe_account_id DROP NOT NULL;
     `);
 
     await p.query(`
@@ -349,6 +383,12 @@ export async function ensureSchema(): Promise<void> {
     await p.query(`
       DO $$
       BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_recipients_send_method') THEN
+          ALTER TABLE recipients
+            ADD CONSTRAINT chk_recipients_send_method
+            CHECK (send_method IN ('cash_app', 'stripe_connected', 'bank')) NOT VALID;
+        END IF;
+
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_procurement_tasks_status') THEN
           ALTER TABLE procurement_tasks
             ADD CONSTRAINT chk_procurement_tasks_status

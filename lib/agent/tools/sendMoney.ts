@@ -145,6 +145,89 @@ async function executeSendMoney(params: {
 
   const wallet = await getWallet(params.userId);
   const currency = wallet.currency.toLowerCase();
+  const recipient = guardrail.recipient;
+
+  if (recipient.sendMethod === 'cash_app') {
+    const message = recipient.cashAppCashtag
+      ? `Cash App recipient ${recipient.name} is saved (${recipient.cashAppCashtag}), but automated Cash App execution is not implemented yet.`
+      : `Cash App recipient ${recipient.name} is selected, but the cashtag is missing.`;
+
+    await recordAgentTask({
+      userId: params.userId,
+      taskId: params.orchestration.taskId,
+      taskType: 'send_money',
+      intent: params.orchestration.message,
+      status: 'blocked',
+      result: {
+        reason: message,
+        sendMethod: recipient.sendMethod,
+      },
+      error: message,
+    });
+
+    return {
+      status: 'failed',
+      message,
+      reason: message,
+      recipientId: recipient.id,
+      recipientName: recipient.name,
+      sendMethod: recipient.sendMethod,
+    };
+  }
+
+  if (recipient.sendMethod === 'bank') {
+    const message = recipient.bankReference
+      ? `Bank recipient ${recipient.name} is saved (${recipient.bankReference}), but automated bank send execution is not implemented yet.`
+      : `Bank recipient ${recipient.name} is selected, but the bank reference is missing.`;
+
+    await recordAgentTask({
+      userId: params.userId,
+      taskId: params.orchestration.taskId,
+      taskType: 'send_money',
+      intent: params.orchestration.message,
+      status: 'blocked',
+      result: {
+        reason: message,
+        sendMethod: recipient.sendMethod,
+      },
+      error: message,
+    });
+
+    return {
+      status: 'failed',
+      message,
+      reason: message,
+      recipientId: recipient.id,
+      recipientName: recipient.name,
+      sendMethod: recipient.sendMethod,
+    };
+  }
+
+  const stripeDestination = recipient.stripeAccountId;
+  if (!stripeDestination) {
+    const message = `Stripe recipient ${recipient.name} is missing a Stripe account id.`;
+    await recordAgentTask({
+      userId: params.userId,
+      taskId: params.orchestration.taskId,
+      taskType: 'send_money',
+      intent: params.orchestration.message,
+      status: 'blocked',
+      result: {
+        reason: message,
+        sendMethod: recipient.sendMethod,
+      },
+      error: message,
+    });
+
+    return {
+      status: 'failed',
+      message,
+      reason: message,
+      recipientId: recipient.id,
+      recipientName: recipient.name,
+      sendMethod: recipient.sendMethod,
+    };
+  }
 
   try {
     const stripe = getStripeClient();
@@ -152,12 +235,12 @@ async function executeSendMoney(params: {
       {
         amount: Math.round(amount * 100),
         currency,
-        destination: guardrail.recipient.stripeAccountId,
-        description: `Wallet send to ${guardrail.recipient.name}`,
+        destination: stripeDestination,
+        description: `Wallet send to ${recipient.name}`,
         metadata: {
           wallet_action: 'send',
           wallet_user_id: params.userId,
-          wallet_recipient_id: guardrail.recipient.id,
+          wallet_recipient_id: recipient.id,
           agent_task_id: params.orchestration.taskId,
         },
       },
@@ -173,13 +256,13 @@ async function executeSendMoney(params: {
       currency,
       direction: 'debit',
       stripeObjectId: transfer.id,
-      description: `Sent to ${guardrail.recipient.name}`,
-      merchant: guardrail.recipient.name,
-      recipientId: guardrail.recipient.id,
+      description: `Sent to ${recipient.name}`,
+      merchant: recipient.name,
+      recipientId: recipient.id,
       status: 'succeeded',
       source: 'connect-transfer',
       metadata: {
-        recipient_name: guardrail.recipient.name,
+        recipient_name: recipient.name,
       },
     });
 
@@ -193,20 +276,20 @@ async function executeSendMoney(params: {
         transferId: transfer.id,
         transactionId: transaction.id,
         amount,
-        recipientId: guardrail.recipient.id,
-        recipientName: guardrail.recipient.name,
+        recipientId: recipient.id,
+        recipientName: recipient.name,
       },
     });
 
     return {
       status: 'success',
-      message: `Sent $${amount.toFixed(2)} to ${guardrail.recipient.name}.`,
+      message: `Sent $${amount.toFixed(2)} to ${recipient.name}.`,
       transferId: transfer.id,
       transactionId: transaction.id,
       amount,
       currency,
-      recipientId: guardrail.recipient.id,
-      recipientName: guardrail.recipient.name,
+      recipientId: recipient.id,
+      recipientName: recipient.name,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Stripe transfer failed';
@@ -233,8 +316,8 @@ async function executeSendMoney(params: {
       status: 'failed',
       error: message,
       result: {
-        recipientId: guardrail.recipient.id,
-        recipientName: guardrail.recipient.name,
+        recipientId: recipient.id,
+        recipientName: recipient.name,
         amount,
       },
     });
@@ -243,8 +326,8 @@ async function executeSendMoney(params: {
       status: 'failed',
       message,
       amount,
-      recipientId: guardrail.recipient.id,
-      recipientName: guardrail.recipient.name,
+      recipientId: recipient.id,
+      recipientName: recipient.name,
     };
   }
 }

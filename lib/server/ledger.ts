@@ -41,7 +41,11 @@ type RecipientRow = {
   id: string;
   user_id: string;
   name: string;
-  stripe_account_id: string;
+  send_method: 'cash_app' | 'stripe_connected' | 'bank' | null;
+  stripe_account_id: string | null;
+  cash_app_cashtag: string | null;
+  bank_reference: string | null;
+  aliases: unknown;
   default_currency: string | null;
   notes: string | null;
   status: Recipient['status'] | null;
@@ -131,12 +135,22 @@ function rowToRecipient(row: RecipientRow): Recipient {
   const status = row.status === 'blocked' || row.status === 'pending' || row.status === 'approved'
     ? row.status
     : 'approved';
+  const sendMethod = row.send_method === 'cash_app' || row.send_method === 'bank' || row.send_method === 'stripe_connected'
+    ? row.send_method
+    : 'stripe_connected';
+  const aliases = Array.isArray(row.aliases)
+    ? row.aliases.map((item) => String(item).trim()).filter(Boolean)
+    : [];
 
   return {
     id: row.id,
     userId: row.user_id,
     name: row.name,
-    stripeAccountId: row.stripe_account_id,
+    sendMethod,
+    stripeAccountId: row.stripe_account_id || null,
+    cashAppCashtag: row.cash_app_cashtag || null,
+    bankReference: row.bank_reference || null,
+    aliases,
     defaultCurrency: (row.default_currency || 'usd').toUpperCase(),
     notes: row.notes || undefined,
     status,
@@ -232,7 +246,11 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
           r.id,
           r.user_id,
           r.name,
+          r.send_method,
           r.stripe_account_id,
+          r.cash_app_cashtag,
+          r.bank_reference,
+          r.aliases,
           r.default_currency,
           r.notes,
           COALESCE(wr.status, 'approved') AS status,
@@ -249,7 +267,11 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
           wr.id,
           wr.user_id,
           wr.name,
+          'stripe_connected'::text AS send_method,
           wr.stripe_account_id,
+          NULL::text AS cash_app_cashtag,
+          NULL::text AS bank_reference,
+          '[]'::jsonb AS aliases,
           'usd'::text AS default_currency,
           NULL::text AS notes,
           wr.status,
@@ -263,7 +285,7 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
               AND r.user_id = wr.user_id
           )
       )
-      SELECT id, user_id, name, stripe_account_id, default_currency, notes, status, created_at
+      SELECT id, user_id, name, send_method, stripe_account_id, cash_app_cashtag, bank_reference, aliases, default_currency, notes, status, created_at
       FROM normalized
       ORDER BY created_at DESC
     `,
@@ -329,39 +351,39 @@ export async function addRecipient(
   status: Recipient['status'] = 'approved',
   notes?: string,
 ): Promise<Recipient> {
-  const id = randomUUID();
-  const trimmedName = name.trim();
-  const trimmedStripeAccountId = stripeAccountId.trim();
+  return upsertRecipientDelivery({
+    userId,
+    name,
+    sendMethod: 'stripe_connected',
+    stripeAccountId,
+    status,
+    notes,
+    aliases: [name],
+  });
+}
 
-  await query(
-    `
-      INSERT INTO recipients (id, user_id, name, stripe_account_id, default_currency, notes)
-      VALUES ($1, $2, $3, $4, 'usd', $5)
-    `,
-    [id, userId, trimmedName, trimmedStripeAccountId, notes?.trim() || null],
+function normalizeAliasList(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean),
+    ),
   );
+}
 
-  await query(
-    `
-      INSERT INTO wallet_recipients (id, user_id, name, stripe_account_id, status)
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (id) DO UPDATE
-      SET
-        name = EXCLUDED.name,
-        stripe_account_id = EXCLUDED.stripe_account_id,
-        status = EXCLUDED.status,
-        updated_at = NOW()
-    `,
-    [id, userId, trimmedName, trimmedStripeAccountId, status],
-  );
-
+async function fetchRecipientById(userId: string, recipientId: string): Promise<Recipient | null> {
   const result = await query<RecipientRow>(
     `
       SELECT
         r.id,
         r.user_id,
         r.name,
+        r.send_method,
         r.stripe_account_id,
+        r.cash_app_cashtag,
+        r.bank_reference,
+        r.aliases,
         r.default_currency,
         r.notes,
         COALESCE(wr.status, 'approved') AS status,
@@ -372,15 +394,148 @@ export async function addRecipient(
        AND wr.user_id = r.user_id
       WHERE r.id = $1
         AND r.user_id = $2
+      LIMIT 1
     `,
-    [id, userId],
+    [recipientId, userId],
   );
 
-  if (!result.rows[0]) {
-    throw new Error('Failed to create recipient');
+  if (!result.rows[0]) return null;
+  return rowToRecipient(result.rows[0]);
+}
+
+export async function upsertRecipientDelivery(params: {
+  userId: string;
+  name: string;
+  sendMethod: Recipient['sendMethod'];
+  stripeAccountId?: string | null;
+  cashAppCashtag?: string | null;
+  bankReference?: string | null;
+  status?: Recipient['status'];
+  notes?: string;
+  aliases?: string[];
+}): Promise<Recipient> {
+  const trimmedName = params.name.trim();
+  if (!trimmedName) {
+    throw new Error('Recipient name is required');
   }
 
-  return rowToRecipient(result.rows[0]);
+  const normalizedAliases = normalizeAliasList([
+    trimmedName,
+    ...(params.aliases || []),
+  ]);
+
+  const existing = await query<{ id: string }>(
+    `
+      SELECT r.id
+      FROM recipients r
+      WHERE r.user_id = $1
+        AND (
+          lower(r.name) = lower($2)
+          OR EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(COALESCE(r.aliases, '[]'::jsonb)) AS alias(value)
+            WHERE lower(alias.value) = lower($2)
+          )
+        )
+      ORDER BY r.created_at DESC
+      LIMIT 1
+    `,
+    [params.userId, trimmedName],
+  );
+
+  const recipientId = existing.rows[0]?.id || randomUUID();
+
+  if (existing.rows[0]) {
+    await query(
+      `
+        UPDATE recipients
+        SET
+          send_method = $3,
+          stripe_account_id = COALESCE($4, stripe_account_id),
+          cash_app_cashtag = COALESCE($5, cash_app_cashtag),
+          bank_reference = COALESCE($6, bank_reference),
+          aliases = (
+            SELECT COALESCE(jsonb_agg(DISTINCT alias), '[]'::jsonb)
+            FROM (
+              SELECT jsonb_array_elements_text(COALESCE(aliases, '[]'::jsonb)) AS alias
+              UNION ALL
+              SELECT jsonb_array_elements_text($7::jsonb) AS alias
+            ) merged
+          ),
+          notes = COALESCE($8, notes),
+          updated_at = NOW()
+        WHERE id = $1
+          AND user_id = $2
+      `,
+      [
+        recipientId,
+        params.userId,
+        params.sendMethod,
+        params.stripeAccountId?.trim() || null,
+        params.cashAppCashtag?.trim() || null,
+        params.bankReference?.trim() || null,
+        JSON.stringify(normalizedAliases),
+        params.notes?.trim() || null,
+      ],
+    );
+  } else {
+    await query(
+      `
+        INSERT INTO recipients (
+          id,
+          user_id,
+          name,
+          send_method,
+          stripe_account_id,
+          cash_app_cashtag,
+          bank_reference,
+          aliases,
+          default_currency,
+          notes
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'usd', $9)
+      `,
+      [
+        recipientId,
+        params.userId,
+        trimmedName,
+        params.sendMethod,
+        params.stripeAccountId?.trim() || null,
+        params.cashAppCashtag?.trim() || null,
+        params.bankReference?.trim() || null,
+        JSON.stringify(normalizedAliases),
+        params.notes?.trim() || null,
+      ],
+    );
+  }
+
+  if (params.sendMethod === 'stripe_connected') {
+    const stripeAccountId = params.stripeAccountId?.trim() || null;
+    if (!stripeAccountId) {
+      throw new Error('Stripe recipient requires stripeAccountId');
+    }
+
+    await query(
+      `
+        INSERT INTO wallet_recipients (id, user_id, name, stripe_account_id, status)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (id) DO UPDATE
+        SET
+          name = EXCLUDED.name,
+          stripe_account_id = EXCLUDED.stripe_account_id,
+          status = EXCLUDED.status,
+          updated_at = NOW()
+      `,
+      [recipientId, params.userId, trimmedName, stripeAccountId, params.status || 'approved'],
+    );
+  }
+
+  const recipient = await fetchRecipientById(params.userId, recipientId);
+  if (!recipient) {
+    throw new Error('Failed to save recipient');
+  }
+
+  return recipient;
 }
 
 export async function setRecipientStatus(
@@ -394,7 +549,19 @@ export async function setRecipientStatus(
       SET status = $3,
           updated_at = NOW()
       WHERE id = $1 AND user_id = $2
-      RETURNING id, user_id, name, stripe_account_id, 'usd'::text AS default_currency, NULL::text AS notes, status, created_at::text
+      RETURNING
+        id,
+        user_id,
+        name,
+        'stripe_connected'::text AS send_method,
+        stripe_account_id,
+        NULL::text AS cash_app_cashtag,
+        NULL::text AS bank_reference,
+        '[]'::jsonb AS aliases,
+        'usd'::text AS default_currency,
+        NULL::text AS notes,
+        status,
+        created_at::text AS created_at
     `,
     [recipientId, userId, status],
   );
@@ -406,7 +573,19 @@ export async function setRecipientStatus(
         SELECT id, user_id, name, stripe_account_id, $3
         FROM recipients
         WHERE id = $1 AND user_id = $2
-        RETURNING id, user_id, name, stripe_account_id, 'usd'::text AS default_currency, NULL::text AS notes, status, created_at::text
+        RETURNING
+          id,
+          user_id,
+          name,
+          'stripe_connected'::text AS send_method,
+          stripe_account_id,
+          NULL::text AS cash_app_cashtag,
+          NULL::text AS bank_reference,
+          '[]'::jsonb AS aliases,
+          'usd'::text AS default_currency,
+          NULL::text AS notes,
+          status,
+          created_at::text AS created_at
       `,
       [recipientId, userId, status],
     );
@@ -423,12 +602,19 @@ export async function resolveRecipientByName(userId: string, rawName: string): P
   const recipients = await listRecipientsForUser(userId);
   const approved = recipients.filter((recipient) => recipient.status === 'approved');
 
-  const exact = approved.find((recipient) => recipient.name.trim().toLowerCase() === lookup);
+  const exact = approved.find((recipient) => {
+    const nameMatch = recipient.name.trim().toLowerCase() === lookup;
+    const aliasMatch = (recipient.aliases || []).some((alias) => alias.trim().toLowerCase() === lookup);
+    return nameMatch || aliasMatch;
+  });
   if (exact) return exact;
 
   const partial = approved.find((recipient) => {
-    const normalized = recipient.name.trim().toLowerCase();
-    return normalized.includes(lookup) || lookup.includes(normalized);
+    const candidates = [
+      recipient.name.trim().toLowerCase(),
+      ...(recipient.aliases || []).map((alias) => alias.trim().toLowerCase()),
+    ];
+    return candidates.some((normalized) => normalized.includes(lookup) || lookup.includes(normalized));
   });
 
   return partial || null;
@@ -892,7 +1078,10 @@ export async function recordAgentTask(params: {
       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
       ON CONFLICT (id)
       DO UPDATE SET
+        task_type = EXCLUDED.task_type,
+        intent = EXCLUDED.intent,
         status = EXCLUDED.status,
+        input = COALESCE(EXCLUDED.input, agent_tasks.input),
         result = EXCLUDED.result,
         error = EXCLUDED.error,
         updated_at = NOW()

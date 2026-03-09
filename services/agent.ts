@@ -32,7 +32,11 @@ export interface AgentIntentParseResult {
   amount: number | null;
   currency: 'USD';
   recipient_name: string | null;
+  delivery_method?: 'cash_app' | 'stripe_connected' | 'bank' | null;
   recipient_stripe_account_id?: string | null;
+  cash_app_cashtag?: string | null;
+  bank_reference?: string | null;
+  funding_source?: string | null;
   merchant: string | null;
   description: string;
   budget_limit: number | null;
@@ -60,6 +64,7 @@ export interface AgentOrchestrationResult {
     amount: number;
     recipientName: string;
     recipientId: string;
+    sendMethod: Recipient['sendMethod'];
   };
   fundWallet?: {
     amount: number;
@@ -316,10 +321,15 @@ export function resolveRecipient(wallet: Wallet, name: string): Recipient | null
   const normalizedLookup = name.toLowerCase();
   const approved = wallet.recipients.filter((r) => r.status === 'approved');
   return approved.find((candidate) => {
-    const norm = candidate.name.toLowerCase();
-    return norm === normalizedLookup
+    const candidates = [
+      candidate.name.toLowerCase(),
+      ...(candidate.aliases || []).map((alias) => alias.toLowerCase()),
+    ];
+    return candidates.some((norm) => (
+      norm === normalizedLookup
       || norm.includes(normalizedLookup)
-      || normalizedLookup.includes(norm);
+      || normalizedLookup.includes(norm)
+    ));
   }) || null;
 }
 

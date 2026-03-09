@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { Recipient } from '@/lib/types';
 import {
-  addRecipient,
   checkGuardrails,
   getLatestPendingAgentTask,
   getUserAutofillProfile,
   getWallet,
   recordAgentTask,
   resolveRecipientByName,
+  upsertRecipientDelivery,
   upsertUserAutofillProfile,
 } from '@/lib/server/ledger';
 import { parseAgentIntent, type AgentIntent } from '@/lib/server/agentIntent';
@@ -34,6 +34,7 @@ export interface AgentOrchestrationResult {
     amount: number;
     recipientName: string;
     recipientId: string;
+    sendMethod: Recipient['sendMethod'];
   };
   fundWallet?: {
     amount: number;
@@ -102,6 +103,20 @@ function mergeIntentWithPending(
   const previousStripeAccount = typeof pendingInput.recipient_stripe_account_id === 'string'
     ? pendingInput.recipient_stripe_account_id
     : null;
+  const previousDeliveryMethod = pendingInput.delivery_method === 'cash_app'
+    || pendingInput.delivery_method === 'stripe_connected'
+    || pendingInput.delivery_method === 'bank'
+    ? pendingInput.delivery_method
+    : null;
+  const previousCashAppCashtag = typeof pendingInput.cash_app_cashtag === 'string'
+    ? pendingInput.cash_app_cashtag
+    : null;
+  const previousBankReference = typeof pendingInput.bank_reference === 'string'
+    ? pendingInput.bank_reference
+    : null;
+  const previousFundingSource = typeof pendingInput.funding_source === 'string'
+    ? pendingInput.funding_source
+    : null;
   const previousRequiredProfileFields = Array.isArray(pendingInput.required_profile_fields)
     ? pendingInput.required_profile_fields.filter((field): field is AgentIntent['required_profile_fields'][number] => {
       return typeof field === 'string';
@@ -111,8 +126,12 @@ function mergeIntentWithPending(
     ? pendingInput.intent
     : null;
 
+  const shouldForcePendingSendIntent = pendingTaskType === 'send_money'
+    && pendingStatus === 'awaiting_clarification';
   const shouldPreservePendingIntent = pendingStatus === 'awaiting_clarification' && intent.confidence < 0.7;
-  const resolvedIntent = intent.intent === 'send_money'
+  const resolvedIntent = shouldForcePendingSendIntent
+    ? 'send_money'
+    : intent.intent === 'send_money'
     ? 'send_money'
     : (shouldPreservePendingIntent && previousIntent
       ? previousIntent
@@ -128,6 +147,10 @@ function mergeIntentWithPending(
     merchant: intent.merchant ?? previousMerchant,
     budget_limit: intent.budget_limit ?? previousBudget,
     recipient_stripe_account_id: intent.recipient_stripe_account_id ?? previousStripeAccount,
+    delivery_method: intent.delivery_method ?? previousDeliveryMethod,
+    cash_app_cashtag: intent.cash_app_cashtag ?? previousCashAppCashtag,
+    bank_reference: intent.bank_reference ?? previousBankReference,
+    funding_source: intent.funding_source ?? previousFundingSource,
     required_profile_fields: intent.required_profile_fields.length > 0
       ? intent.required_profile_fields
       : previousRequiredProfileFields,
@@ -137,6 +160,22 @@ function mergeIntentWithPending(
 function extractStripeAccountIdFromMessage(message: string): string | null {
   const matched = message.match(/\bacct_[A-Za-z0-9]+\b/);
   return matched?.[0] || null;
+}
+
+function normalizeCashtag(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return /^\$[A-Za-z][A-Za-z0-9_]{1,}$/.test(trimmed) ? trimmed : null;
+}
+
+function normalizeBankReference(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length >= 2 ? trimmed : null;
+}
+
+function deliveryMethodQuestion(recipientName: string): string {
+  return `I don't have ${recipientName} saved yet. How should I send it — Cash App, Stripe recipient, or bank?`;
 }
 
 type AutofillField =
@@ -300,23 +339,210 @@ export async function orchestrateAgentMessage(params: {
       };
     }
 
-    const recipient = await resolveRecipientByName(params.userId, intent.recipient_name);
-    if (!recipient && intent.recipient_stripe_account_id) {
-      await addRecipient(
-        params.userId,
-        intent.recipient_name,
-        intent.recipient_stripe_account_id,
-        'approved',
-        'Created during clarification flow',
-      );
+    let resolvedRecipient = await resolveRecipientByName(params.userId, intent.recipient_name);
+    if (resolvedRecipient) {
+      intent.delivery_method = intent.delivery_method ?? resolvedRecipient.sendMethod;
+      intent.recipient_stripe_account_id = intent.recipient_stripe_account_id ?? resolvedRecipient.stripeAccountId ?? null;
+      intent.cash_app_cashtag = intent.cash_app_cashtag ?? resolvedRecipient.cashAppCashtag ?? null;
+      intent.bank_reference = intent.bank_reference ?? resolvedRecipient.bankReference ?? null;
     }
 
-    const resolvedRecipient = recipient || await resolveRecipientByName(params.userId, intent.recipient_name);
+    const normalizedCashtag = normalizeCashtag(intent.cash_app_cashtag);
+    if (normalizedCashtag) {
+      intent.cash_app_cashtag = normalizedCashtag;
+      intent.delivery_method = 'cash_app';
+    }
+
+    const normalizedBankReference = normalizeBankReference(intent.bank_reference);
+    if (normalizedBankReference) {
+      intent.bank_reference = normalizedBankReference;
+      intent.delivery_method = intent.delivery_method || 'bank';
+    }
+
+    if (intent.recipient_stripe_account_id) {
+      intent.delivery_method = intent.delivery_method || 'stripe_connected';
+    }
+
+    const resolvedMethod = intent.delivery_method ?? resolvedRecipient?.sendMethod ?? null;
+    if (resolvedMethod) {
+      intent.delivery_method = resolvedMethod;
+    }
+
+    const resolvedStripeAccountId = intent.recipient_stripe_account_id ?? resolvedRecipient?.stripeAccountId ?? null;
+    const resolvedCashAppCashtag = normalizeCashtag(intent.cash_app_cashtag ?? resolvedRecipient?.cashAppCashtag ?? null);
+    const resolvedBankReference = normalizeBankReference(intent.bank_reference ?? resolvedRecipient?.bankReference ?? null);
+
+    if (!resolvedRecipient && !resolvedMethod) {
+      const question = deliveryMethodQuestion(intent.recipient_name);
+
+      await persistAgentTask({
+        userId: params.userId,
+        taskId,
+        taskType: 'send_money',
+        intent: params.message,
+        status: 'awaiting_clarification',
+        input: intent,
+        result: {
+          question,
+          missingFields: ['recipient_delivery_method'],
+        },
+      });
+
+      return {
+        route: 'clarification',
+        taskId,
+        status: 'awaiting_clarification',
+        intent,
+        message: question,
+        missingFields: ['recipient_delivery_method'],
+      };
+    }
+
+    if (resolvedMethod === 'cash_app' && !resolvedCashAppCashtag) {
+      const question = resolvedRecipient
+        ? `I have ${resolvedRecipient.name}, but I still need their Cash App cashtag to send $${intent.amount.toFixed(2)}.`
+        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name}. What is their Cash App cashtag?`;
+
+      await persistAgentTask({
+        userId: params.userId,
+        taskId,
+        taskType: 'send_money',
+        intent: params.message,
+        status: 'awaiting_clarification',
+        input: {
+          ...intent,
+          delivery_method: 'cash_app',
+        },
+        result: {
+          question,
+          missingFields: ['cash_app_cashtag'],
+        },
+      });
+
+      return {
+        route: 'clarification',
+        taskId,
+        status: 'awaiting_clarification',
+        intent: {
+          ...intent,
+          delivery_method: 'cash_app',
+        },
+        message: question,
+        missingFields: ['cash_app_cashtag'],
+      };
+    }
+
+    if (resolvedMethod === 'stripe_connected' && !resolvedStripeAccountId) {
+      const question = resolvedRecipient
+        ? `I have ${resolvedRecipient.name}, but I still need their Stripe recipient account id (starts with acct_).`
+        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name}. What is their Stripe recipient account id (starts with acct_)?`;
+
+      await persistAgentTask({
+        userId: params.userId,
+        taskId,
+        taskType: 'send_money',
+        intent: params.message,
+        status: 'awaiting_clarification',
+        input: {
+          ...intent,
+          delivery_method: 'stripe_connected',
+        },
+        result: {
+          question,
+          missingFields: ['recipient_stripe_account_id'],
+        },
+      });
+
+      return {
+        route: 'clarification',
+        taskId,
+        status: 'awaiting_clarification',
+        intent: {
+          ...intent,
+          delivery_method: 'stripe_connected',
+        },
+        message: question,
+        missingFields: ['recipient_stripe_account_id'],
+      };
+    }
+
+    if (resolvedMethod === 'bank' && !resolvedBankReference) {
+      const question = resolvedRecipient
+        ? `I have ${resolvedRecipient.name}, but I still need the bank reference to send $${intent.amount.toFixed(2)}.`
+        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name}. What bank reference should I use?`;
+
+      await persistAgentTask({
+        userId: params.userId,
+        taskId,
+        taskType: 'send_money',
+        intent: params.message,
+        status: 'awaiting_clarification',
+        input: {
+          ...intent,
+          delivery_method: 'bank',
+        },
+        result: {
+          question,
+          missingFields: ['bank_reference'],
+        },
+      });
+
+      return {
+        route: 'clarification',
+        taskId,
+        status: 'awaiting_clarification',
+        intent: {
+          ...intent,
+          delivery_method: 'bank',
+        },
+        message: question,
+        missingFields: ['bank_reference'],
+      };
+    }
+
+    if (!resolvedRecipient && resolvedMethod) {
+      resolvedRecipient = await upsertRecipientDelivery({
+        userId: params.userId,
+        name: intent.recipient_name,
+        sendMethod: resolvedMethod,
+        stripeAccountId: resolvedStripeAccountId,
+        cashAppCashtag: resolvedCashAppCashtag,
+        bankReference: resolvedBankReference,
+        status: 'approved',
+        notes: 'Created during send-money clarification flow',
+        aliases: [intent.recipient_name],
+      });
+    } else if (resolvedRecipient && resolvedMethod) {
+      const shouldUpdateRecipient = resolvedRecipient.sendMethod !== resolvedMethod
+        || (resolvedMethod === 'cash_app' && resolvedCashAppCashtag !== (resolvedRecipient.cashAppCashtag || null))
+        || (resolvedMethod === 'stripe_connected' && resolvedStripeAccountId !== (resolvedRecipient.stripeAccountId || null))
+        || (resolvedMethod === 'bank' && resolvedBankReference !== (resolvedRecipient.bankReference || null))
+        || resolvedRecipient.name.trim().toLowerCase() !== intent.recipient_name.trim().toLowerCase();
+
+      if (shouldUpdateRecipient) {
+        resolvedRecipient = await upsertRecipientDelivery({
+          userId: params.userId,
+          name: resolvedRecipient.name,
+          sendMethod: resolvedMethod,
+          stripeAccountId: resolvedStripeAccountId,
+          cashAppCashtag: resolvedCashAppCashtag,
+          bankReference: resolvedBankReference,
+          status: resolvedRecipient.status,
+          notes: resolvedRecipient.notes,
+          aliases: [
+            resolvedRecipient.name,
+            intent.recipient_name,
+            ...(resolvedRecipient.aliases || []),
+          ],
+        });
+      }
+    }
+
     if (!resolvedRecipient) {
       const approvedRecipients = wallet.recipients.filter((item) => item.status === 'approved');
       const recipientHint = approvedRecipients.length > 0
-        ? `I can send $${intent.amount.toFixed(2)}. I don't see "${intent.recipient_name}" in approved recipients (${recipientListLabel(approvedRecipients)}). Share their Stripe account id (starts with acct_) to save and continue.`
-        : `I don't see a saved recipient named "${intent.recipient_name}". Share their Stripe account id (starts with acct_) and I will save them and continue.`;
+        ? `I can send $${intent.amount.toFixed(2)}. I don't see "${intent.recipient_name}" in approved recipients (${recipientListLabel(approvedRecipients)}). ${deliveryMethodQuestion(intent.recipient_name)}`
+        : deliveryMethodQuestion(intent.recipient_name);
 
       await persistAgentTask({
         userId: params.userId,
@@ -327,7 +553,7 @@ export async function orchestrateAgentMessage(params: {
         input: intent,
         result: {
           question: recipientHint,
-          missingFields: ['recipient_account'],
+          missingFields: ['recipient_delivery_method'],
         },
       });
 
@@ -337,7 +563,7 @@ export async function orchestrateAgentMessage(params: {
         status: 'awaiting_clarification',
         intent,
         message: recipientHint,
-        missingFields: ['recipient_account'],
+        missingFields: ['recipient_delivery_method'],
       };
     }
 
@@ -386,6 +612,7 @@ export async function orchestrateAgentMessage(params: {
         amount: intent.amount,
         recipientId: resolvedRecipient.id,
         recipientName: resolvedRecipient.name,
+        sendMethod: resolvedRecipient.sendMethod,
         approvalRequired,
       },
     });
@@ -402,6 +629,7 @@ export async function orchestrateAgentMessage(params: {
         amount: intent.amount,
         recipientName: resolvedRecipient.name,
         recipientId: resolvedRecipient.id,
+        sendMethod: resolvedRecipient.sendMethod,
       },
     };
   }
