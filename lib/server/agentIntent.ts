@@ -70,9 +70,11 @@ function parserPrompt(message: string, context?: string): string {
     '',
     'Intent routing rules:',
     '- "send liz five dollars", "pay my fiancee a dollar", "transfer 10 to bob" → send_money',
+    '  send_money is ONLY for peer-to-peer transfers to a named person/recipient.',
     '- "add $25", "top up my wallet", "fund my account" → fund_wallet',
-    '- "buy notion under 15/mo", "find me a CRM" → procurement_task',
-    '- "find a streaming service with Top Gun Maverick" → compare_and_buy',
+    '- "buy me coffee", "buy notion under 15/mo", "find me a CRM", "order lunch under $15", "get me a parking pass" → procurement_task',
+    '  procurement_task is for buying products/services/goods. "buy me X" = procurement, NOT send_money.',
+    '- "find a streaming service with Top Gun Maverick", "compare CRMs" → compare_and_buy',
     '- "sign up for Notion Pro" → signup_and_prepare_checkout',
     '- "cancel my grammarly subscription" → cancel_subscription',
     '- "what did I spend today", "balance" → review_spend',
@@ -283,12 +285,15 @@ function inferIntent(message: string, candidate: string | null): AgentIntent['in
   }
 
   const lower = message.toLowerCase();
+  // "buy me X" / "order X" / "get me X" → procurement (must be checked BEFORE send_money)
+  if (/\b(buy\s+me|order\s+me|get\s+me|buy\s+a|order\s+a|find\s+me)\b/.test(lower)) return 'procurement_task';
   if (/\b(send|pay|transfer)\b/.test(lower)) return 'send_money';
   if (/\b(top\s*up|topup|fund|deposit)\b/.test(lower)) return 'fund_wallet';
   if (/\b(cancel|unsubscribe|downgrade)\b/.test(lower)) return 'cancel_subscription';
   if (/\b(balance|spent|spend|history|transactions?)\b/.test(lower)) return 'review_spend';
   if (/\b(sign\s*up|signup|register|checkout)\b/.test(lower)) return 'signup_and_prepare_checkout';
   if (/\b(compare|rank|pick|best)\b/.test(lower) && /\b(buy|purchase)\b/.test(lower)) return 'compare_and_buy';
+  if (/\b(buy|purchase|order|get)\b/.test(lower)) return 'procurement_task';
   return 'procurement_task';
 }
 

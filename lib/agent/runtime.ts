@@ -10,12 +10,15 @@ function appendLifecycleForTarget(
   note: string,
 ): AgentRuntimeResult['lifecycle'] {
   let next = lifecycle;
+  const currentState = next[next.length - 1]?.state;
 
   if (targetState === 'needs_clarification' || targetState === 'failed') {
     return transitionState(next, targetState, note);
   }
 
-  next = transitionState(next, 'ready_to_execute', 'Intent parsed and workflow is executable.');
+  if (currentState !== 'ready_to_execute') {
+    next = transitionState(next, 'ready_to_execute', 'Intent parsed and workflow is executable.');
+  }
 
   if (targetState === 'awaiting_approval') {
     return transitionState(next, 'awaiting_approval', note);
@@ -54,48 +57,57 @@ export async function runAgentRuntime(input: AgentRuntimeInput): Promise<AgentRu
       message: input.prompt,
     });
 
-    lifecycle = transitionState(
-      lifecycle,
-      'ready_to_execute',
-      `Intent detected: ${orchestration.intent.intent}`,
-    );
-
     const routeDecision = routeAgentAction(orchestration);
 
     let executionResult: AgentRuntimeResult['executionResult'] = null;
 
-    if (routeDecision.nextState === 'executing') {
+    // For clarification/failure, transition directly from parsing — don't go through ready_to_execute
+    if (routeDecision.nextState === 'needs_clarification' || routeDecision.nextState === 'failed') {
       lifecycle = transitionState(
-        lifecycle,
-        'executing',
-        `Executing tool route: ${routeDecision.toolRoute}`,
-      );
-
-      executionResult = await executeAgentTask({
-        userId: input.userId,
-        routeDecision,
-        orchestration,
-      });
-
-      if (executionResult.status === 'failed') {
-        lifecycle = transitionState(
-          lifecycle,
-          'failed',
-          executionResult.message || `Execution failed for ${routeDecision.toolRoute}`,
-        );
-      } else {
-        lifecycle = transitionState(
-          lifecycle,
-          'completed',
-          executionResult.message || `Execution completed for ${routeDecision.toolRoute}`,
-        );
-      }
-    } else {
-      lifecycle = appendLifecycleForTarget(
         lifecycle,
         routeDecision.nextState,
         routeDecision.note,
       );
+    } else {
+      lifecycle = transitionState(
+        lifecycle,
+        'ready_to_execute',
+        `Intent detected: ${orchestration.intent.intent}`,
+      );
+
+      if (routeDecision.nextState === 'executing') {
+        lifecycle = transitionState(
+          lifecycle,
+          'executing',
+          `Executing tool route: ${routeDecision.toolRoute}`,
+        );
+
+        executionResult = await executeAgentTask({
+          userId: input.userId,
+          routeDecision,
+          orchestration,
+        });
+
+        if (executionResult.status === 'failed') {
+          lifecycle = transitionState(
+            lifecycle,
+            'failed',
+            executionResult.message || `Execution failed for ${routeDecision.toolRoute}`,
+          );
+        } else {
+          lifecycle = transitionState(
+            lifecycle,
+            'completed',
+            executionResult.message || `Execution completed for ${routeDecision.toolRoute}`,
+          );
+        }
+      } else {
+        lifecycle = appendLifecycleForTarget(
+          lifecycle,
+          routeDecision.nextState,
+          routeDecision.note,
+        );
+      }
     }
 
     return {
