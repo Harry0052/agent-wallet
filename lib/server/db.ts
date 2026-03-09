@@ -1,14 +1,67 @@
-import { Pool, type QueryResult, type QueryResultRow } from 'pg';
+import { Pool, type PoolConfig, type QueryResult, type QueryResultRow } from 'pg';
 import { getDatabaseUrl } from '@/lib/server/env';
 
-let pool: Pool | null = null;
-let schemaInitPromise: Promise<void> | null = null;
+declare global {
+  var __agentWalletPgPool: Pool | undefined;
+  var __agentWalletSchemaInitPromise: Promise<void> | undefined;
+}
+
+let pool: Pool | null = globalThis.__agentWalletPgPool || null;
+let schemaInitPromise: Promise<void> | null = globalThis.__agentWalletSchemaInitPromise || null;
+
+function parsePositiveInt(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function resolvePoolConfig(connectionString: string): PoolConfig {
+  const configuredMax = parsePositiveInt(process.env.DATABASE_POOL_MAX);
+  const max = configuredMax
+    ?? (connectionString.includes('pooler.supabase.com') || process.env.VERCEL
+      ? 1
+      : 10);
+
+  const idleTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_IDLE_TIMEOUT_MS)
+    ?? (process.env.VERCEL ? 5_000 : 30_000);
+  const connectionTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_CONNECTION_TIMEOUT_MS)
+    ?? 10_000;
+
+  return {
+    connectionString,
+    max,
+    idleTimeoutMillis,
+    connectionTimeoutMillis,
+    allowExitOnIdle: true,
+  };
+}
+
+function isRetryableMaxClientsError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes('maxclientsinsessionmode')
+    || message.includes('max clients reached')
+    || message.includes('too many clients');
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 function getPool(): Pool {
   if (pool) return pool;
 
+  if (globalThis.__agentWalletPgPool) {
+    pool = globalThis.__agentWalletPgPool;
+    return pool;
+  }
+
   const connectionString = getDatabaseUrl();
-  pool = new Pool({ connectionString });
+  pool = new Pool(resolvePoolConfig(connectionString));
+  globalThis.__agentWalletPgPool = pool;
   return pool;
 }
 
@@ -17,7 +70,17 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   params?: unknown[],
 ): Promise<QueryResult<T>> {
   await ensureSchema();
-  return getPool().query<T>(text, params);
+  try {
+    return await getPool().query<T>(text, params);
+  } catch (error) {
+    if (!isRetryableMaxClientsError(error)) {
+      throw error;
+    }
+
+    // Brief backoff helps when Supabase session mode is saturated momentarily.
+    await wait(150);
+    return getPool().query<T>(text, params);
+  }
 }
 
 export async function withTransaction<T>(fn: (client: Pool) => Promise<T>): Promise<T> {
@@ -327,7 +390,14 @@ export async function ensureSchema(): Promise<void> {
         END IF;
       END $$;
     `);
-  })();
+  })().catch((error) => {
+    // Allow retries on subsequent calls if first schema init failed transiently.
+    schemaInitPromise = null;
+    globalThis.__agentWalletSchemaInitPromise = undefined;
+    throw error;
+  });
+
+  globalThis.__agentWalletSchemaInitPromise = schemaInitPromise;
 
   return schemaInitPromise;
 }

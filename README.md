@@ -58,6 +58,9 @@ Schema file: `db/schema.sql`
 
 ```bash
 DATABASE_URL=postgres://...
+DATABASE_POOL_MAX=1 # recommended for Supabase session-mode pooler/serverless
+DATABASE_POOL_IDLE_TIMEOUT_MS=5000 # optional
+DATABASE_POOL_CONNECTION_TIMEOUT_MS=10000 # optional
 WALLET_USER_ID=default-user # optional
 
 OPENAI_API_KEY=

@@ -44,6 +44,9 @@ export function classifyTaskError(input: {
     || message.includes('database')
     || message.includes('procurement_tasks')
     || message.includes('ledger_entries')
+    || message.includes('maxclientsinsessionmode')
+    || message.includes('max clients reached')
+    || message.includes('too many clients')
   ) {
     return 'DB_FAILURE';
   }
