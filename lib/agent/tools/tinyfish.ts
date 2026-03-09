@@ -16,10 +16,20 @@ async function runProcurementExecution(params: {
   const goal = params.orchestration.procurement?.goal || params.orchestration.message;
   const budgetLimit = params.orchestration.intent.budget_limit;
 
-  const candidates = await discoverTinyFishVendorCandidates({
-    goal,
-    maxCandidates: 5,
-  });
+  let candidates: string[] = [];
+  try {
+    candidates = await discoverTinyFishVendorCandidates({
+      goal,
+      maxCandidates: 5,
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'vendor discovery failed';
+    return {
+      status: 'failed',
+      message: `Live vendor discovery is temporarily unavailable: ${reason}. Try again in a minute.`,
+      candidates: [],
+    };
+  }
 
   const researchTargets = candidates.slice(0, 3);
   const findings: TinyFishProcurementFinding[] = [];
@@ -142,24 +152,32 @@ export async function runTinyFishTask(params: {
     };
   }
 
-  if (params.orchestration.route === 'cancel_subscription') {
-    return runCancellationExecution(params);
-  }
+  try {
+    if (params.orchestration.route === 'cancel_subscription') {
+      return runCancellationExecution(params);
+    }
 
-  if (params.orchestration.route === 'procurement_task') {
-    return runProcurementExecution(params);
-  }
+    if (params.orchestration.route === 'procurement_task') {
+      return runProcurementExecution(params);
+    }
 
-  if (params.orchestration.route === 'signup_and_prepare_checkout') {
+    if (params.orchestration.route === 'signup_and_prepare_checkout') {
+      return {
+        status: 'queued',
+        message: 'Signup and checkout preparation is queued in the procurement workflow.',
+        merchant: params.orchestration.signup?.merchant || null,
+      };
+    }
+
     return {
-      status: 'queued',
-      message: 'Signup and checkout preparation is queued in the procurement workflow.',
-      merchant: params.orchestration.signup?.merchant || null,
+      status: 'noop',
+      message: `No TinyFish action for route ${params.orchestration.route}.`,
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'TinyFish execution failed';
+    return {
+      status: 'failed',
+      message: `TinyFish execution failed: ${reason}`,
     };
   }
-
-  return {
-    status: 'noop',
-    message: `No TinyFish action for route ${params.orchestration.route}.`,
-  };
 }
