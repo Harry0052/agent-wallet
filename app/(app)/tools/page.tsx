@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AppWindow,
   Briefcase,
@@ -71,10 +72,34 @@ function catalogIcon(catalog: ToolCatalogItem | null): LucideIcon {
   return Wrench;
 }
 
-function statusLabel(tool: UserToolRecord): "Connected" | "Disabled" | "Needs login" {
-  if (!tool.enabled) return "Disabled";
-  if (tool.status === "connected") return "Connected";
-  return "Needs login";
+type ToolStatusLabel = "Connected" | "Not connected" | "Disabled" | "Needs reconnect";
+
+function hasConnectionSignal(tool: UserToolRecord): boolean {
+  return (
+    tool.hasSecret
+    || Boolean(tool.loginIdentifierMasked)
+    || tool.status === "connected"
+    || tool.status === "failed"
+  );
+}
+
+function statusLabel(tool: UserToolRecord): ToolStatusLabel {
+  if (tool.status === "failed") return "Needs reconnect";
+  if (tool.status === "connected") return tool.enabled ? "Connected" : "Disabled";
+
+  if (!tool.enabled) {
+    return hasConnectionSignal(tool) ? "Disabled" : "Not connected";
+  }
+
+  if (tool.status === "pending") {
+    return hasConnectionSignal(tool) ? "Needs reconnect" : "Not connected";
+  }
+
+  if (tool.status === "disconnected") {
+    return hasConnectionSignal(tool) ? "Needs reconnect" : "Not connected";
+  }
+
+  return "Not connected";
 }
 
 function statusClasses(tool: UserToolRecord): string {
@@ -85,10 +110,17 @@ function statusClasses(tool: UserToolRecord): string {
   if (status === "Disabled") {
     return "border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] text-[var(--aw-text-muted)]";
   }
+  if (status === "Not connected") {
+    return "border-[var(--aw-border)] bg-white text-[var(--aw-text-soft)]";
+  }
   return "border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.12)] text-[var(--aw-warning)]";
 }
 
-function connectionLabel(connectionType: ToolConnectionType): string {
+function connectionLabel(tool: UserToolRecord): string {
+  if (!tool.hasSecret && !tool.loginIdentifierMasked && tool.status !== "connected") {
+    return "Not available";
+  }
+  const connectionType = tool.connectionType;
   if (connectionType === "password") return "Connected with password";
   if (connectionType === "oauth") return "Connected with OAuth";
   if (connectionType === "api_key") return "Connected with API key";
@@ -158,6 +190,7 @@ export default function ToolsPage() {
   const [isSavingToolId, setIsSavingToolId] = useState<string | null>(null);
   const [reconnectSecret, setReconnectSecret] = useState("");
   const [reconnectIdentifier, setReconnectIdentifier] = useState("");
+  const [isStartingStripeSetup, setIsStartingStripeSetup] = useState(false);
 
   const selectedTool = useMemo(
     () => tools.find((tool) => tool.id === selectedToolId) || null,
@@ -168,6 +201,13 @@ export default function ToolsPage() {
     () => catalog.find((item) => item.key === selectedCatalogKey) || null,
     [catalog, selectedCatalogKey],
   );
+
+  const stripeTool = useMemo(
+    () => tools.find((tool) => tool.tool.key === "stripe") || null,
+    [tools],
+  );
+
+  const stripeStatus = stripeTool ? statusLabel(stripeTool) : "Not connected";
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -339,6 +379,11 @@ export default function ToolsPage() {
     }
   };
 
+  const startStripeSetup = useCallback(async () => {
+    setIsStartingStripeSetup(true);
+    window.location.assign("/wallet?open_payment_setup=1&source=tools");
+  }, []);
+
   return (
     <div className="aw-page">
       <div className="aw-page-header">
@@ -351,6 +396,42 @@ export default function ToolsPage() {
         <div className="mb-4 rounded-xl border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-sm text-[var(--aw-danger)]">
           {error}
         </div>
+      )}
+
+      {stripeTool && stripeStatus !== "Connected" && (
+        <section className="aw-surface mb-5 p-4 md:p-5">
+          <p className="aw-kicker">Payment setup</p>
+          <h2 className="mt-1 text-base font-semibold text-[var(--aw-text)]">
+            Set up Stripe
+          </h2>
+          <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
+            Connect Stripe to fund your wallet and manage payments.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {stripeStatus === "Disabled" ? (
+              <button
+                onClick={() => void toggleEnabled(stripeTool, true)}
+                className="aw-button-primary px-3 py-1.5 text-xs"
+                disabled={isSavingToolId === stripeTool.id}
+              >
+                Enable Stripe
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  void startStripeSetup();
+                }}
+                className="aw-button-primary px-3 py-1.5 text-xs"
+                disabled={isStartingStripeSetup}
+              >
+                {isStartingStripeSetup ? "Opening..." : stripeStatus === "Needs reconnect" ? "Reconnect" : "Connect"}
+              </button>
+            )}
+            <Link href="/wallet" className="aw-button-secondary px-3 py-1.5 text-xs">
+              Fund wallet
+            </Link>
+          </div>
+        </section>
       )}
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -399,6 +480,10 @@ export default function ToolsPage() {
 
               {tools.map((tool) => {
                 const ToolIcon = toolIcon(tool);
+                const rowStatus = statusLabel(tool);
+                const isStripe = tool.tool.key === "stripe";
+                const canConnectStripe = isStripe && (rowStatus === "Not connected" || rowStatus === "Needs reconnect");
+                const canToggle = rowStatus !== "Not connected";
                 return (
                   <article
                     key={tool.id}
@@ -430,15 +515,15 @@ export default function ToolsPage() {
 
                       <div>
                         <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${statusClasses(tool)}`}>
-                          {statusLabel(tool)}
+                          {rowStatus}
                         </span>
                         <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
-                          {tool.enabled ? "Enabled" : "Disabled"}
+                          {tool.enabled ? "Enabled" : rowStatus === "Not connected" ? "Not connected" : "Disabled"}
                         </p>
                       </div>
 
                       <p className="text-xs text-[var(--aw-text-soft)]">
-                        {connectionLabel(tool.connectionType)}
+                        {connectionLabel(tool)}
                       </p>
 
                       <p className="text-xs text-[var(--aw-text-soft)]">
@@ -471,20 +556,25 @@ export default function ToolsPage() {
                           void toggleEnabled(tool, !tool.enabled);
                         }}
                         className="aw-button-secondary px-2.5 py-1 text-[11px]"
-                        disabled={isSavingToolId === tool.id}
+                        disabled={isSavingToolId === tool.id || !canToggle}
                       >
-                        {tool.enabled ? "Disable" : "Enable"}
+                        {canToggle ? (tool.enabled ? "Disable" : "Enable") : "Not connected"}
                       </button>
 
                       <button
                         onClick={() => {
+                          if (canConnectStripe) {
+                            void startStripeSetup();
+                            return;
+                          }
                           setSelectedToolId(tool.id);
                           setReconnectIdentifier("");
                           setReconnectSecret("");
                         }}
                         className="aw-button-secondary px-2.5 py-1 text-[11px]"
+                        disabled={isStartingStripeSetup}
                       >
-                        Reconnect
+                        {rowStatus === "Not connected" ? "Connect" : "Reconnect"}
                       </button>
 
                       <button
@@ -702,7 +792,7 @@ export default function ToolsPage() {
 
               <article className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
                 <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Connection</p>
-                <p className="mt-1 text-sm font-medium text-[var(--aw-text)]">{connectionLabel(selectedTool.connectionType)}</p>
+                <p className="mt-1 text-sm font-medium text-[var(--aw-text)]">{connectionLabel(selectedTool)}</p>
                 <p className="mt-1 text-xs text-[var(--aw-text-soft)]">{createdByLabel(selectedTool)}</p>
               </article>
 
@@ -731,48 +821,71 @@ export default function ToolsPage() {
               </article>
             </div>
 
-            <div className="mt-4 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Reconnect</p>
-              <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-                <label className="space-y-1">
-                  <span className="text-xs text-[var(--aw-text-muted)]">Login identifier</span>
-                  <input
-                    value={reconnectIdentifier}
-                    onChange={(event) => setReconnectIdentifier(event.target.value)}
-                    className="aw-input h-10 text-sm"
-                    placeholder={selectedTool.loginIdentifierMasked || "you@company.com"}
-                  />
-                </label>
-
-                <label className="space-y-1">
-                  <span className="text-xs text-[var(--aw-text-muted)]">Secret</span>
-                  <input
-                    type="password"
-                    value={reconnectSecret}
-                    onChange={(event) => setReconnectSecret(event.target.value)}
-                    className="aw-input h-10 text-sm"
-                    placeholder="Enter new password or token"
-                  />
-                </label>
-
-                <button
-                  onClick={() => {
-                    void submitReconnect(selectedTool);
-                  }}
-                  className="aw-button-primary h-10 px-4 text-sm"
-                  disabled={isSavingToolId === selectedTool.id}
-                >
-                  {isSavingToolId === selectedTool.id ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Loader2 size={13} className="animate-spin" />
-                      Saving
-                    </span>
-                  ) : (
-                    "Reconnect"
-                  )}
-                </button>
+            {selectedTool.tool.key === "stripe" ? (
+              <div className="mt-4 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Payment setup</p>
+                <p className="mt-1 text-xs text-[var(--aw-text-soft)]">
+                  Connect Stripe to fund your wallet and manage payments.
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      void startStripeSetup();
+                    }}
+                    className="aw-button-primary h-10 px-4 text-sm"
+                    disabled={isStartingStripeSetup}
+                  >
+                    {isStartingStripeSetup ? "Opening..." : statusLabel(selectedTool) === "Connected" ? "Update setup" : "Set up Stripe"}
+                  </button>
+                  <Link href="/wallet" className="aw-button-secondary h-10 px-4 text-sm">
+                    Fund wallet
+                  </Link>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Reconnect</p>
+                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                  <label className="space-y-1">
+                    <span className="text-xs text-[var(--aw-text-muted)]">Login identifier</span>
+                    <input
+                      value={reconnectIdentifier}
+                      onChange={(event) => setReconnectIdentifier(event.target.value)}
+                      className="aw-input h-10 text-sm"
+                      placeholder={selectedTool.loginIdentifierMasked || "you@company.com"}
+                    />
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="text-xs text-[var(--aw-text-muted)]">Secret</span>
+                    <input
+                      type="password"
+                      value={reconnectSecret}
+                      onChange={(event) => setReconnectSecret(event.target.value)}
+                      className="aw-input h-10 text-sm"
+                      placeholder="Enter new password or token"
+                    />
+                  </label>
+
+                  <button
+                    onClick={() => {
+                      void submitReconnect(selectedTool);
+                    }}
+                    className="aw-button-primary h-10 px-4 text-sm"
+                    disabled={isSavingToolId === selectedTool.id}
+                  >
+                    {isSavingToolId === selectedTool.id ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Loader2 size={13} className="animate-spin" />
+                        Saving
+                      </span>
+                    ) : (
+                      "Reconnect"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
               <div className="flex items-center justify-between gap-2">
@@ -820,11 +933,11 @@ export default function ToolsPage() {
                   void toggleEnabled(selectedTool, !selectedTool.enabled);
                 }}
                 className="aw-button-secondary px-3 py-1.5 text-xs"
-                disabled={isSavingToolId === selectedTool.id}
+                disabled={isSavingToolId === selectedTool.id || statusLabel(selectedTool) === "Not connected"}
               >
                 <span className="inline-flex items-center gap-1">
                   {selectedTool.enabled ? <ShieldAlert size={12} /> : <CheckCircle2 size={12} />}
-                  {selectedTool.enabled ? "Disable" : "Enable"}
+                  {statusLabel(selectedTool) === "Not connected" ? "Not connected" : selectedTool.enabled ? "Disable" : "Enable"}
                 </span>
               </button>
 

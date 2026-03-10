@@ -28,7 +28,10 @@ interface AppState {
   approveTask: (taskId: string) => void;
   rejectTask: (taskId: string) => void;
   addFunds: (amount: number) => void;
-  startFunding: (amount: number) => Promise<void>;
+  startFunding: (amount: number, options?: {
+    paymentMethodId?: string;
+    forgetAfterUse?: boolean;
+  }) => Promise<void>;
   refreshWallet: () => Promise<void>;
   updateSettings: (updates: Partial<WalletSettings>) => Promise<void>;
   addRecipient: (name: string, stripeAccountId: string) => Promise<void>;
@@ -147,7 +150,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshWallet,
   }), [addMessage, updateLastMessage, getWallet, refreshWallet]);
 
-  const startFunding = useCallback(async (amount: number) => {
+  const pollForTopupConfirmation = useCallback(async (startingBalance: number) => {
+    for (let i = 0; i < 6; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      try {
+        const latest = await walletService.fetchWallet();
+        setWallet(latest);
+        if (latest.balance > startingBalance) {
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: `Webhook confirmed. New balance: $${latest.balance.toFixed(2)}.`,
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      } catch {
+        // Keep polling; webhook and API may still be in flight.
+      }
+    }
+  }, [addMessage]);
+
+  const startFunding = useCallback(async (
+    amount: number,
+    options?: {
+      paymentMethodId?: string;
+      forgetAfterUse?: boolean;
+    },
+  ) => {
     if (amount <= 0) {
       addMessage({
         id: uid(),
@@ -160,20 +191,127 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const session = await fundingService.createFundingSession(amount);
-      window.location.assign(session.checkoutUrl);
-    } catch (error) {
+      const startingBalance = walletRef.current.balance;
+      const explicitMethodId = options?.paymentMethodId?.trim() || null;
+
+      if (explicitMethodId) {
+        const result = await fundingService.topupWithSavedPaymentMethod({
+          amount,
+          paymentMethodId: explicitMethodId,
+          approved: true,
+          forgetAfterUse: options?.forgetAfterUse,
+        });
+
+        if (result.status === 'succeeded') {
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: `${result.message} Waiting for webhook confirmation before crediting balance.`,
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          });
+          await pollForTopupConfirmation(startingBalance);
+          return;
+        }
+
+        if (result.checkoutUrl) {
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: 'Payment needs verification.',
+            type: 'funding',
+            data: {
+              amount: result.amount,
+              topupMode: 'checkout',
+              requiresVerification: true,
+              checkoutUrl: result.checkoutUrl,
+              allowDeny: true,
+            },
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
+      let savedMethods: Awaited<ReturnType<typeof fundingService.listSavedPaymentMethods>> = [];
+      try {
+        savedMethods = await fundingService.listSavedPaymentMethods();
+      } catch {
+        savedMethods = [];
+      }
+      if (savedMethods.length > 0) {
+        const fallbackMethod = savedMethods[0];
+        const result = await fundingService.topupWithSavedPaymentMethod({
+          amount,
+          paymentMethodId: fallbackMethod.stripePaymentMethodId,
+          approved: true,
+          forgetAfterUse: options?.forgetAfterUse,
+        });
+
+        if (result.status === 'succeeded') {
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: `${result.message} Waiting for webhook confirmation before crediting balance.`,
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          });
+          await pollForTopupConfirmation(startingBalance);
+          return;
+        }
+
+        if (result.checkoutUrl) {
+          addMessage({
+            id: uid(),
+            role: 'assistant',
+            content: 'Payment needs verification.',
+            type: 'funding',
+            data: {
+              amount: result.amount,
+              topupMode: 'checkout',
+              requiresVerification: true,
+              checkoutUrl: result.checkoutUrl,
+              allowDeny: true,
+            },
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
       addMessage({
         id: uid(),
         role: 'assistant',
-        content: error instanceof Error
+        content: `Set up payment method to add $${amount.toFixed(2)}.`,
+        type: 'funding',
+        data: {
+          amount,
+          topupMode: 'setup_required',
+          setupUrl: '/wallet?open_payment_setup=1&source=chat',
+          allowDeny: true,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : '';
+      const lower = rawMessage.toLowerCase();
+      const guidance = lower.includes('stripe is not connected')
+        ? 'Stripe is not connected. Open Tools or Wallet and set up Stripe first.'
+        : lower.includes('stripe needs reconnect')
+          ? 'Stripe needs reconnect. Open Tools and reconnect Stripe.'
+          : lower.includes('stripe is disabled')
+            ? 'Stripe is disabled. Enable Stripe in Tools before funding.'
+            : null;
+      addMessage({
+        id: uid(),
+        role: 'assistant',
+        content: guidance || (error instanceof Error
           ? `Funding setup failed: ${error.message}`
-          : 'Funding setup failed. Please try again.',
+          : 'Funding setup failed. Please try again.'),
         type: 'text',
         timestamp: new Date().toISOString(),
       });
     }
-  }, [addMessage]);
+  }, [addMessage, pollForTopupConfirmation]);
 
   useEffect(() => {
     void refreshWallet();
@@ -914,6 +1052,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
           case 'fund_wallet': {
             const runtimeExecution = orchestration.executionResult;
             if (
+              runtimeExecution?.status === 'needs_input'
+              && runtimeExecution.requiresApproval === true
+              && typeof runtimeExecution.amount === 'number'
+              && runtimeExecution.paymentMethod
+            ) {
+              const paymentMethod = runtimeExecution.paymentMethod as {
+                stripePaymentMethodId?: string;
+                brand?: string | null;
+                last4?: string | null;
+              };
+              const label = typeof runtimeExecution.paymentMethodLabel === 'string'
+                ? runtimeExecution.paymentMethodLabel
+                : `${paymentMethod.brand || 'Card'} ${paymentMethod.last4 ? `**** ${paymentMethod.last4}` : 'saved method'}`;
+
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: typeof runtimeExecution.message === 'string'
+                  ? runtimeExecution.message
+                  : `Approve $${runtimeExecution.amount.toFixed(2)} top-up from ${label}.`,
+                type: 'funding',
+                data: {
+                  amount: runtimeExecution.amount,
+                  paymentMethodId: paymentMethod.stripePaymentMethodId,
+                  paymentMethodLabel: label,
+                  topupMode: 'saved_payment_method',
+                  requireApproval: true,
+                  allowDeny: true,
+                  allowForgetAfterUse: true,
+                },
+                timestamp: new Date().toISOString(),
+              });
+              break;
+            }
+
+            if (
+              runtimeExecution?.status === 'needs_input'
+              && runtimeExecution.setupRequired === true
+              && typeof runtimeExecution.amount === 'number'
+            ) {
+              const setupUrl = typeof runtimeExecution.setupUrl === 'string'
+                ? runtimeExecution.setupUrl
+                : '/wallet?open_payment_setup=1&source=chat';
+
+              addMessage({
+                id: uid(),
+                role: 'assistant',
+                content: typeof runtimeExecution.message === 'string'
+                  ? runtimeExecution.message
+                  : `Set up payment method to add $${runtimeExecution.amount.toFixed(2)}.`,
+                type: 'funding',
+                data: {
+                  amount: runtimeExecution.amount,
+                  topupMode: 'setup_required',
+                  setupUrl,
+                  allowDeny: true,
+                },
+                timestamp: new Date().toISOString(),
+              });
+              break;
+            }
+
+            if (
               runtimeExecution?.status === 'pending_checkout'
               && typeof runtimeExecution.checkoutUrl === 'string'
             ) {
@@ -922,11 +1123,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 role: 'assistant',
                 content: typeof runtimeExecution.message === 'string'
                   ? runtimeExecution.message
-                  : 'Funding checkout is ready. Redirecting now.',
-                type: 'text',
+                  : 'Payment needs verification.',
+                type: 'funding',
+                data: {
+                  amount: typeof runtimeExecution.amount === 'number' ? runtimeExecution.amount : 0,
+                  topupMode: 'checkout',
+                  checkoutUrl: runtimeExecution.checkoutUrl,
+                  requiresVerification: true,
+                  allowDeny: true,
+                },
                 timestamp: new Date().toISOString(),
               });
-              window.location.assign(runtimeExecution.checkoutUrl);
               break;
             }
 

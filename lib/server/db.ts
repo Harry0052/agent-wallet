@@ -101,9 +101,15 @@ export async function ensureSchema(): Promise<void> {
         user_id TEXT PRIMARY KEY,
         currency TEXT NOT NULL DEFAULT 'usd',
         settings JSONB NOT NULL,
+        stripe_customer_id TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await p.query(`
+      ALTER TABLE wallet_users
+      ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
     `);
 
     await p.query(`
@@ -233,6 +239,37 @@ export async function ensureSchema(): Promise<void> {
         id TEXT PRIMARY KEY,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS wallet_payment_methods (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        stripe_customer_id TEXT NOT NULL,
+        stripe_payment_method_id TEXT NOT NULL,
+        brand TEXT,
+        last4 TEXT,
+        exp_month INTEGER,
+        exp_year INTEGER,
+        funding TEXT,
+        is_default BOOLEAN NOT NULL DEFAULT FALSE,
+        status TEXT NOT NULL DEFAULT 'active',
+        consented_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        consent_metadata JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_wallet_payment_methods_user_pm UNIQUE (user_id, stripe_payment_method_id)
+      );
+    `);
+
+    await p.query(`
+      CREATE INDEX IF NOT EXISTS idx_wallet_payment_methods_user_updated
+      ON wallet_payment_methods (user_id, updated_at DESC);
+    `);
+
+    await p.query(`
+      CREATE INDEX IF NOT EXISTS idx_wallet_payment_methods_customer
+      ON wallet_payment_methods (stripe_customer_id, stripe_payment_method_id);
     `);
 
     await p.query(`
@@ -600,6 +637,12 @@ export async function ensureSchema(): Promise<void> {
               'removed',
               'signup_created'
             )) NOT VALID;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_wallet_payment_methods_status') THEN
+          ALTER TABLE wallet_payment_methods
+            ADD CONSTRAINT chk_wallet_payment_methods_status
+            CHECK (status IN ('active', 'removed')) NOT VALID;
         END IF;
       END $$;
     `);

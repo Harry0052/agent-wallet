@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWalletUserId } from '@/lib/server/ledger';
-import { getEnabledCheckoutMethods, getStripeClient } from '@/lib/server/stripe';
+import { createTopupCheckoutSession } from '@/lib/server/fundingStripe';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 
 export const runtime = 'nodejs';
@@ -22,52 +22,20 @@ export async function POST(req: NextRequest) {
     const userId = getWalletUserId();
     logServerEvent('info', 'funding.session.started', { userId, amount });
 
-    const stripe = getStripeClient();
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: getEnabledCheckoutMethods(),
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: 'usd',
-            unit_amount: cents,
-            product_data: {
-              name: 'Agent Wallet top-up',
-            },
-          },
-        },
-      ],
-      payment_intent_data: {
-        metadata: {
-          wallet_action: 'topup',
-          wallet_user_id: userId,
-        },
-      },
-      success_url: `${req.nextUrl.origin}/?funding_status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.nextUrl.origin}/?funding_cancelled=1`,
-      metadata: {
-        wallet_action: 'topup',
-        wallet_user_id: userId,
-      },
+    const session = await createTopupCheckoutSession({
+      userId,
+      amount,
+      origin: req.nextUrl.origin,
     });
-
-    if (!session.url) {
-      logServerEvent('error', 'funding.session.missing_url', {
-        userId,
-        sessionId: session.id,
-      });
-      return NextResponse.json(apiError('STRIPE_FAILURE', 'Unable to create Stripe checkout URL', true), { status: 500 });
-    }
 
     logServerEvent('info', 'funding.session.created', {
       userId,
-      sessionId: session.id,
+      sessionId: session.sessionId,
     });
 
     return NextResponse.json({
-      checkoutUrl: session.url,
-      sessionId: session.id,
+      checkoutUrl: session.checkoutUrl,
+      sessionId: session.sessionId,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create Stripe session';

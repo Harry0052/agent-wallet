@@ -61,6 +61,7 @@ interface UserToolRow {
 }
 
 interface UserToolJoinedRow extends UserToolRow {
+  has_secret: boolean;
   tool_key: string;
   tool_display_name: string;
   tool_category: string | null;
@@ -104,6 +105,7 @@ const DEFAULT_TOOL_CATALOG: Array<{
   supportsOauth: boolean;
   supportsPasswordLogin: boolean;
   supportsApiKey: boolean;
+  defaultEnabled?: boolean;
 }> = [
   {
     key: 'stripe',
@@ -116,6 +118,7 @@ const DEFAULT_TOOL_CATALOG: Array<{
     supportsOauth: true,
     supportsPasswordLogin: true,
     supportsApiKey: true,
+    defaultEnabled: true,
   },
   {
     key: 'netflix',
@@ -298,6 +301,7 @@ function mapUserToolRow(row: UserToolJoinedRow) {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    hasSecret: row.has_secret,
     tool: {
       key: row.tool_key,
       displayName: row.tool_display_name,
@@ -373,7 +377,7 @@ async function seedDefaultToolsCatalogIfNeeded(): Promise<void> {
         item.supportsOauth,
         item.supportsPasswordLogin,
         item.supportsApiKey,
-        false,
+        item.defaultEnabled === true,
       ],
     );
   }
@@ -556,6 +560,11 @@ async function loadUserToolJoinedById(userId: string, userToolId: string): Promi
         ut.created_by,
         ut.created_at,
         ut.updated_at,
+        EXISTS (
+          SELECT 1
+          FROM vault_entries ve
+          WHERE ve.user_tool_id = ut.id
+        ) AS has_secret,
         tc.key AS tool_key,
         tc.display_name AS tool_display_name,
         tc.category AS tool_category,
@@ -597,6 +606,11 @@ async function loadUserToolJoinedByKey(userId: string, toolKeyOrDisplay: string)
         ut.created_by,
         ut.created_at,
         ut.updated_at,
+        EXISTS (
+          SELECT 1
+          FROM vault_entries ve
+          WHERE ve.user_tool_id = ut.id
+        ) AS has_secret,
         tc.key AS tool_key,
         tc.display_name AS tool_display_name,
         tc.category AS tool_category,
@@ -622,6 +636,71 @@ async function loadUserToolJoinedByKey(userId: string, toolKeyOrDisplay: string)
   );
 
   return result.rows[0] || null;
+}
+
+export async function ensureStripeToolForUser(userId: string): Promise<ReturnType<typeof mapUserToolRow>> {
+  const catalog = await ensureCatalogTool({
+    toolKey: 'stripe',
+    displayName: 'Stripe',
+    category: 'payments',
+    iconName: 'stripe',
+    homepageUrl: 'https://stripe.com',
+    loginUrl: 'https://dashboard.stripe.com/login',
+    signupUrl: 'https://dashboard.stripe.com/register',
+    supportsOauth: true,
+    supportsPasswordLogin: true,
+    supportsApiKey: true,
+    defaultEnabled: true,
+  });
+
+  const existing = await loadUserToolJoinedByKey(userId, 'stripe');
+  if (existing) return mapUserToolRow(existing);
+
+  const inserted = await query<UserToolRow>(
+    `
+      INSERT INTO user_tools (
+        id,
+        user_id,
+        tool_id,
+        status,
+        enabled,
+        connection_type,
+        label,
+        login_identifier_masked,
+        created_by,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, 'disconnected', FALSE, 'oauth', 'Payment setup', NULL, 'manual', NOW(), NOW())
+      ON CONFLICT (user_id, tool_id) DO NOTHING
+      RETURNING
+        id,
+        user_id,
+        tool_id,
+        status,
+        enabled,
+        connection_type,
+        label,
+        login_identifier_masked,
+        last_used_at,
+        last_verified_at,
+        created_by,
+        created_at,
+        updated_at
+    `,
+    [randomUUID(), userId, catalog.id],
+  );
+
+  if (inserted.rows[0]) {
+    const insertedJoined = await loadUserToolJoinedById(userId, inserted.rows[0].id);
+    if (insertedJoined) return mapUserToolRow(insertedJoined);
+  }
+
+  const resolved = await loadUserToolJoinedByKey(userId, 'stripe');
+  if (!resolved) {
+    throw new Error('Failed to ensure Stripe tool for user');
+  }
+  return mapUserToolRow(resolved);
 }
 
 async function loadVaultEntry(userToolId: string): Promise<VaultEntryRow | null> {
@@ -760,6 +839,8 @@ export async function listToolsCatalog() {
 }
 
 export async function listUserTools(userId: string) {
+  await ensureStripeToolForUser(userId);
+
   const result = await query<UserToolJoinedRow>(
     `
       SELECT
@@ -776,6 +857,11 @@ export async function listUserTools(userId: string) {
         ut.created_by,
         ut.created_at,
         ut.updated_at,
+        EXISTS (
+          SELECT 1
+          FROM vault_entries ve
+          WHERE ve.user_tool_id = ut.id
+        ) AS has_secret,
         tc.key AS tool_key,
         tc.display_name AS tool_display_name,
         tc.category AS tool_category,
@@ -1088,6 +1174,9 @@ export async function resolveToolForAction(input: {
   userId: string;
   toolKey: string;
 }): Promise<ReturnType<typeof mapUserToolRow> | null> {
+  if (normalizeToolKey(input.toolKey) === 'stripe') {
+    await ensureStripeToolForUser(input.userId);
+  }
   const row = await loadUserToolJoinedByKey(input.userId, input.toolKey);
   return row ? mapUserToolRow(row) : null;
 }
@@ -1269,10 +1358,28 @@ export async function resolveRuntimeCredentialReference(input: {
     } as const;
   }
 
-  if (!tool.enabled || tool.status !== 'connected') {
+  const hasConnectionSignal = tool.has_secret || Boolean(tool.login_identifier_masked);
+
+  if (!tool.enabled) {
     return {
       resolved: false,
-      reason: 'not_enabled',
+      reason: tool.status === 'disconnected' && !hasConnectionSignal ? 'not_connected' : 'not_enabled',
+      tool: mapUserToolRow(tool),
+    } as const;
+  }
+
+  if (tool.status === 'failed') {
+    return {
+      resolved: false,
+      reason: 'needs_reconnect',
+      tool: mapUserToolRow(tool),
+    } as const;
+  }
+
+  if (tool.status !== 'connected') {
+    return {
+      resolved: false,
+      reason: hasConnectionSignal ? 'needs_reconnect' : 'not_connected',
       tool: mapUserToolRow(tool),
     } as const;
   }
@@ -1293,4 +1400,96 @@ export async function resolveRuntimeCredentialReference(input: {
     keyVersion: vault.key_version,
     hasMetadata: Boolean(vault.encrypted_metadata),
   } as const;
+}
+
+export async function setStripeToolConnectedFromFunding(input: {
+  userId: string;
+  loginIdentifierMasked?: string | null;
+  label?: string | null;
+}): Promise<ReturnType<typeof mapUserToolRow>> {
+  const ensured = await ensureStripeToolForUser(input.userId);
+  const nextLabel = input.label?.trim() || ensured.label || 'Payment setup';
+  const nextIdentifier = input.loginIdentifierMasked?.trim() || ensured.loginIdentifierMasked;
+
+  await query(
+    `
+      UPDATE user_tools
+      SET
+        status = 'connected',
+        enabled = TRUE,
+        connection_type = 'session',
+        label = $1,
+        login_identifier_masked = $2,
+        updated_at = NOW(),
+        last_verified_at = NOW()
+      WHERE id = $3
+        AND user_id = $4
+    `,
+    [nextLabel, nextIdentifier || null, ensured.id, input.userId],
+  );
+
+  await recordToolEvent({
+    userToolId: ensured.id,
+    eventType: 'connected',
+    message: 'Stripe payment setup completed',
+  });
+
+  const row = await loadUserToolJoinedById(input.userId, ensured.id);
+  if (!row) {
+    throw new Error('Failed to update Stripe tool after payment setup');
+  }
+
+  return mapUserToolRow(row);
+}
+
+export async function setStripeToolDisconnected(input: {
+  userId: string;
+  reason?: string;
+}): Promise<void> {
+  const stripeTool = await ensureStripeToolForUser(input.userId);
+
+  await query(
+    `
+      UPDATE user_tools
+      SET
+        status = 'disconnected',
+        enabled = FALSE,
+        updated_at = NOW()
+      WHERE id = $1
+        AND user_id = $2
+    `,
+    [stripeTool.id, input.userId],
+  );
+
+  await recordToolEvent({
+    userToolId: stripeTool.id,
+    eventType: 'disabled',
+    message: input.reason || 'Stripe disconnected',
+  });
+}
+
+export async function setStripeToolNeedsReconnect(input: {
+  userId: string;
+  reason?: string;
+}): Promise<void> {
+  const stripeTool = await ensureStripeToolForUser(input.userId);
+
+  await query(
+    `
+      UPDATE user_tools
+      SET
+        status = 'failed',
+        enabled = TRUE,
+        updated_at = NOW()
+      WHERE id = $1
+        AND user_id = $2
+    `,
+    [stripeTool.id, input.userId],
+  );
+
+  await recordToolEvent({
+    userToolId: stripeTool.id,
+    eventType: 'login_failed',
+    message: input.reason || 'Stripe needs reconnect',
+  });
 }

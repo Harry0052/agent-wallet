@@ -1339,10 +1339,14 @@ export async function orchestrateAgentMessage(params: {
         const reason = credentialRef.reason;
         const question = reason === 'not_enabled'
           ? `${resolvedTool.tool.displayName} is disabled. Enable it in Tools before running this task.`
-          : `Saved login for ${resolvedTool.tool.displayName} needs reconnect before I can continue.`;
+          : reason === 'not_connected'
+            ? `No saved ${resolvedTool.tool.displayName} login found. Connect it in Tools first.`
+            : `Saved login for ${resolvedTool.tool.displayName} needs reconnect before I can continue.`;
         const missingFields = reason === 'not_enabled'
           ? ['tool_enable']
-          : ['security_credential'];
+          : reason === 'not_connected'
+            ? ['tool_connection']
+            : ['security_credential'];
 
         await persistAgentTask({
           userId: params.userId,
@@ -1355,7 +1359,7 @@ export async function orchestrateAgentMessage(params: {
             mode: 'login',
             tool_key: resolvedTool.tool.key,
             tool_display_name: resolvedTool.tool.displayName,
-            ...(reason === 'not_enabled' ? {} : {
+            ...((reason === 'not_enabled' || reason === 'not_connected') ? {} : {
               resume_action: 'tool_reconnect',
               reconnect_user_tool_id: resolvedTool.id,
             }),
@@ -1364,10 +1368,12 @@ export async function orchestrateAgentMessage(params: {
             question,
             missingFields,
             success: false,
-            error_type: reason === 'not_enabled' ? 'login_required' : 'invalid_credentials',
+            error_type: reason === 'not_enabled' || reason === 'not_connected' ? 'login_required' : 'invalid_credentials',
             error_message: reason === 'not_enabled'
               ? 'Tool is disabled.'
-              : 'Saved login is missing or invalid. Reconnect is required.',
+              : reason === 'not_connected'
+                ? 'No saved login is connected for this tool.'
+                : 'Saved login is missing or invalid. Reconnect is required.',
           },
         });
 

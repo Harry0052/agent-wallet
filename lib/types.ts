@@ -13,6 +13,24 @@ export interface Wallet {
   recipients: Recipient[];
 }
 
+export interface SavedPaymentMethod {
+  id: string;
+  userId: string;
+  stripeCustomerId: string;
+  stripePaymentMethodId: string;
+  brand?: string | null;
+  last4?: string | null;
+  expMonth?: number | null;
+  expYear?: number | null;
+  funding?: string | null;
+  isDefault: boolean;
+  status: 'active' | 'removed';
+  consentedAt: string;
+  consentMetadata?: Record<string, string> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WalletSettings {
   maxTransaction: number;        // max per single transaction
   dailyLimit: number;            // daily spend limit
@@ -142,6 +160,15 @@ export interface ReceiptData {
 
 export interface FundingData {
   amount: number;
+  paymentMethodId?: string;
+  paymentMethodLabel?: string;
+  topupMode?: 'checkout' | 'saved_payment_method' | 'setup_required';
+  requireApproval?: boolean;
+  allowForgetAfterUse?: boolean;
+  allowDeny?: boolean;
+  requiresVerification?: boolean;
+  checkoutUrl?: string;
+  setupUrl?: string;
 }
 
 export interface AgentLogData {
@@ -405,6 +432,7 @@ export interface UserToolRecord {
   toolId: string;
   status: UserToolStatus;
   enabled: boolean;
+  hasSecret: boolean;
   connectionType: ToolConnectionType;
   label: string | null;
   loginIdentifierMasked: string | null;

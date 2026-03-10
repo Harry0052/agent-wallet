@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChatInterface } from "@/components/ChatInterface";
 import { OpsDeck } from "@/components/OpsDeck";
@@ -52,6 +53,29 @@ function OperatorContent() {
           </span>
         </div>
       </section>
+
+      {isLandingEntry && (
+        <section
+          className="aw-surface mb-5 p-4 md:p-5 aw-enter-reveal-fast"
+          style={{ animationDelay: "120ms" }}
+        >
+          <p className="aw-kicker">Payment setup</p>
+          <h3 className="mt-1 text-base font-semibold text-[var(--aw-text)]">
+            Set up Stripe
+          </h3>
+          <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
+            Connect Stripe to fund your wallet and manage payments.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Link href="/wallet" className="aw-button-primary px-3 py-1.5 text-xs">
+              Set up Stripe
+            </Link>
+            <Link href="/tools" className="aw-button-secondary px-3 py-1.5 text-xs">
+              Open Tools
+            </Link>
+          </div>
+        </section>
+      )}
 
       <div
         className={`aw-page-header ${isLandingEntry ? "aw-enter-reveal" : ""}`}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { ChatMessage as Msg, OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData, EvidenceData, TaskProgressData, TaskState } from '@/lib/types';
 import { useApp } from '@/lib/store';
 import { fmt, fmtTime, cn, domainFromUrl } from '@/lib/utils';
@@ -106,22 +107,114 @@ function ReceiptCard({ data }: { data: ReceiptData }) {
 
 function FundingCard({ data }: { data: FundingData }) {
   const { startFunding } = useApp();
+  const [decision, setDecision] = useState<'idle' | 'denied'>('idle');
+  const [forgetAfterUse, setForgetAfterUse] = useState(false);
+  const usingSavedMethod = data.topupMode === 'saved_payment_method' && Boolean(data.paymentMethodId);
+  const needsSetup = data.topupMode === 'setup_required';
+  const needsVerification = data.topupMode === 'checkout' && Boolean(data.checkoutUrl);
+  const subtitle = needsSetup
+    ? 'Set up payment method first'
+    : usingSavedMethod
+    ? `Use saved ${data.paymentMethodLabel || 'payment method'}`
+    : needsVerification
+      ? 'Payment needs verification'
+      : 'Stripe Checkout';
+
+  if (decision === 'denied') {
+    return (
+      <div className="mt-3 rounded-2xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3.5">
+        <p className="text-sm font-medium text-[var(--aw-text)]">Top-up denied.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-3 rounded-2xl border border-[var(--aw-border-strong)] bg-[var(--aw-primary-soft)] p-3.5 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[var(--aw-text)]">Wallet Top-Up</p>
-          <p className="text-xs text-[var(--aw-text-soft)]">Stripe Checkout (Apple Pay if enabled)</p>
+          <p className="text-xs text-[var(--aw-text-soft)]">{subtitle}</p>
         </div>
         <p className="text-lg font-semibold text-[var(--aw-primary-strong)]">{fmt(data.amount)}</p>
       </div>
-      <button
-        onClick={() => void startFunding(data.amount)}
-        className="aw-button-primary w-full py-2 text-sm"
-      >
-        Continue To Stripe
-      </button>
+      {usingSavedMethod && data.allowForgetAfterUse ? (
+        <label className="flex items-center gap-2 text-xs text-[var(--aw-text-soft)]">
+          <input
+            type="checkbox"
+            checked={forgetAfterUse}
+            onChange={(event) => setForgetAfterUse(event.target.checked)}
+            className="h-3.5 w-3.5 accent-[var(--aw-primary)]"
+          />
+          Forget this payment method after this top-up
+        </label>
+      ) : null}
+      {needsSetup ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => {
+              window.location.assign(data.setupUrl || "/wallet?open_payment_setup=1&source=chat");
+            }}
+            className="aw-button-primary py-2 text-sm"
+          >
+            Set up payment method
+          </button>
+          <button
+            onClick={() => setDecision('denied')}
+            className="aw-button-secondary py-2 text-sm"
+          >
+            Deny
+          </button>
+        </div>
+      ) : needsVerification ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => {
+              window.location.assign(data.checkoutUrl as string);
+            }}
+            className="aw-button-primary py-2 text-sm"
+          >
+            Verify payment
+          </button>
+          <button
+            onClick={() => setDecision('denied')}
+            className="aw-button-secondary py-2 text-sm"
+          >
+            Deny
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => void startFunding(
+              data.amount,
+              usingSavedMethod
+                ? {
+                  paymentMethodId: data.paymentMethodId,
+                  forgetAfterUse,
+                }
+                : undefined,
+            )}
+            className="aw-button-primary py-2 text-sm"
+          >
+            {usingSavedMethod ? 'Approve' : 'Continue'}
+          </button>
+          {data.allowDeny ? (
+            <button
+              onClick={() => setDecision('denied')}
+              className="aw-button-secondary py-2 text-sm"
+            >
+              Deny
+            </button>
+          ) : (
+            <button
+              onClick={() => setDecision('denied')}
+              className="aw-button-secondary py-2 text-sm"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

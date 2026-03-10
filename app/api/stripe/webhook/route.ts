@@ -10,6 +10,11 @@ import {
 } from '@/lib/server/ledger';
 import { getStripeWebhookSecret, validateCriticalServerEnv } from '@/lib/server/env';
 import { getStripeClient } from '@/lib/server/stripe';
+import {
+  markStripeDisconnectedFromExternalDetach,
+  saveSetupSessionPaymentMethod,
+} from '@/lib/server/fundingStripe';
+import { markPaymentMethodRemovedByStripeIdWithUsers } from '@/lib/server/fundingPaymentMethods';
 import { apiError, logServerEvent } from '@/lib/server/observability';
 
 export const runtime = 'nodejs';
@@ -105,6 +110,17 @@ export async function POST(req: NextRequest) {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       const action = session.metadata?.wallet_action;
+      if (action === 'save_payment_method' && session.mode === 'setup') {
+        const savedMethod = await saveSetupSessionPaymentMethod({ session });
+
+        logServerEvent('info', 'stripe.webhook.setup_method_saved', {
+          userId: session.metadata?.wallet_user_id || null,
+          sessionId: session.id,
+          setupIntentId: typeof session.setup_intent === 'string' ? session.setup_intent : null,
+          savedPaymentMethodId: savedMethod?.stripePaymentMethodId || null,
+        });
+      }
+
       if (action === 'topup' && session.mode === 'payment') {
         const userId = session.metadata?.wallet_user_id || getWalletUserId();
         const amount = (session.amount_total || 0) / 100;
@@ -205,6 +221,47 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (event.type === 'payment_intent.payment_failed') {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const action = paymentIntent.metadata?.wallet_action;
+      if (action === 'topup') {
+        const userId = paymentIntent.metadata?.wallet_user_id || getWalletUserId();
+        const amount = (paymentIntent.amount || 0) / 100;
+        if (amount > 0) {
+          const source = await resolveFundingSource(stripe, paymentIntent.id);
+          const errorCode = paymentIntent.last_payment_error?.code || 'unknown';
+          const errorMessage = paymentIntent.last_payment_error?.message || 'Payment failed';
+
+          await recordLedgerEntryUnique({
+            userId,
+            type: 'topup',
+            amount,
+            currency: paymentIntent.currency || 'usd',
+            direction: 'credit',
+            stripeObjectId: `pi_failed:${paymentIntent.id}`,
+            stripeEventId: event.id,
+            description: 'Top-up failed',
+            status: 'failed',
+            source,
+            metadata: {
+              payment_intent_id: paymentIntent.id,
+              error_code: errorCode,
+              error_message: errorMessage.slice(0, 220),
+            },
+          });
+
+          logServerEvent('info', 'stripe.webhook.payment_intent_topup_failed_recorded', {
+            userId,
+            amount,
+            source,
+            eventId: event.id,
+            paymentIntentId: paymentIntent.id,
+            errorCode,
+          });
+        }
+      }
+    }
+
     if (event.type === 'charge.refunded') {
       const charge = event.data.object as Stripe.Charge;
       const action = charge.metadata?.wallet_action;
@@ -232,6 +289,22 @@ export async function POST(req: NextRequest) {
           chargeId: charge.id,
         });
       }
+    }
+
+    if (event.type === 'payment_method.detached') {
+      const paymentMethod = event.data.object as Stripe.PaymentMethod;
+      const affectedUsers = await markPaymentMethodRemovedByStripeIdWithUsers(paymentMethod.id);
+      for (const userId of affectedUsers) {
+        await markStripeDisconnectedFromExternalDetach({
+          userId,
+          reason: 'Stripe payment method detached',
+        });
+      }
+
+      logServerEvent('info', 'stripe.webhook.payment_method_detached', {
+        paymentMethodId: paymentMethod.id,
+        affectedUsers: affectedUsers.length,
+      });
     }
 
     await markWebhookProcessed(event.id);

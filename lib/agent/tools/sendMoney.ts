@@ -7,22 +7,9 @@ import {
   recordLedgerEntry,
   recordLedgerEntryUnique,
 } from '@/lib/server/ledger';
-import { getEnabledCheckoutMethods, getStripeClient } from '@/lib/server/stripe';
-
-function resolveAppOrigin(): string {
-  const explicit = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL;
-  if (explicit && /^https?:\/\//i.test(explicit)) {
-    return explicit.replace(/\/+$/, '');
-  }
-
-  const vercelUrl = process.env.VERCEL_URL;
-  if (vercelUrl) {
-    return `https://${vercelUrl.replace(/^https?:\/\//i, '').replace(/\/+$/, '')}`;
-  }
-
-  const port = process.env.PORT || '3000';
-  return `http://localhost:${port}`;
-}
+import { getDefaultSavedPaymentMethodForUser } from '@/lib/server/fundingPaymentMethods';
+import { paymentMethodDisplayLabel } from '@/lib/server/fundingStripe';
+import { getStripeClient } from '@/lib/server/stripe';
 
 async function executeFundWallet(params: {
   userId: string;
@@ -44,53 +31,53 @@ async function executeFundWallet(params: {
     };
   }
 
-  const origin = resolveAppOrigin();
-  const stripe = getStripeClient();
-  const session = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    payment_method_types: getEnabledCheckoutMethods(),
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: 'usd',
-          unit_amount: cents,
-          product_data: { name: 'Agent Wallet top-up' },
-        },
+  const savedMethod = await getDefaultSavedPaymentMethodForUser(params.userId);
+  if (savedMethod) {
+    const label = paymentMethodDisplayLabel(savedMethod);
+
+    await recordAgentTask({
+      userId: params.userId,
+      taskId: params.orchestration.taskId,
+      taskType: 'fund_wallet',
+      intent: params.orchestration.message,
+      status: 'awaiting_approval',
+      result: {
+        amount,
+        savedPaymentMethodId: savedMethod.stripePaymentMethodId,
+        paymentMethodLabel: label,
+        approvalMessage: `Approve $${amount.toFixed(2)} top-up from ${label}.`,
       },
-    ],
-    payment_intent_data: {
-      metadata: {
-        wallet_action: 'topup',
-        wallet_user_id: params.userId,
-      },
-    },
-    success_url: `${origin}/?funding_status=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/?funding_cancelled=1`,
-    metadata: {
-      wallet_action: 'topup',
-      wallet_user_id: params.userId,
-    },
-  });
+    });
+
+    return {
+      status: 'needs_input',
+      message: `Approve $${amount.toFixed(2)} top-up from ${label}.`,
+      amount,
+      requiresApproval: true,
+      paymentMethod: savedMethod,
+      paymentMethodLabel: label,
+      topupMode: 'saved_payment_method',
+    };
+  }
 
   await recordAgentTask({
     userId: params.userId,
     taskId: params.orchestration.taskId,
     taskType: 'fund_wallet',
     intent: params.orchestration.message,
-    status: 'completed',
+    status: 'awaiting_clarification',
     result: {
-      checkoutUrl: session.url,
-      sessionId: session.id,
       amount,
+      setupRequired: true,
+      setupUrl: '/wallet?open_payment_setup=1&source=chat',
     },
   });
 
   return {
-    status: 'pending_checkout',
-    message: `Funding checkout created for $${amount.toFixed(2)}.`,
-    checkoutUrl: session.url,
-    sessionId: session.id,
+    status: 'needs_input',
+    message: `Set up payment method to add $${amount.toFixed(2)}.`,
+    setupRequired: true,
+    setupUrl: '/wallet?open_payment_setup=1&source=chat',
     amount,
   };
 }
