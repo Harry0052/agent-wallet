@@ -1,29 +1,24 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { Cormorant_Garamond, Manrope } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 
-const bodyFont = Manrope({
+const bodyFont = Inter({
   subsets: ['latin'],
-  variable: '--font-manrope',
+  variable: '--font-inter',
   weight: ['400', '500', '600', '700'],
-});
-
-const displayFont = Cormorant_Garamond({
-  subsets: ['latin'],
-  variable: '--font-display',
-  weight: ['500', '600', '700'],
 });
 
 export const metadata: Metadata = {
   title: 'Agent Wallet',
-  description: 'The spending layer for AI agents. Chat-first autonomous purchasing powered by TinyFish.',
+  description:
+    'Financial OS for tasks, wallet controls, and live web execution powered by TinyFish.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${bodyFont.variable} ${displayFont.variable} aw-body antialiased min-h-screen overflow-x-hidden`}>
+      <body className={`${bodyFont.variable} aw-body antialiased min-h-screen overflow-x-hidden`}>
         {children}
       </body>
     </html>

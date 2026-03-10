@@ -174,6 +174,7 @@ export interface ProcurementBudgetConstraint {
 export interface ProcurementPlan {
   normalizedGoal: string;
   category: string;
+  scopeLocked: boolean;
   targetVendorCandidates: string[];
   budgetConstraint: ProcurementBudgetConstraint;
   mustHaveFeatures: string[];
@@ -368,6 +369,73 @@ export interface SubscriptionActionRecord {
   updatedAt: string;
 }
 
+export type ToolConnectionType = 'password' | 'oauth' | 'api_key' | 'session';
+export type UserToolStatus = 'connected' | 'disconnected' | 'pending' | 'failed';
+export type UserToolCreatedBy = 'manual' | 'signup_flow' | 'oauth' | 'imported';
+export type UserToolEventType =
+  | 'connected'
+  | 'updated'
+  | 'login_used'
+  | 'login_failed'
+  | 'disabled'
+  | 'enabled'
+  | 'removed'
+  | 'signup_created';
+
+export interface ToolCatalogItem {
+  id: string;
+  key: string;
+  displayName: string;
+  category: string | null;
+  iconName: string | null;
+  homepageUrl: string | null;
+  loginUrl: string | null;
+  signupUrl: string | null;
+  supportsOauth: boolean;
+  supportsPasswordLogin: boolean;
+  supportsApiKey: boolean;
+  defaultEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserToolRecord {
+  id: string;
+  userId: string;
+  toolId: string;
+  status: UserToolStatus;
+  enabled: boolean;
+  connectionType: ToolConnectionType;
+  label: string | null;
+  loginIdentifierMasked: string | null;
+  lastUsedAt: string | null;
+  lastVerifiedAt: string | null;
+  createdBy: UserToolCreatedBy;
+  createdAt: string;
+  updatedAt: string;
+  tool: {
+    key: string;
+    displayName: string;
+    category: string | null;
+    iconName: string | null;
+    homepageUrl: string | null;
+    loginUrl: string | null;
+    signupUrl: string | null;
+    supportsOauth: boolean;
+    supportsPasswordLogin: boolean;
+    supportsApiKey: boolean;
+    defaultEnabled: boolean;
+  };
+}
+
+export interface UserToolEventRecord {
+  id: string;
+  userToolId: string;
+  eventType: UserToolEventType;
+  message: string | null;
+  createdAt: string;
+}
+
 // -- Agent / TinyFish ----------------------------------------
 
 export type AgentStepType =
@@ -408,6 +476,48 @@ export type TaskState =
 export interface TaskProgressData {
   taskState: TaskState;
   stateHistory: Array<{ state: TaskState; label: string; timestamp: string }>;
+}
+
+export type LiveRunStatus =
+  | 'idle'
+  | 'started'
+  | 'running'
+  | 'complete'
+  | 'failed'
+  | 'canceled';
+
+export type LiveRunEventType =
+  | 'STARTED'
+  | 'STREAMING_URL'
+  | 'PROGRESS'
+  | 'COMPLETE';
+
+export interface LiveRunEvent {
+  id: string;
+  type: LiveRunEventType;
+  label: 'Started' | 'Running' | 'Complete' | 'Failed' | 'Canceled';
+  message: string;
+  purpose?: string;
+  timestamp: string;
+  raw?: unknown;
+}
+
+export interface LiveRunResult {
+  status: 'complete' | 'failed' | 'canceled';
+  summary: string;
+  resultJson?: unknown;
+  error?: string;
+  raw?: unknown;
+}
+
+export interface LiveRunState {
+  runId: string | null;
+  status: LiveRunStatus;
+  events: LiveRunEvent[];
+  streamingUrl: string | null;
+  result: LiveRunResult | null;
+  error: string | null;
+  updatedAt: string | null;
 }
 
 export interface AgentTask {

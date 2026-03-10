@@ -12,7 +12,7 @@ export function routeAgentAction(orchestration: AgentOrchestrationResult): Agent
     return {
       toolRoute: 'ask_clarification',
       nextState: 'needs_clarification',
-      note: 'Missing required fields, asking user for clarification.',
+      note: orchestration.message || 'Clarification is required before I can continue.',
     };
   }
 

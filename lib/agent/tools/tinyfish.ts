@@ -14,6 +14,7 @@ import {
   deriveVendorCandidatesFromContext,
   sanitizeVendorTargets,
 } from '@/lib/server/vendorTargeting';
+import { getRuntimeCredential } from '@/lib/server/toolsVault';
 
 function fallbackDiscoveryCandidates(orchestration: AgentOrchestrationResult): string[] {
   const goal = orchestration.procurement?.goal || orchestration.message || '';
@@ -25,6 +26,7 @@ function fallbackDiscoveryCandidates(orchestration: AgentOrchestrationResult): s
   });
 
   return sanitizeVendorTargets([
+    ...(orchestration.intent.candidate_vendors || []),
     orchestration.intent.merchant,
     orchestration.signup?.merchant || null,
     ...inferredFromContext,
@@ -38,33 +40,47 @@ async function runProcurementExecution(params: {
 }): Promise<AgentExecutionResult> {
   const goal = params.orchestration.procurement?.goal || params.orchestration.message;
   const budgetLimit = params.orchestration.intent.budget_limit;
+  const scopeLocked = params.orchestration.intent.scope_locked === true;
+  const lockedCandidates = sanitizeVendorTargets(params.orchestration.intent.candidate_vendors || [], 5);
   let discoveryWarning: string | null = null;
 
   let candidates: string[] = [];
-  try {
-    candidates = await discoverTinyFishVendorCandidates({
-      goal,
-      maxCandidates: 5,
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'vendor discovery failed';
-    const fallback = fallbackDiscoveryCandidates(params.orchestration);
-    if (fallback.length === 0) {
-      const clarification = buildVendorClarificationQuestion({
+  if (scopeLocked) {
+    candidates = lockedCandidates;
+  } else {
+    try {
+      candidates = await discoverTinyFishVendorCandidates({
         goal,
-        category: params.orchestration.intent.intent === 'compare_and_buy' ? 'compare_and_buy' : 'procurement',
+        maxCandidates: 5,
       });
-      return {
-        status: 'needs_input',
-        message: `Live vendor discovery is temporarily unavailable: ${reason}. ${clarification}`,
-        candidates: [],
-      };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'vendor discovery failed';
+      const fallback = fallbackDiscoveryCandidates(params.orchestration);
+      if (fallback.length === 0) {
+        const clarification = buildVendorClarificationQuestion({
+          goal,
+          category: params.orchestration.intent.intent === 'compare_and_buy' ? 'compare_and_buy' : 'procurement',
+        });
+        return {
+          status: 'needs_input',
+          message: `Live vendor discovery is temporarily unavailable: ${reason}. ${clarification}`,
+          candidates: [],
+        };
+      }
+      candidates = fallback;
+      discoveryWarning = reason;
     }
-    candidates = fallback;
-    discoveryWarning = reason;
   }
 
   const researchTargets = candidates.slice(0, 3);
+  if (scopeLocked && researchTargets.length === 0) {
+    return {
+      status: 'needs_input',
+      message: 'I can keep this comparison scoped, but I need at least one vendor name. Which vendors should I compare?',
+      candidates: [],
+    };
+  }
+
   const findings: TinyFishProcurementFinding[] = [];
   const vendorResearchFailures: string[] = [];
 
@@ -86,6 +102,15 @@ async function runProcurementExecution(params: {
   }
 
   if (findings.length === 0) {
+    if (scopeLocked && researchTargets.length > 0) {
+      return {
+        status: 'needs_input',
+        message: `I could not extract pricing for the scoped vendors (${researchTargets.join(', ')}). Do you want me to expand beyond those vendors?`,
+        candidates: researchTargets,
+        failedVendors: vendorResearchFailures,
+      };
+    }
+
     if (discoveryWarning && researchTargets.length > 0) {
       const attempted = researchTargets.join(', ');
       const clarification = buildVendorClarificationQuestion({
@@ -124,10 +149,11 @@ async function runProcurementExecution(params: {
     status: 'success',
     message: discoveryWarning
       ? `TinyFish researched ${researchTargets.length} fallback vendor(s) and found ${findings.length} plans. Live vendor discovery is temporarily unavailable.`
-      : `TinyFish researched ${researchTargets.length} vendors and found ${findings.length} plans.`,
+      : `TinyFish researched ${researchTargets.length} ${scopeLocked ? 'scoped vendor(s)' : 'vendors'} and found ${findings.length} plans.`,
     candidates: researchTargets,
     topMatches: ranked.slice(0, 5),
     discoveryWarning,
+    scopeLocked,
   };
 }
 
@@ -220,9 +246,68 @@ export async function runTinyFishTask(params: {
     }
 
     if (params.orchestration.route === 'signup_and_prepare_checkout') {
+      const signup = params.orchestration.signup;
+      if (signup?.mode === 'login') {
+        const toolKey = signup.toolKey || signup.merchant || null;
+        const actionStatus = signup.credentialState === 'action_required'
+          ? 'action_required'
+          : 'success';
+        const toolLabel = signup.toolDisplayName || signup.merchant || 'tool';
+
+        if (!toolKey) {
+          return {
+            status: 'needs_input',
+            message: 'Tool login is required before I can continue.',
+            task_type: 'login',
+            tool: null,
+            action_status: 'action_required',
+            used_saved_login: false,
+            notes: 'Missing tool key.',
+            merchant: signup.merchant || null,
+          };
+        }
+
+        const runtimeCredential = await getRuntimeCredential({
+          userId: params.userId,
+          toolKey,
+          actionType: 'login_runtime',
+        }).catch(() => null);
+
+        if (!runtimeCredential) {
+          return {
+            status: 'needs_input',
+            message: `Saved login for ${toolLabel} is not ready. Reconnect this tool and try again.`,
+            task_type: 'login',
+            tool: toolKey,
+            action_status: 'action_required',
+            used_saved_login: false,
+            notes: 'Credential resolution failed.',
+            merchant: signup.merchant || null,
+          };
+        }
+
+        return {
+          status: 'queued',
+          message: signup.usedSavedLogin
+            ? `Using saved ${toolLabel} login.`
+            : `Login for ${toolLabel} is ready.`,
+          task_type: 'login',
+          tool: toolKey,
+          action_status: actionStatus,
+          used_saved_login: Boolean(signup.usedSavedLogin),
+          notes: null,
+          merchant: signup.merchant || null,
+        };
+      }
+
       return {
         status: 'queued',
         message: 'Signup and checkout preparation is queued in the procurement workflow.',
+        task_type: 'signup',
+        tool: signup?.toolKey || null,
+        created_tool: false,
+        login_identifier: null,
+        notes: null,
         merchant: params.orchestration.signup?.merchant || null,
       };
     }

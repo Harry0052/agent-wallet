@@ -381,6 +381,140 @@ export async function ensureSchema(): Promise<void> {
     `);
 
     await p.query(`
+      CREATE TABLE IF NOT EXISTS tools_catalog (
+        id TEXT PRIMARY KEY,
+        key TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        category TEXT,
+        icon_name TEXT,
+        homepage_url TEXT,
+        login_url TEXT,
+        signup_url TEXT,
+        supports_oauth BOOLEAN NOT NULL DEFAULT FALSE,
+        supports_password_login BOOLEAN NOT NULL DEFAULT TRUE,
+        supports_api_key BOOLEAN NOT NULL DEFAULT FALSE,
+        default_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await p.query(`
+      CREATE INDEX IF NOT EXISTS idx_tools_catalog_key
+      ON tools_catalog (key);
+    `);
+
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS user_tools (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        tool_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        connection_type TEXT NOT NULL,
+        label TEXT,
+        login_identifier_masked TEXT,
+        last_used_at TIMESTAMPTZ,
+        last_verified_at TIMESTAMPTZ,
+        created_by TEXT NOT NULL DEFAULT 'manual',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_user_tools_user_tool UNIQUE (user_id, tool_id)
+      );
+    `);
+
+    await p.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_tools_user_updated
+      ON user_tools (user_id, updated_at DESC);
+    `);
+
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS vault_entries (
+        id TEXT PRIMARY KEY,
+        user_tool_id TEXT NOT NULL,
+        secret_type TEXT NOT NULL,
+        encrypted_secret TEXT NOT NULL,
+        encrypted_metadata TEXT,
+        key_version TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_vault_entries_user_tool_secret UNIQUE (user_tool_id, secret_type)
+      );
+    `);
+
+    await p.query(`
+      CREATE INDEX IF NOT EXISTS idx_vault_entries_user_tool_updated
+      ON vault_entries (user_tool_id, updated_at DESC);
+    `);
+
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS user_tool_events (
+        id TEXT PRIMARY KEY,
+        user_tool_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        message TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await p.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_tool_events_user_tool_created
+      ON user_tool_events (user_tool_id, created_at DESC);
+    `);
+
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS tool_run_links (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        user_tool_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await p.query(`
+      CREATE INDEX IF NOT EXISTS idx_tool_run_links_run
+      ON tool_run_links (run_id, created_at DESC);
+    `);
+
+    await p.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_user_tools_tool_id') THEN
+          ALTER TABLE user_tools
+            ADD CONSTRAINT fk_user_tools_tool_id
+            FOREIGN KEY (tool_id)
+            REFERENCES tools_catalog(id)
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_vault_entries_user_tool_id') THEN
+          ALTER TABLE vault_entries
+            ADD CONSTRAINT fk_vault_entries_user_tool_id
+            FOREIGN KEY (user_tool_id)
+            REFERENCES user_tools(id)
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_user_tool_events_user_tool_id') THEN
+          ALTER TABLE user_tool_events
+            ADD CONSTRAINT fk_user_tool_events_user_tool_id
+            FOREIGN KEY (user_tool_id)
+            REFERENCES user_tools(id)
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_tool_run_links_user_tool_id') THEN
+          ALTER TABLE tool_run_links
+            ADD CONSTRAINT fk_tool_run_links_user_tool_id
+            FOREIGN KEY (user_tool_id)
+            REFERENCES user_tools(id)
+            ON DELETE CASCADE;
+        END IF;
+      END $$;
+    `);
+
+    await p.query(`
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_recipients_send_method') THEN
@@ -427,6 +561,45 @@ export async function ensureSchema(): Promise<void> {
           ALTER TABLE subscription_actions
             ADD CONSTRAINT chk_subscription_actions_operation
             CHECK (operation IN ('inspect_billing', 'renewal_check', 'downgrade', 'cancel', 'switch_billing')) NOT VALID;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_user_tools_status') THEN
+          ALTER TABLE user_tools
+            ADD CONSTRAINT chk_user_tools_status
+            CHECK (status IN ('connected', 'disconnected', 'pending', 'failed')) NOT VALID;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_user_tools_connection_type') THEN
+          ALTER TABLE user_tools
+            ADD CONSTRAINT chk_user_tools_connection_type
+            CHECK (connection_type IN ('password', 'oauth', 'api_key', 'session')) NOT VALID;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_user_tools_created_by') THEN
+          ALTER TABLE user_tools
+            ADD CONSTRAINT chk_user_tools_created_by
+            CHECK (created_by IN ('manual', 'signup_flow', 'oauth', 'imported')) NOT VALID;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_vault_entries_secret_type') THEN
+          ALTER TABLE vault_entries
+            ADD CONSTRAINT chk_vault_entries_secret_type
+            CHECK (secret_type IN ('password', 'oauth_token', 'refresh_token', 'api_key', 'session')) NOT VALID;
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_user_tool_events_type') THEN
+          ALTER TABLE user_tool_events
+            ADD CONSTRAINT chk_user_tool_events_type
+            CHECK (event_type IN (
+              'connected',
+              'updated',
+              'login_used',
+              'login_failed',
+              'disabled',
+              'enabled',
+              'removed',
+              'signup_created'
+            )) NOT VALID;
         END IF;
       END $$;
     `);

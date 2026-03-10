@@ -47,6 +47,7 @@ function toProcurementPlan(value: unknown): ProcurementPlan {
   const fallback: ProcurementPlan = {
     normalizedGoal: '',
     category: 'general',
+    scopeLocked: false,
     targetVendorCandidates: [],
     budgetConstraint: {
       amount: null,
@@ -66,6 +67,7 @@ function toProcurementPlan(value: unknown): ProcurementPlan {
   return {
     normalizedGoal: typeof raw.normalizedGoal === 'string' ? raw.normalizedGoal : fallback.normalizedGoal,
     category: typeof raw.category === 'string' ? raw.category : fallback.category,
+    scopeLocked: typeof raw.scopeLocked === 'boolean' ? raw.scopeLocked : false,
     targetVendorCandidates: toStringArray(raw.targetVendorCandidates),
     budgetConstraint: {
       amount: typeof raw.budgetConstraint?.amount === 'number' ? raw.budgetConstraint.amount : null,

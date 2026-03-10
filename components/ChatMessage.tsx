@@ -18,8 +18,8 @@ function OptionCards({ data }: { data: OptionsData }) {
             className={cn(
               'w-full rounded-2xl border px-3.5 py-3 text-left transition-all duration-200',
               recommended
-                ? 'border-[rgba(201,165,106,0.7)] bg-[rgba(201,165,106,0.14)] shadow-[0_10px_24px_rgba(201,165,106,0.18)]'
-                : 'border-[var(--aw-border)] bg-black/15 hover:border-[var(--aw-border-strong)] hover:bg-white/[0.04]'
+                ? 'border-[var(--aw-border-strong)] bg-[var(--aw-primary-soft)] shadow-[0_8px_18px_rgba(37,99,235,0.16)]'
+                : 'border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] hover:border-[var(--aw-border-strong)] hover:bg-[var(--aw-surface-emphasis)]'
             )}
           >
             <div className="flex items-start justify-between gap-3">
@@ -27,7 +27,7 @@ function OptionCards({ data }: { data: OptionsData }) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-[var(--aw-text)]">{option.name}</span>
                   {recommended && (
-                    <span className="rounded-full border border-[rgba(201,165,106,0.6)] bg-[rgba(201,165,106,0.22)] px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[#e6cb9d]">
+                    <span className="rounded-full border border-[var(--aw-border-strong)] bg-[var(--aw-primary-soft)] px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[var(--aw-primary-strong)]">
                       Best Match
                     </span>
                   )}
@@ -41,7 +41,7 @@ function OptionCards({ data }: { data: OptionsData }) {
                   ))}
                 </div>
               </div>
-              <p className="text-base font-semibold text-[#ecd8b4] whitespace-nowrap">{fmt(option.price)}</p>
+              <p className="text-base font-semibold text-[var(--aw-primary-strong)] whitespace-nowrap">{fmt(option.price)}</p>
             </div>
           </button>
         );
@@ -54,13 +54,13 @@ function ApprovalCard({ data }: { data: ApprovalData }) {
   const { approveTask, rejectTask } = useApp();
 
   return (
-    <div className="mt-3 rounded-2xl border border-[rgba(201,165,106,0.56)] bg-[rgba(201,165,106,0.13)] p-3.5 space-y-3">
+    <div className="mt-3 rounded-2xl border border-[var(--aw-border-strong)] bg-[var(--aw-primary-soft)] p-3.5 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[var(--aw-text)] truncate">{data.merchant}</p>
           <p className="text-xs text-[var(--aw-text-soft)] truncate">{data.item}</p>
         </div>
-        <p className="text-lg font-semibold text-[#ecd8b4]">{fmt(data.amount)}</p>
+        <p className="text-lg font-semibold text-[var(--aw-primary-strong)]">{fmt(data.amount)}</p>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <button
@@ -88,7 +88,7 @@ function ReceiptCard({ data }: { data: ReceiptData }) {
           <p className="text-sm font-semibold text-[var(--aw-text)] truncate">{data.merchant}</p>
           <p className="text-xs text-[var(--aw-text-soft)] truncate">{data.item}</p>
         </div>
-        <p className="text-sm font-semibold text-[#9cd0ba]">-{fmt(data.amount)}</p>
+        <p className="text-sm font-semibold text-[var(--aw-success)]">-{fmt(data.amount)}</p>
       </div>
       <div className="space-y-1 border-t border-[rgba(88,166,132,0.45)] pt-2 text-xs">
         <div className="flex justify-between text-[var(--aw-text-soft)]">
@@ -108,13 +108,13 @@ function FundingCard({ data }: { data: FundingData }) {
   const { startFunding } = useApp();
 
   return (
-    <div className="mt-3 rounded-2xl border border-[rgba(201,165,106,0.5)] bg-[rgba(201,165,106,0.1)] p-3.5 space-y-3">
+    <div className="mt-3 rounded-2xl border border-[var(--aw-border-strong)] bg-[var(--aw-primary-soft)] p-3.5 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[var(--aw-text)]">Wallet Top-Up</p>
           <p className="text-xs text-[var(--aw-text-soft)]">Stripe Checkout (Apple Pay if enabled)</p>
         </div>
-        <p className="text-lg font-semibold text-[#ecd8b4]">{fmt(data.amount)}</p>
+        <p className="text-lg font-semibold text-[var(--aw-primary-strong)]">{fmt(data.amount)}</p>
       </div>
       <button
         onClick={() => void startFunding(data.amount)}
@@ -128,7 +128,7 @@ function FundingCard({ data }: { data: FundingData }) {
 
 function AgentLog({ data }: { data: AgentLogData }) {
   return (
-    <div className="mt-3 space-y-2 rounded-2xl border border-[var(--aw-border)] bg-black/20 p-3">
+    <div className="mt-3 space-y-2 rounded-2xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
       {data.steps.map((step) => (
         <div key={step.id} className="flex items-start gap-2">
           <span
@@ -153,12 +153,12 @@ function EvidencePanel({ data }: { data: EvidenceData }) {
       {data.findings.slice(0, 4).map((finding, index) => {
         const features = Array.isArray(finding.keyFeatures) ? finding.keyFeatures : [];
         return (
-          <div key={`${finding.vendorName}_${finding.planName}_${finding.extractedAt}_${index}`} className="rounded-xl border border-[var(--aw-border)] bg-black/20 p-2.5">
+          <div key={`${finding.vendorName}_${finding.planName}_${finding.extractedAt}_${index}`} className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-2.5">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">
                 {domainFromUrl(finding.sourceUrl) || 'source'}
               </p>
-              <p className="text-xs text-[#e7d0a8]">{fmt(finding.price)} / {finding.billingFrequency}</p>
+              <p className="text-xs text-[var(--aw-primary-strong)]">{fmt(finding.price)} / {finding.billingFrequency}</p>
             </div>
             <p className="mt-1 text-sm font-semibold text-[var(--aw-text)]">{finding.vendorName} · {finding.planName}</p>
             {features.length > 0 && (
@@ -173,19 +173,19 @@ function EvidencePanel({ data }: { data: EvidenceData }) {
 
 const STATE_STYLES: Record<TaskState, { dot: string; label: string }> = {
   received: { dot: 'bg-[var(--aw-text-muted)]', label: 'Received' },
-  parsing: { dot: 'bg-[#dfc08a] animate-pulse', label: 'Parsing' },
-  needs_clarification: { dot: 'bg-[#e6a23c]', label: 'Needs Info' },
-  resolving_recipient: { dot: 'bg-[#dfc08a] animate-pulse', label: 'Resolving' },
-  ready_to_execute: { dot: 'bg-[#67c4a0]', label: 'Ready' },
+  parsing: { dot: 'bg-[var(--aw-primary)] animate-pulse', label: 'Parsing' },
+  needs_clarification: { dot: 'bg-[var(--aw-warning)]', label: 'Needs Info' },
+  resolving_recipient: { dot: 'bg-[var(--aw-primary)] animate-pulse', label: 'Resolving' },
+  ready_to_execute: { dot: 'bg-[var(--aw-success)]', label: 'Ready' },
   executing: { dot: 'aw-dot-live', label: 'Executing' },
-  awaiting_approval: { dot: 'bg-[#e6a23c]', label: 'Awaiting Approval' },
+  awaiting_approval: { dot: 'bg-[var(--aw-warning)]', label: 'Awaiting Approval' },
   completed: { dot: 'bg-[var(--aw-success)]', label: 'Completed' },
   failed: { dot: 'bg-[var(--aw-danger)]', label: 'Failed' },
 };
 
 function TaskProgressPanel({ data }: { data: TaskProgressData }) {
   return (
-    <div className="mt-3 space-y-1.5 rounded-2xl border border-[var(--aw-border)] bg-black/20 p-3">
+    <div className="mt-3 space-y-1.5 rounded-2xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
       {data.stateHistory.map((entry, index) => {
         const style = STATE_STYLES[entry.state] || STATE_STYLES.received;
         const isLast = index === data.stateHistory.length - 1;
@@ -208,9 +208,9 @@ function TaskProgressPanel({ data }: { data: TaskProgressData }) {
 function ThinkingIndicator() {
   return (
     <div className="mt-2 flex items-center gap-1.5">
-      <div className="h-1.5 w-1.5 rounded-full bg-[#dfc08a] animate-pulse" />
-      <div className="h-1.5 w-1.5 rounded-full bg-[#dfc08a] animate-pulse" style={{ animationDelay: '0.2s' }} />
-      <div className="h-1.5 w-1.5 rounded-full bg-[#dfc08a] animate-pulse" style={{ animationDelay: '0.4s' }} />
+      <div className="h-1.5 w-1.5 rounded-full bg-[var(--aw-primary)] animate-pulse" />
+      <div className="h-1.5 w-1.5 rounded-full bg-[var(--aw-primary)] animate-pulse" style={{ animationDelay: '0.2s' }} />
+      <div className="h-1.5 w-1.5 rounded-full bg-[var(--aw-primary)] animate-pulse" style={{ animationDelay: '0.4s' }} />
     </div>
   );
 }
@@ -218,7 +218,7 @@ function ThinkingIndicator() {
 function renderMessageText(content: string) {
   return content.split(/(\*\*[^*]+\*\*)/g).map((part, index) => (
     part.startsWith('**') && part.endsWith('**')
-      ? <strong key={index} className="font-semibold text-[#f5dfb6]">{part.slice(2, -2)}</strong>
+      ? <strong key={index} className="font-semibold text-[var(--aw-primary-strong)]">{part.slice(2, -2)}</strong>
       : part
   ));
 }
@@ -232,8 +232,8 @@ export function ChatMessageBubble({ message }: { message: Msg }) {
         className={cn(
           'max-w-[90%] rounded-[20px] border px-4 py-3 md:max-w-[85%]',
           isUser
-            ? 'border-[rgba(201,165,106,0.56)] bg-[linear-gradient(145deg,rgba(201,165,106,0.24),rgba(201,165,106,0.08))] text-[var(--aw-text)]'
-            : 'border-[var(--aw-border)] bg-black/20 text-[var(--aw-text)]'
+            ? 'border-[var(--aw-border-strong)] bg-[var(--aw-primary-soft)] text-[var(--aw-text)]'
+            : 'border-[var(--aw-border)] bg-[var(--aw-surface-muted)] text-[var(--aw-text)]'
         )}
       >
         <p className="text-sm leading-relaxed whitespace-pre-wrap">
@@ -249,7 +249,7 @@ export function ChatMessageBubble({ message }: { message: Msg }) {
         {message.type === 'evidence' && message.data && <EvidencePanel data={message.data as EvidenceData} />}
         {message.type === 'task-progress' && message.data && <TaskProgressPanel data={message.data as TaskProgressData} />}
 
-        <p className={cn('mt-1.5 text-[10px]', isUser ? 'text-[#ead7b6]' : 'text-[var(--aw-text-muted)]')}>
+        <p className={cn('mt-1.5 text-[10px]', isUser ? 'text-[var(--aw-primary-strong)]' : 'text-[var(--aw-text-muted)]')}>
           {fmtTime(message.timestamp)}
         </p>
       </article>

@@ -31,6 +31,10 @@ export interface AgentIntentParseResult {
     | 'review_spend';
   amount: number | null;
   currency: 'USD';
+  normalized_goal?: string | null;
+  category?: string | null;
+  scope_locked?: boolean;
+  candidate_vendors?: string[];
   recipient_name: string | null;
   delivery_method?: 'cash_app' | 'stripe_connected' | 'bank' | null;
   recipient_stripe_account_id?: string | null;
@@ -75,6 +79,11 @@ export interface AgentOrchestrationResult {
   signup?: {
     merchant: string | null;
     requiredProfileFields: string[];
+    mode?: 'login' | 'signup';
+    toolKey?: string | null;
+    toolDisplayName?: string | null;
+    credentialState?: 'ready' | 'updated' | 'action_required';
+    usedSavedLogin?: boolean;
   };
   reviewSpend?: {
     balance: number;

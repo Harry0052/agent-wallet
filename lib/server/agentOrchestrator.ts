@@ -7,9 +7,16 @@ import {
   getWallet,
   recordAgentTask,
   resolveRecipientByName,
+  supersedePendingAgentTask,
   upsertRecipientDelivery,
   upsertUserAutofillProfile,
 } from '@/lib/server/ledger';
+import {
+  listToolsCatalog,
+  reconnectToolForUser,
+  resolveRuntimeCredentialReference,
+  resolveToolForAction,
+} from '@/lib/server/toolsVault';
 import { parseAgentIntent, type AgentIntent } from '@/lib/server/agentIntent';
 import { runProcurementPurchasePreparation } from '@/lib/server/procurementApprovalRunner';
 import { listActiveSubscriptions } from '@/lib/server/subscriptions';
@@ -45,6 +52,11 @@ export interface AgentOrchestrationResult {
   signup?: {
     merchant: string | null;
     requiredProfileFields: string[];
+    mode?: 'login' | 'signup';
+    toolKey?: string | null;
+    toolDisplayName?: string | null;
+    credentialState?: 'ready' | 'updated' | 'action_required';
+    usedSavedLogin?: boolean;
   };
   reviewSpend?: {
     balance: number;
@@ -56,6 +68,116 @@ export interface AgentOrchestrationResult {
     vendorName: string;
     taskId: string;
   };
+}
+
+type CatalogTool = Awaited<ReturnType<typeof listToolsCatalog>>[number];
+
+function normalizeToolKeyText(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function textHasToken(text: string, token: string): boolean {
+  const trimmed = token.trim().toLowerCase();
+  if (!trimmed) return false;
+  const pattern = `(?:^|[^a-z0-9])${escapeRegex(trimmed)}(?:$|[^a-z0-9])`;
+  return new RegExp(pattern, 'i').test(text.toLowerCase());
+}
+
+function detectToolRequestMode(message: string): 'login' | 'signup' | null {
+  const lower = message.toLowerCase();
+  const signup = /\b(sign\s*up|signup|register|create\s+account)\b/.test(lower);
+  const login = /\b(log\s*into|log\s*in|login|sign\s*into|sign\s*in|reconnect|saved\s+login|use\s+my\s+saved)\b/.test(lower);
+  if (signup) return 'signup';
+  if (login) return 'login';
+  return null;
+}
+
+function isReconnectRequest(message: string): boolean {
+  return /\breconnect\b/i.test(message);
+}
+
+function findCatalogToolByName(
+  tools: CatalogTool[],
+  merchant: string | null | undefined,
+): CatalogTool | null {
+  if (!merchant) return null;
+  const target = merchant.trim().toLowerCase();
+  if (!target) return null;
+
+  const normalizedTarget = normalizeToolKeyText(target);
+  const exact = tools.find((tool) => (
+    tool.key === normalizedTarget
+    || tool.displayName.toLowerCase() === target
+  ));
+  if (exact) return exact;
+
+  return tools.find((tool) => (
+    target.includes(tool.displayName.toLowerCase())
+    || tool.displayName.toLowerCase().includes(target)
+    || target.includes(tool.key.replace(/_/g, ' '))
+    || tool.key.includes(normalizedTarget)
+  )) || null;
+}
+
+function detectRequestedCatalogTool(params: {
+  message: string;
+  merchant: string | null | undefined;
+  tools: CatalogTool[];
+}): CatalogTool | null {
+  const byMerchant = findCatalogToolByName(params.tools, params.merchant);
+  if (byMerchant) return byMerchant;
+
+  const lower = params.message.toLowerCase();
+  for (const tool of params.tools) {
+    const keySpace = tool.key.replace(/_/g, ' ');
+    if (
+      textHasToken(lower, tool.displayName)
+      || textHasToken(lower, tool.key)
+      || textHasToken(lower, keySpace)
+    ) {
+      return tool;
+    }
+  }
+
+  return null;
+}
+
+function isSimpleAffirmation(message: string): boolean {
+  return /^(yes|y|ok|okay|sure|continue|proceed)$/i.test(message.trim());
+}
+
+function extractCredentialSubmission(message: string, allowRawMessage: boolean): string | null {
+  const trimmed = message.trim();
+  if (!trimmed) return null;
+  if (isSimpleAffirmation(trimmed)) return null;
+
+  const labeled = trimmed.match(
+    /\b(?:password|passcode|credential|token|api\s*key|secret)\b\s*(?:is|=|:)?\s*(.+)$/i,
+  );
+  if (labeled?.[1]) {
+    const credential = labeled[1].trim();
+    return credential || null;
+  }
+
+  return allowRawMessage ? trimmed : null;
+}
+
+function extractLoginIdentifierFromMessage(message: string): string | null {
+  const email = message.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+  if (email?.[0]) return email[0].trim();
+
+  const username = message.match(/\b(?:username|user|login)\s*(?:is|=|:)\s*([^\s,;]+)/i);
+  if (username?.[1]) return username[1].trim();
+
+  return null;
 }
 
 function sumSucceededDebitsSince(
@@ -82,8 +204,88 @@ function recipientListLabel(recipients: Recipient[]): string {
   return recipients.slice(0, 8).map((recipient) => recipient.name).join(', ');
 }
 
+function isEphemeralReasoningIntent(intent: AgentIntent['intent']): boolean {
+  return intent === 'compare_and_buy' || intent === 'procurement_task';
+}
+
+function messageLooksLikeNewReasoningTask(message: string): boolean {
+  const lower = message.toLowerCase();
+  const reasoningCue = /\b(compare|versus|vs\.?|which is better|what is better|better for|choose between|best|find me|recommend)\b/.test(lower);
+  const domainCue = /\b(app|tool|software|platform|service|vendor|solution|crm|note[\s-]?taking|outreach|email|subscription)\b/.test(lower);
+  return reasoningCue && domainCue;
+}
+
+function messageLooksLikeSendMoneyClarification(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  if (!lower) return false;
+  if (/\b(acct_[a-z0-9]+|cash\s*app|cashtag|stripe|ach|wire|bank\s+reference|routing\s+number|account\s+number|account\s+ending)\b/.test(lower)) return true;
+  if (/\$[a-z][a-z0-9_]{1,}/i.test(message)) return true;
+  if (/^(yes|y|ok|okay|sure|proceed|continue)$/i.test(lower)) return true;
+  if (lower.split(/\s+/).length <= 8 && !messageLooksLikeNewReasoningTask(lower)) return true;
+  return false;
+}
+
+function messageLooksLikeProcurementClarification(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  if (!lower) return false;
+  if (/^(yes|y|no|n|ok|okay|continue|go ahead)$/i.test(lower)) return true;
+  if (/\bunder\b|\bbudget\b|\$\s*\d+|\bmonthly\b|\byearly\b|\bper\s+month\b/.test(lower)) return true;
+  if (/\b(vs\.?|versus|between)\b/.test(lower)) return true;
+  return false;
+}
+
+function messageLooksLikeStandaloneTask(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  if (!lower) return false;
+  if (messageLooksLikeNewReasoningTask(lower)) return true;
+  if (/\b(log\s*into|log\s*in|login|sign\s*into|sign\s*in|reconnect|saved\s+login|use\s+my\s+saved)\b/.test(lower)) return true;
+  return /^(what('?s)?|which|find|buy|cancel|compare|show|list|review|fund|top\s*up|recommend|help)\b/.test(lower)
+    || /\b(cancel|unsubscribe|buy|purchase|compare|find me|top up|balance|history)\b/.test(lower);
+}
+
+function classifyPendingTaskMessage(params: {
+  pending: {
+    taskType: string;
+    status: string;
+  };
+  message: string;
+}): 'continuation_of_pending_task' | 'new_task' {
+  const lower = params.message.trim().toLowerCase();
+  if (!lower) return 'continuation_of_pending_task';
+
+  const sendClarification = messageLooksLikeSendMoneyClarification(params.message);
+  const procurementClarification = messageLooksLikeProcurementClarification(params.message);
+  const standaloneTask = messageLooksLikeStandaloneTask(params.message);
+  const yesNo = /^(yes|y|no|n|ok|okay|sure|proceed|continue)$/i.test(lower);
+
+  switch (params.pending.taskType) {
+    case 'send_money':
+      if (sendClarification) return 'continuation_of_pending_task';
+      if (standaloneTask) return 'new_task';
+      return params.pending.status === 'awaiting_approval' && yesNo
+        ? 'continuation_of_pending_task'
+        : 'new_task';
+    case 'procurement_task':
+    case 'compare_and_buy':
+      if (sendClarification) return 'new_task';
+      if (procurementClarification) return 'continuation_of_pending_task';
+      return standaloneTask ? 'new_task' : 'new_task';
+    case 'fund_wallet':
+      if (/\$?\d+/.test(lower) || yesNo) return 'continuation_of_pending_task';
+      return standaloneTask ? 'new_task' : 'new_task';
+    default:
+      if (standaloneTask) return 'new_task';
+      return 'continuation_of_pending_task';
+  }
+}
+
+function formatTaskTypeLabel(taskType: string): string {
+  return taskType.replace(/_/g, ' ');
+}
+
 function mergeIntentWithPending(
   intent: AgentIntent,
+  message: string,
   pendingInput?: Record<string, unknown>,
   pendingTaskType?: string,
   pendingStatus?: string,
@@ -100,6 +302,18 @@ function mergeIntentWithPending(
   const previousBudget = typeof pendingInput.budget_limit === 'number'
     ? pendingInput.budget_limit
     : null;
+  const previousNormalizedGoal = typeof pendingInput.normalized_goal === 'string'
+    ? pendingInput.normalized_goal
+    : null;
+  const previousCategory = typeof pendingInput.category === 'string'
+    ? pendingInput.category
+    : null;
+  const previousScopeLocked = pendingInput.scope_locked === true;
+  const previousCandidateVendors = Array.isArray(pendingInput.candidate_vendors)
+    ? pendingInput.candidate_vendors
+      .map((vendor) => (typeof vendor === 'string' ? vendor.trim() : ''))
+      .filter((vendor): vendor is string => Boolean(vendor))
+    : [];
   const previousStripeAccount = typeof pendingInput.recipient_stripe_account_id === 'string'
     ? pendingInput.recipient_stripe_account_id
     : null;
@@ -125,35 +339,92 @@ function mergeIntentWithPending(
   const previousIntent = typeof pendingInput.intent === 'string'
     ? pendingInput.intent
     : null;
+  const pendingIntent = previousIntent && (
+    previousIntent === 'send_money'
+    || previousIntent === 'compare_and_buy'
+    || previousIntent === 'signup_and_prepare_checkout'
+    || previousIntent === 'procurement_task'
+    || previousIntent === 'fund_wallet'
+    || previousIntent === 'review_spend'
+    || previousIntent === 'cancel_subscription'
+  )
+    ? previousIntent
+    : null;
+  const parsedIntentIsReasoning = isEphemeralReasoningIntent(intent.intent);
+  const treatAsNewReasoningTask = parsedIntentIsReasoning && messageLooksLikeNewReasoningTask(message);
 
   const shouldForcePendingSendIntent = pendingTaskType === 'send_money'
-    && pendingStatus === 'awaiting_clarification';
-  const shouldPreservePendingIntent = pendingStatus === 'awaiting_clarification' && intent.confidence < 0.7;
+    && pendingStatus === 'awaiting_clarification'
+    && messageLooksLikeSendMoneyClarification(message)
+    && !treatAsNewReasoningTask;
+  const shouldPreservePendingIntent = pendingStatus === 'awaiting_clarification'
+    && intent.confidence < 0.7
+    && Boolean(pendingIntent)
+    && !treatAsNewReasoningTask
+    && !parsedIntentIsReasoning;
   const resolvedIntent = shouldForcePendingSendIntent
     ? 'send_money'
     : intent.intent === 'send_money'
     ? 'send_money'
-    : (shouldPreservePendingIntent && previousIntent
-      ? previousIntent
+    : (shouldPreservePendingIntent && pendingIntent
+      ? pendingIntent
       : intent.intent);
+  const sameIntentFamily = pendingIntent === resolvedIntent;
+  const mergeTransferFields = resolvedIntent === 'send_money';
+  const mergeFundFields = resolvedIntent === 'fund_wallet';
+  const mergeMerchantFields = resolvedIntent === 'signup_and_prepare_checkout'
+    || resolvedIntent === 'cancel_subscription';
+  const mergeBudgetFields = resolvedIntent === 'procurement_task' || resolvedIntent === 'compare_and_buy';
 
   return {
     ...intent,
     intent: (pendingTaskType === 'signup_and_prepare_checkout' && resolvedIntent === 'procurement_task')
       ? 'signup_and_prepare_checkout'
       : (resolvedIntent as AgentIntent['intent']),
-    amount: intent.amount ?? previousAmount,
-    recipient_name: intent.recipient_name ?? previousRecipient,
-    merchant: intent.merchant ?? previousMerchant,
-    budget_limit: intent.budget_limit ?? previousBudget,
-    recipient_stripe_account_id: intent.recipient_stripe_account_id ?? previousStripeAccount,
-    delivery_method: intent.delivery_method ?? previousDeliveryMethod,
-    cash_app_cashtag: intent.cash_app_cashtag ?? previousCashAppCashtag,
-    bank_reference: intent.bank_reference ?? previousBankReference,
-    funding_source: intent.funding_source ?? previousFundingSource,
+    amount: (mergeTransferFields || mergeFundFields)
+      ? (intent.amount ?? (sameIntentFamily ? previousAmount : null))
+      : intent.amount,
+    recipient_name: mergeTransferFields
+      ? (intent.recipient_name ?? (sameIntentFamily ? previousRecipient : null))
+      : intent.recipient_name,
+    merchant: mergeMerchantFields
+      ? (intent.merchant ?? (sameIntentFamily ? previousMerchant : null))
+      : intent.merchant,
+    budget_limit: mergeBudgetFields
+      ? (intent.budget_limit ?? (sameIntentFamily ? previousBudget : null))
+      : intent.budget_limit,
+    normalized_goal: mergeBudgetFields
+      ? (intent.normalized_goal ?? (sameIntentFamily ? previousNormalizedGoal : null))
+      : intent.normalized_goal,
+    category: mergeBudgetFields
+      ? (intent.category ?? (sameIntentFamily ? previousCategory : null))
+      : intent.category,
+    scope_locked: mergeBudgetFields
+      ? (intent.scope_locked || (sameIntentFamily ? previousScopeLocked : false))
+      : intent.scope_locked,
+    candidate_vendors: mergeBudgetFields
+      ? (intent.candidate_vendors.length > 0
+        ? intent.candidate_vendors
+        : (sameIntentFamily ? previousCandidateVendors : []))
+      : intent.candidate_vendors,
+    recipient_stripe_account_id: mergeTransferFields
+      ? (intent.recipient_stripe_account_id ?? (sameIntentFamily ? previousStripeAccount : null))
+      : intent.recipient_stripe_account_id,
+    delivery_method: mergeTransferFields
+      ? (intent.delivery_method ?? (sameIntentFamily ? previousDeliveryMethod : null))
+      : intent.delivery_method,
+    cash_app_cashtag: mergeTransferFields
+      ? (intent.cash_app_cashtag ?? (sameIntentFamily ? previousCashAppCashtag : null))
+      : intent.cash_app_cashtag,
+    bank_reference: mergeTransferFields
+      ? (intent.bank_reference ?? (sameIntentFamily ? previousBankReference : null))
+      : intent.bank_reference,
+    funding_source: mergeTransferFields
+      ? (intent.funding_source ?? (sameIntentFamily ? previousFundingSource : null))
+      : intent.funding_source,
     required_profile_fields: intent.required_profile_fields.length > 0
       ? intent.required_profile_fields
-      : previousRequiredProfileFields,
+      : (sameIntentFamily ? previousRequiredProfileFields : intent.required_profile_fields),
   };
 }
 
@@ -278,13 +549,56 @@ export async function orchestrateAgentMessage(params: {
 }): Promise<AgentOrchestrationResult> {
   const wallet = await getWallet(params.userId);
   const pending = await getLatestPendingAgentTask({ userId: params.userId });
-  const context = pending
-    ? `Pending task: type=${pending.taskType} status=${pending.status} input=${JSON.stringify(pending.input || {})}`
+  let activePending = pending;
+  let supersededNotice: string | null = null;
+
+  if (pending) {
+    const classification = classifyPendingTaskMessage({
+      pending: {
+        taskType: pending.taskType,
+        status: pending.status,
+      },
+      message: params.message,
+    });
+
+    if (classification === 'new_task') {
+      await supersedePendingAgentTask({
+        userId: params.userId,
+        taskId: pending.id,
+        reason: `Superseded by new user request: ${params.message.slice(0, 180)}`,
+      });
+      supersededNotice = `I paused your previous ${formatTaskTypeLabel(pending.taskType)} task.`;
+      activePending = null;
+    }
+  }
+
+  const context = activePending
+    ? `Pending task: type=${activePending.taskType} status=${activePending.status} input=${JSON.stringify(activePending.input || {})}`
     : undefined;
 
   const parsedIntent = await parseAgentIntent(params.message, { context });
-  const intent = mergeIntentWithPending(parsedIntent, pending?.input, pending?.taskType, pending?.status);
-  const taskId = pending?.id || randomUUID();
+  const intent = mergeIntentWithPending(parsedIntent, params.message, activePending?.input, activePending?.taskType, activePending?.status);
+  const toolRequestMode = detectToolRequestMode(params.message);
+  const catalogTools = await listToolsCatalog().catch(() => []);
+  const requestedCatalogTool = detectRequestedCatalogTool({
+    message: params.message,
+    merchant: intent.merchant,
+    tools: catalogTools,
+  });
+  if (!intent.merchant && requestedCatalogTool) {
+    intent.merchant = requestedCatalogTool.displayName;
+  }
+  if (
+    requestedCatalogTool
+    && toolRequestMode === 'login'
+    && intent.intent !== 'send_money'
+    && intent.intent !== 'fund_wallet'
+    && intent.intent !== 'cancel_subscription'
+  ) {
+    intent.intent = 'signup_and_prepare_checkout';
+  }
+  const taskId = activePending?.id || randomUUID();
+  const composeMessage = (message: string): string => supersededNotice ? `${supersededNotice} ${message}` : message;
   const messageStripeAccountId = extractStripeAccountIdFromMessage(params.message);
   if (!intent.recipient_stripe_account_id && messageStripeAccountId) {
     intent.recipient_stripe_account_id = messageStripeAccountId;
@@ -310,7 +624,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'awaiting_clarification',
         intent,
-        message: 'How much should I send?',
+        message: composeMessage('How much should I send?'),
         missingFields: ['amount'],
       };
     }
@@ -324,7 +638,7 @@ export async function orchestrateAgentMessage(params: {
         status: 'awaiting_clarification',
         input: intent,
         result: {
-          question: 'Who should receive the payment?',
+          question: 'Who should receive the money?',
           missingFields: ['recipient_name'],
         },
       });
@@ -334,7 +648,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'awaiting_clarification',
         intent,
-        message: 'Who should receive the payment?',
+        message: composeMessage('Who should receive the money?'),
         missingFields: ['recipient_name'],
       };
     }
@@ -393,7 +707,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'awaiting_clarification',
         intent,
-        message: question,
+        message: composeMessage(question),
         missingFields: ['recipient_delivery_method'],
       };
     }
@@ -401,7 +715,7 @@ export async function orchestrateAgentMessage(params: {
     if (resolvedMethod === 'cash_app' && !resolvedCashAppCashtag) {
       const question = resolvedRecipient
         ? `I have ${resolvedRecipient.name}, but I still need their Cash App cashtag to send $${intent.amount.toFixed(2)}.`
-        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name}. What is their Cash App cashtag?`;
+        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name} on Cash App, but I need their Cash App cashtag.`;
 
       await persistAgentTask({
         userId: params.userId,
@@ -427,15 +741,15 @@ export async function orchestrateAgentMessage(params: {
           ...intent,
           delivery_method: 'cash_app',
         },
-        message: question,
+        message: composeMessage(question),
         missingFields: ['cash_app_cashtag'],
       };
     }
 
     if (resolvedMethod === 'stripe_connected' && !resolvedStripeAccountId) {
       const question = resolvedRecipient
-        ? `I have ${resolvedRecipient.name}, but I still need their Stripe recipient account id (starts with acct_).`
-        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name}. What is their Stripe recipient account id (starts with acct_)?`;
+        ? `I can send $${intent.amount.toFixed(2)} to ${resolvedRecipient.name}, but I need the Stripe-connected recipient account (starts with acct_).`
+        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name}, but I need the Stripe-connected recipient account (starts with acct_).`;
 
       await persistAgentTask({
         userId: params.userId,
@@ -461,15 +775,15 @@ export async function orchestrateAgentMessage(params: {
           ...intent,
           delivery_method: 'stripe_connected',
         },
-        message: question,
+        message: composeMessage(question),
         missingFields: ['recipient_stripe_account_id'],
       };
     }
 
     if (resolvedMethod === 'bank' && !resolvedBankReference) {
       const question = resolvedRecipient
-        ? `I have ${resolvedRecipient.name}, but I still need the bank reference to send $${intent.amount.toFixed(2)}.`
-        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name}. What bank reference should I use?`;
+        ? `I can send $${intent.amount.toFixed(2)} to ${resolvedRecipient.name}, but I need the bank reference.`
+        : `I can send $${intent.amount.toFixed(2)} to ${intent.recipient_name}, but I need the bank reference.`;
 
       await persistAgentTask({
         userId: params.userId,
@@ -495,7 +809,7 @@ export async function orchestrateAgentMessage(params: {
           ...intent,
           delivery_method: 'bank',
         },
-        message: question,
+        message: composeMessage(question),
         missingFields: ['bank_reference'],
       };
     }
@@ -562,7 +876,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'awaiting_clarification',
         intent,
-        message: recipientHint,
+        message: composeMessage(recipientHint),
         missingFields: ['recipient_delivery_method'],
       };
     }
@@ -595,7 +909,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'blocked',
         intent,
-        message: blockedMessage,
+        message: composeMessage(blockedMessage),
       };
     }
 
@@ -622,9 +936,9 @@ export async function orchestrateAgentMessage(params: {
       taskId,
       status: approvalRequired ? 'awaiting_approval' : 'ready',
       intent,
-      message: approvalRequired
+      message: composeMessage(approvalRequired
         ? `I found ${resolvedRecipient.name} in your recipients list. Send $${intent.amount.toFixed(2)}?`
-        : `I found ${resolvedRecipient.name} in your recipients list. Sending $${intent.amount.toFixed(2)} now.`,
+        : `I found ${resolvedRecipient.name} in your recipients list. Sending $${intent.amount.toFixed(2)} now.`),
       sendMoney: {
         amount: intent.amount,
         recipientName: resolvedRecipient.name,
@@ -654,7 +968,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'awaiting_clarification',
         intent,
-        message: 'How much should I add to your wallet?',
+        message: composeMessage('How much should I add to your wallet?'),
         missingFields: ['amount'],
       };
     }
@@ -674,12 +988,13 @@ export async function orchestrateAgentMessage(params: {
       taskId,
       status: 'ready',
       intent,
-      message: `I can top up your wallet with $${intent.amount.toFixed(2)}.`,
+      message: composeMessage(`I can top up your wallet with $${intent.amount.toFixed(2)}.`),
       fundWallet: { amount: intent.amount },
     };
   }
 
   if (intent.intent === 'procurement_task' || intent.intent === 'compare_and_buy') {
+    const procurementGoal = intent.normalized_goal || params.message;
     await persistAgentTask({
       userId: params.userId,
       taskId,
@@ -688,7 +1003,7 @@ export async function orchestrateAgentMessage(params: {
       status: 'ready',
       input: intent,
       result: {
-        goal: params.message,
+        goal: procurementGoal,
       },
     });
 
@@ -697,26 +1012,66 @@ export async function orchestrateAgentMessage(params: {
       taskId,
       status: 'ready',
       intent,
-      message: intent.intent === 'compare_and_buy'
+      message: composeMessage(intent.intent === 'compare_and_buy'
         ? 'Starting vendor comparison and purchase planning from your request.'
-        : 'Starting procurement planning from your request.',
+        : 'Starting procurement planning from your request.'),
       procurement: {
-        goal: params.message,
+        goal: procurementGoal,
       },
     };
   }
 
   if (intent.intent === 'signup_and_prepare_checkout') {
+    const pendingInput = (activePending?.input || {}) as Record<string, unknown>;
+    const resumeAction = typeof pendingInput.resume_action === 'string' ? pendingInput.resume_action : null;
+    const reconnectUserToolId = typeof pendingInput.reconnect_user_tool_id === 'string'
+      ? pendingInput.reconnect_user_tool_id
+      : null;
+    const resumeToolKey = typeof pendingInput.tool_key === 'string'
+      ? pendingInput.tool_key
+      : null;
+    const resumeToolDisplayName = typeof pendingInput.tool_display_name === 'string'
+      ? pendingInput.tool_display_name
+      : null;
+    const requestedMode: 'login' | 'signup' | null = resumeAction === 'purchase_prep'
+      ? null
+      : toolRequestMode === 'signup'
+        ? 'signup'
+        : (toolRequestMode === 'login' || resumeAction === 'tool_reconnect')
+          ? 'login'
+          : null;
+    const requestedTool = requestedCatalogTool
+      || findCatalogToolByName(catalogTools, intent.merchant)
+      || (resumeToolKey
+        ? catalogTools.find((tool) => tool.key === normalizeToolKeyText(resumeToolKey)) || null
+        : null);
+    const toolLookupKey = requestedTool?.key
+      || (resumeToolKey ? normalizeToolKeyText(resumeToolKey) : null)
+      || (intent.merchant ? normalizeToolKeyText(intent.merchant) : null);
+    const toolDisplayName = requestedTool?.displayName || resumeToolDisplayName || intent.merchant;
+    const inferredCredentialSubmission = extractCredentialSubmission(params.message, true);
+    const securitySensitiveMessage = Boolean(inferredCredentialSubmission);
+    const persistedIntentText = securitySensitiveMessage ? '[credential submitted]' : params.message;
+    if (securitySensitiveMessage) {
+      intent.description = 'credential submitted';
+    }
+    if (!intent.merchant && toolDisplayName) {
+      intent.merchant = toolDisplayName;
+    }
+
     if (!intent.merchant) {
+      const question = requestedMode === 'login'
+        ? 'Which tool should I log into?'
+        : 'Which vendor should I prepare checkout for?';
       await persistAgentTask({
         userId: params.userId,
         taskId,
         taskType: 'signup_and_prepare_checkout',
-        intent: params.message,
+        intent: persistedIntentText,
         status: 'awaiting_clarification',
         input: intent,
         result: {
-          question: 'Which vendor should I prepare checkout for?',
+          question,
           missingFields: ['merchant'],
         },
       });
@@ -726,7 +1081,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'awaiting_clarification',
         intent,
-        message: 'Which vendor should I prepare checkout for?',
+        message: composeMessage(question),
         missingFields: ['merchant'],
       };
     }
@@ -749,18 +1104,320 @@ export async function orchestrateAgentMessage(params: {
 
     const requiredProfileFields = normalizeRequiredProfileFields(intent.required_profile_fields);
     const profile = await getUserAutofillProfile(params.userId);
-    const missing = getMissingProfileFields(requiredProfileFields, profile);
-    const pendingInput = (pending?.input || {}) as Record<string, unknown>;
-    const resumeAction = typeof pendingInput.resume_action === 'string' ? pendingInput.resume_action : null;
+    const missing = requestedMode === 'login'
+      ? []
+      : getMissingProfileFields(requiredProfileFields, profile);
     const procurementTaskId = typeof pendingInput.procurement_task_id === 'string'
       ? pendingInput.procurement_task_id
       : null;
     const needsSecurityCredential = pendingInput.missing_security_credential === true;
     const messageLooksLikeCredential = params.message.trim().length > 0
-      && !/^(yes|y|ok|okay|sure|continue)$/i.test(params.message.trim());
+      && !isSimpleAffirmation(params.message.trim());
     const resumeCredentialSecret = (needsSecurityCredential && messageLooksLikeCredential)
-      ? params.message.trim()
+      ? (inferredCredentialSubmission || params.message.trim())
       : undefined;
+
+    if (requestedMode === 'login' && toolLookupKey) {
+      const reconnectRequest = resumeAction === 'tool_reconnect' || isReconnectRequest(params.message);
+      const providedSecret = extractCredentialSubmission(params.message, resumeAction === 'tool_reconnect');
+      const providedIdentifier = extractLoginIdentifierFromMessage(params.message) || profile?.email || undefined;
+      const resolvedTool = await resolveToolForAction({
+        userId: params.userId,
+        toolKey: toolLookupKey,
+      });
+
+      if (resumeAction === 'tool_reconnect') {
+        if (!reconnectUserToolId || !providedSecret) {
+          const question = `Share the updated ${toolDisplayName || intent.merchant} login credential to reconnect.`;
+          await persistAgentTask({
+            userId: params.userId,
+            taskId,
+            taskType: 'signup_and_prepare_checkout',
+            intent: persistedIntentText,
+            status: 'awaiting_clarification',
+            input: {
+              ...intent,
+              resume_action: 'tool_reconnect',
+              reconnect_user_tool_id: reconnectUserToolId,
+              tool_key: toolLookupKey,
+              tool_display_name: toolDisplayName || intent.merchant,
+            },
+            result: {
+              question,
+              missingFields: ['security_credential'],
+              success: false,
+              error_type: 'login_required',
+              error_message: 'Updated login is required before reconnect.',
+            },
+          });
+
+          return {
+            route: 'clarification',
+            taskId,
+            status: 'awaiting_clarification',
+            intent,
+            message: composeMessage(question),
+            missingFields: ['security_credential'],
+          };
+        }
+
+        const reconnected = await reconnectToolForUser({
+          userId: params.userId,
+          userToolId: reconnectUserToolId,
+          secret: providedSecret,
+          loginIdentifier: providedIdentifier,
+          metadata: {
+            source: 'runtime_reconnect',
+            taskId,
+            merchant: intent.merchant,
+          },
+        });
+
+        await persistAgentTask({
+          userId: params.userId,
+          taskId,
+          taskType: 'signup_and_prepare_checkout',
+          intent: persistedIntentText,
+          status: 'ready',
+          input: {
+            ...intent,
+            mode: 'login',
+            tool_key: reconnected.tool.key,
+          },
+          result: {
+            task_type: 'login',
+            tool: reconnected.tool.key,
+            status: 'success',
+            used_saved_login: false,
+            notes: 'Credentials updated and reconnected.',
+          },
+        });
+
+        return {
+          route: 'signup_and_prepare_checkout',
+          taskId,
+          status: 'ready',
+          intent,
+          message: composeMessage(`Reconnected ${reconnected.tool.displayName}. Running with saved login.`),
+          signup: {
+            merchant: intent.merchant,
+            requiredProfileFields: [],
+            mode: 'login',
+            toolKey: reconnected.tool.key,
+            toolDisplayName: reconnected.tool.displayName,
+            credentialState: 'updated',
+            usedSavedLogin: false,
+          },
+        };
+      }
+
+      if (!resolvedTool) {
+        const question = `No saved ${toolDisplayName || intent.merchant} login found. Connect it in Tools first.`;
+        await persistAgentTask({
+          userId: params.userId,
+          taskId,
+          taskType: 'signup_and_prepare_checkout',
+          intent: persistedIntentText,
+          status: 'awaiting_clarification',
+          input: {
+            ...intent,
+            mode: 'login',
+            tool_key: toolLookupKey,
+            tool_display_name: toolDisplayName || intent.merchant,
+          },
+          result: {
+            question,
+            missingFields: ['tool_connection'],
+            success: false,
+            error_type: 'login_required',
+            error_message: 'No saved login is connected for this tool.',
+          },
+        });
+
+        return {
+          route: 'clarification',
+          taskId,
+          status: 'awaiting_clarification',
+          intent,
+          message: composeMessage(question),
+          missingFields: ['tool_connection'],
+        };
+      }
+
+      if (reconnectRequest) {
+        if (!providedSecret) {
+          const question = `Share the updated ${resolvedTool.tool.displayName} login credential to reconnect.`;
+          await persistAgentTask({
+            userId: params.userId,
+            taskId,
+            taskType: 'signup_and_prepare_checkout',
+            intent: persistedIntentText,
+            status: 'awaiting_clarification',
+            input: {
+              ...intent,
+              mode: 'login',
+              resume_action: 'tool_reconnect',
+              reconnect_user_tool_id: resolvedTool.id,
+              tool_key: resolvedTool.tool.key,
+              tool_display_name: resolvedTool.tool.displayName,
+            },
+            result: {
+              question,
+              missingFields: ['security_credential'],
+              success: false,
+              error_type: 'login_required',
+              error_message: 'Updated login is required before reconnect.',
+            },
+          });
+
+          return {
+            route: 'clarification',
+            taskId,
+            status: 'awaiting_clarification',
+            intent,
+            message: composeMessage(question),
+            missingFields: ['security_credential'],
+          };
+        }
+
+        const reconnected = await reconnectToolForUser({
+          userId: params.userId,
+          userToolId: resolvedTool.id,
+          secret: providedSecret,
+          loginIdentifier: providedIdentifier,
+          metadata: {
+            source: 'runtime_reconnect',
+            taskId,
+            merchant: intent.merchant,
+          },
+        });
+
+        await persistAgentTask({
+          userId: params.userId,
+          taskId,
+          taskType: 'signup_and_prepare_checkout',
+          intent: persistedIntentText,
+          status: 'ready',
+          input: {
+            ...intent,
+            mode: 'login',
+            tool_key: reconnected.tool.key,
+          },
+          result: {
+            task_type: 'login',
+            tool: reconnected.tool.key,
+            status: 'success',
+            used_saved_login: false,
+            notes: 'Credentials updated and reconnected.',
+          },
+        });
+
+        return {
+          route: 'signup_and_prepare_checkout',
+          taskId,
+          status: 'ready',
+          intent,
+          message: composeMessage(`Reconnected ${reconnected.tool.displayName}. Running with saved login.`),
+          signup: {
+            merchant: intent.merchant,
+            requiredProfileFields: [],
+            mode: 'login',
+            toolKey: reconnected.tool.key,
+            toolDisplayName: reconnected.tool.displayName,
+            credentialState: 'updated',
+            usedSavedLogin: false,
+          },
+        };
+      }
+
+      const credentialRef = await resolveRuntimeCredentialReference({
+        userId: params.userId,
+        toolKey: resolvedTool.tool.key,
+      });
+
+      if (!credentialRef.resolved) {
+        const reason = credentialRef.reason;
+        const question = reason === 'not_enabled'
+          ? `${resolvedTool.tool.displayName} is disabled. Enable it in Tools before running this task.`
+          : `Saved login for ${resolvedTool.tool.displayName} needs reconnect before I can continue.`;
+        const missingFields = reason === 'not_enabled'
+          ? ['tool_enable']
+          : ['security_credential'];
+
+        await persistAgentTask({
+          userId: params.userId,
+          taskId,
+          taskType: 'signup_and_prepare_checkout',
+          intent: persistedIntentText,
+          status: 'awaiting_clarification',
+          input: {
+            ...intent,
+            mode: 'login',
+            tool_key: resolvedTool.tool.key,
+            tool_display_name: resolvedTool.tool.displayName,
+            ...(reason === 'not_enabled' ? {} : {
+              resume_action: 'tool_reconnect',
+              reconnect_user_tool_id: resolvedTool.id,
+            }),
+          },
+          result: {
+            question,
+            missingFields,
+            success: false,
+            error_type: reason === 'not_enabled' ? 'login_required' : 'invalid_credentials',
+            error_message: reason === 'not_enabled'
+              ? 'Tool is disabled.'
+              : 'Saved login is missing or invalid. Reconnect is required.',
+          },
+        });
+
+        return {
+          route: 'clarification',
+          taskId,
+          status: 'awaiting_clarification',
+          intent,
+          message: composeMessage(question),
+          missingFields,
+        };
+      }
+
+      await persistAgentTask({
+        userId: params.userId,
+        taskId,
+        taskType: 'signup_and_prepare_checkout',
+        intent: persistedIntentText,
+        status: 'ready',
+        input: {
+          ...intent,
+          mode: 'login',
+          tool_key: resolvedTool.tool.key,
+        },
+        result: {
+          task_type: 'login',
+          tool: resolvedTool.tool.key,
+          status: 'success',
+          used_saved_login: true,
+          notes: null,
+        },
+      });
+
+      return {
+        route: 'signup_and_prepare_checkout',
+        taskId,
+        status: 'ready',
+        intent,
+        message: composeMessage(`Using saved ${resolvedTool.tool.displayName} login.`),
+        signup: {
+          merchant: intent.merchant,
+          requiredProfileFields: [],
+          mode: 'login',
+          toolKey: resolvedTool.tool.key,
+          toolDisplayName: resolvedTool.tool.displayName,
+          credentialState: 'ready',
+          usedSavedLogin: true,
+        },
+      };
+    }
 
     if (missing.length > 0) {
       const nextField = missing[0];
@@ -769,7 +1426,7 @@ export async function orchestrateAgentMessage(params: {
         userId: params.userId,
         taskId,
         taskType: 'signup_and_prepare_checkout',
-        intent: params.message,
+        intent: persistedIntentText,
         status: 'awaiting_clarification',
         input: {
           ...intent,
@@ -789,7 +1446,7 @@ export async function orchestrateAgentMessage(params: {
           ...intent,
           required_profile_fields: requiredProfileFields,
         },
-        message: question,
+        message: composeMessage(question),
         missingFields: missing,
       };
     }
@@ -800,7 +1457,7 @@ export async function orchestrateAgentMessage(params: {
         userId: params.userId,
         taskId,
         taskType: 'signup_and_prepare_checkout',
-        intent: params.message,
+        intent: persistedIntentText,
         status: 'awaiting_clarification',
         input: {
           ...intent,
@@ -823,7 +1480,7 @@ export async function orchestrateAgentMessage(params: {
           ...intent,
           required_profile_fields: requiredProfileFields,
         },
-        message: question,
+        message: composeMessage(question),
         missingFields: ['security_credential'],
       };
     }
@@ -832,7 +1489,7 @@ export async function orchestrateAgentMessage(params: {
       userId: params.userId,
       taskId,
       taskType: 'signup_and_prepare_checkout',
-      intent: params.message,
+      intent: persistedIntentText,
       status: 'ready',
       input: {
         ...intent,
@@ -842,6 +1499,12 @@ export async function orchestrateAgentMessage(params: {
         goal: params.message,
         merchant: intent.merchant,
         requiredProfileFields,
+        task_type: 'signup',
+        tool: toolLookupKey,
+        status: 'success',
+        created_tool: false,
+        login_identifier: profile?.email || null,
+        notes: null,
       },
     });
 
@@ -860,10 +1523,13 @@ export async function orchestrateAgentMessage(params: {
           ...intent,
           required_profile_fields: requiredProfileFields,
         },
-        message: `Resuming ${intent.merchant} sign-up and checkout preparation now.`,
+        message: composeMessage(`Resuming ${intent.merchant} sign-up and checkout preparation now.`),
         signup: {
           merchant: intent.merchant,
           requiredProfileFields,
+          mode: 'signup',
+          toolKey: toolLookupKey,
+          toolDisplayName: toolDisplayName || intent.merchant,
         },
       };
     }
@@ -876,10 +1542,13 @@ export async function orchestrateAgentMessage(params: {
         ...intent,
         required_profile_fields: requiredProfileFields,
       },
-      message: `Autofill profile is ready. Starting sign-up and checkout preparation for ${intent.merchant}.`,
+      message: composeMessage(`Autofill profile is ready. Starting sign-up and checkout preparation for ${intent.merchant}.`),
       signup: {
         merchant: intent.merchant,
         requiredProfileFields,
+        mode: 'signup',
+        toolKey: toolLookupKey,
+        toolDisplayName: toolDisplayName || intent.merchant,
       },
     };
   }
@@ -905,7 +1574,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'awaiting_clarification',
         intent,
-        message: 'Which subscription should I cancel?',
+        message: composeMessage('Which subscription should I cancel?'),
         missingFields: ['merchant'],
       };
     }
@@ -943,7 +1612,7 @@ export async function orchestrateAgentMessage(params: {
         taskId,
         status: 'awaiting_clarification',
         intent,
-        message: clarification,
+        message: composeMessage(clarification),
         missingFields: ['merchant'],
       };
     }
@@ -966,7 +1635,7 @@ export async function orchestrateAgentMessage(params: {
       taskId,
       status: 'ready',
       intent,
-      message: `Starting cancellation flow for ${target.vendorName}.`,
+      message: composeMessage(`Starting cancellation flow for ${target.vendorName}.`),
       cancelSubscription: {
         vendorName: target.vendorName,
         taskId: target.taskId,
@@ -997,7 +1666,7 @@ export async function orchestrateAgentMessage(params: {
     taskId,
     status: 'ready',
     intent,
-    message: 'Reviewing your wallet balance and spend activity.',
+    message: composeMessage('Reviewing your wallet balance and spend activity.'),
     reviewSpend: {
       balance: wallet.balance,
       currency: wallet.currency,

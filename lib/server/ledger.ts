@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Recipient, Transaction, UserAutofillProfile, Wallet, WalletSettings } from '@/lib/types';
 import { query } from '@/lib/server/db';
+import { logServerEvent } from '@/lib/server/observability';
 
 const DEFAULT_SETTINGS: WalletSettings = {
   maxTransaction: 50,
@@ -207,6 +208,70 @@ function merchantMatches(name: string | undefined, list: string[]): boolean {
   if (!name) return false;
   const normalized = name.toLowerCase();
   return list.some((item) => normalized.includes(item.toLowerCase()));
+}
+
+function normalizeRequiredText(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function normalizeOptionalText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeJsonRecord(value: Record<string, unknown> | undefined): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  try {
+    const normalized = JSON.parse(JSON.stringify(value, (_key, item) => {
+      return item === undefined ? null : item;
+    })) as unknown;
+    if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return null;
+    return normalized as Record<string, unknown>;
+  } catch {
+    return {
+      normalizationError: 'unserializable_payload',
+    };
+  }
+}
+
+const SENSITIVE_KEY_PATTERN = /(password|passcode|secret|token|api[_-]?key|credential|authorization|cookie|session)/i;
+const SENSITIVE_VALUE_PATTERN = /\b(password|passcode|credential|token|api\s*key|secret|authorization|cookie|session)\b\s*(?:is|=|:)\s*([^\s,;]+)/gi;
+const BEARER_VALUE_PATTERN = /\bBearer\s+[A-Za-z0-9\-._~+/=]+\b/gi;
+
+function redactSensitiveText(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+
+  const withLabeledRedaction = trimmed.replace(
+    SENSITIVE_VALUE_PATTERN,
+    (_match, label: string) => `${label}=[redacted]`,
+  );
+
+  return withLabeledRedaction.replace(BEARER_VALUE_PATTERN, 'Bearer [redacted]');
+}
+
+function sanitizeSensitivePayload(value: unknown, keyHint?: string): unknown {
+  if (typeof value === 'string') {
+    if (keyHint && SENSITIVE_KEY_PATTERN.test(keyHint)) {
+      return '[redacted]';
+    }
+    return redactSensitiveText(value);
+  }
+
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeSensitivePayload(item));
+  }
+
+  const input = value as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(input)) {
+    output[key] = sanitizeSensitivePayload(item, key);
+  }
+  return output;
 }
 
 async function ensureUser(userId: string): Promise<void> {
@@ -966,6 +1031,10 @@ export async function recordWebAction(params: {
   status: 'done' | 'error' | 'running';
   details?: Record<string, unknown>;
 }): Promise<void> {
+  const safeDetails = params.details
+    ? sanitizeSensitivePayload(params.details) as Record<string, unknown>
+    : undefined;
+
   await query(
     `
       INSERT INTO web_action_logs (id, user_id, task_id, action_type, url, status, details)
@@ -978,7 +1047,7 @@ export async function recordWebAction(params: {
       params.actionType,
       params.url || null,
       params.status,
-      params.details ? JSON.stringify(params.details) : null,
+      safeDetails ? JSON.stringify(safeDetails) : null,
     ],
   );
 }
@@ -1071,32 +1140,64 @@ export async function recordAgentTask(params: {
   taskId?: string;
 }): Promise<string> {
   const id = params.taskId || randomUUID();
+  const safeInput = params.input
+    ? sanitizeSensitivePayload(params.input) as Record<string, unknown>
+    : undefined;
+  const safeResult = params.result
+    ? sanitizeSensitivePayload(params.result) as Record<string, unknown>
+    : undefined;
+  const normalizedPayload = {
+    id,
+    userId: normalizeRequiredText(params.userId, 'default-user'),
+    taskType: normalizeRequiredText(params.taskType, 'unknown_task'),
+    intent: normalizeRequiredText(redactSensitiveText(params.intent), 'unspecified'),
+    status: normalizeRequiredText(params.status, 'ready'),
+    input: normalizeJsonRecord(safeInput),
+    result: normalizeJsonRecord(safeResult),
+    error: normalizeOptionalText(params.error ? redactSensitiveText(params.error) : undefined),
+  };
 
-  await query(
-    `
-      INSERT INTO agent_tasks (id, user_id, task_type, intent, status, input, result, error)
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
-      ON CONFLICT (id)
-      DO UPDATE SET
-        task_type = EXCLUDED.task_type,
-        intent = EXCLUDED.intent,
-        status = EXCLUDED.status,
-        input = COALESCE(EXCLUDED.input, agent_tasks.input),
-        result = EXCLUDED.result,
-        error = EXCLUDED.error,
-        updated_at = NOW()
-    `,
-    [
-      id,
-      params.userId,
-      params.taskType,
-      params.intent,
-      params.status,
-      params.input ? JSON.stringify(params.input) : null,
-      params.result ? JSON.stringify(params.result) : null,
-      params.error || null,
-    ],
-  );
+  try {
+    await query(
+      `
+        INSERT INTO agent_tasks (id, user_id, task_type, intent, status, input, result, error)
+        VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::jsonb, $7::jsonb, $8::text)
+        ON CONFLICT (id)
+        DO UPDATE SET
+          task_type = EXCLUDED.task_type,
+          intent = EXCLUDED.intent,
+          status = EXCLUDED.status,
+          input = COALESCE(EXCLUDED.input, agent_tasks.input),
+          result = EXCLUDED.result,
+          error = EXCLUDED.error,
+          updated_at = NOW()
+      `,
+      [
+        normalizedPayload.id,
+        normalizedPayload.userId,
+        normalizedPayload.taskType,
+        normalizedPayload.intent,
+        normalizedPayload.status,
+        normalizedPayload.input ? JSON.stringify(normalizedPayload.input) : null,
+        normalizedPayload.result ? JSON.stringify(normalizedPayload.result) : null,
+        normalizedPayload.error,
+      ],
+    );
+  } catch (error) {
+    const dbError = error as { message?: string; code?: string; detail?: string; hint?: string };
+    logServerEvent('error', 'db.agent_tasks.record.failed', {
+      queryContext: 'recordAgentTask.upsert',
+      taskId: normalizedPayload.id,
+      userId: normalizedPayload.userId,
+      taskType: normalizedPayload.taskType,
+      status: normalizedPayload.status,
+      message: dbError.message || 'Unknown DB error',
+      pgCode: dbError.code || null,
+      detail: dbError.detail || null,
+      hint: dbError.hint || null,
+    });
+    throw new Error(`Failed to persist agent task (agent_tasks): ${dbError.message || 'unknown database error'}`);
+  }
 
   return id;
 }
@@ -1154,4 +1255,47 @@ export async function getLatestPendingAgentTask(params: {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+export async function supersedePendingAgentTask(params: {
+  userId: string;
+  taskId: string;
+  reason: string;
+}): Promise<void> {
+  const normalizedPayload = {
+    taskId: normalizeRequiredText(params.taskId, ''),
+    userId: normalizeRequiredText(params.userId, 'default-user'),
+    reason: normalizeRequiredText(params.reason, 'Superseded by a new request'),
+  };
+
+  try {
+    await query(
+      `
+        UPDATE agent_tasks
+        SET
+          status = 'superseded',
+          result = COALESCE(result, '{}'::jsonb) || jsonb_build_object(
+            'supersededReason', $3::text,
+            'supersededAt', NOW()::text
+          ),
+          updated_at = NOW()
+        WHERE id = $1::text
+          AND user_id = $2::text
+          AND status IN ('awaiting_clarification', 'awaiting_approval')
+      `,
+      [normalizedPayload.taskId, normalizedPayload.userId, normalizedPayload.reason],
+    );
+  } catch (error) {
+    const dbError = error as { message?: string; code?: string; detail?: string; hint?: string };
+    logServerEvent('error', 'db.agent_tasks.supersede.failed', {
+      queryContext: 'supersedePendingAgentTask.update',
+      fieldNames: ['id', 'user_id', 'supersededReason'],
+      normalizedPayload,
+      message: dbError.message || 'Unknown DB error',
+      pgCode: dbError.code || null,
+      detail: dbError.detail || null,
+      hint: dbError.hint || null,
+    });
+    throw new Error(`Failed to supersede pending task (agent_tasks): ${dbError.message || 'unknown database error'}`);
+  }
 }

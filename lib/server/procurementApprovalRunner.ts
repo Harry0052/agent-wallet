@@ -14,6 +14,7 @@ import { getProcurementTask, updateProcurementTask } from '@/lib/server/procurem
 import { parseProcurementRecommendation, recommendationAmount } from '@/lib/server/procurementRecommendation';
 import { runTinyFishPurchaseExecution } from '@/lib/server/tinyfishPurchaseExecute';
 import { runTinyFishPurchasePreparation } from '@/lib/server/tinyfishPurchasePrep';
+import { getRuntimeCredential, markToolLoginFailure, registerToolFromSignup } from '@/lib/server/toolsVault';
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) return error.message;
@@ -135,6 +136,47 @@ export async function runProcurementPurchasePreparation(params: {
   });
 
   try {
+    let credentialSecret = params.resumeCredentialSecret;
+    let credentialSource: 'user_input' | 'vault' | 'none' = credentialSecret ? 'user_input' : 'none';
+
+    if (!credentialSecret) {
+      try {
+        const runtimeCredential = await getRuntimeCredential({
+          userId: task.userId,
+          toolKey: winner.vendorName,
+          actionType: 'purchase_preparation',
+        });
+
+        if (runtimeCredential?.credentialText) {
+          credentialSecret = runtimeCredential.credentialText;
+          credentialSource = 'vault';
+          await appendLog({
+            userId: task.userId,
+            taskId: task.id,
+            actionType: 'auth',
+            status: 'running',
+            phase: 'purchase_prep',
+            event: 'vault_credential_resolved',
+            code: 'VAULT_CREDENTIAL_RESOLVED',
+            message: `using saved login for ${winner.vendorName}`,
+            url: winner.pricingPageUrl,
+          });
+        }
+      } catch {
+        await appendLog({
+          userId: task.userId,
+          taskId: task.id,
+          actionType: 'auth',
+          status: 'running',
+          phase: 'purchase_prep',
+          event: 'vault_credential_unavailable',
+          code: 'VAULT_CREDENTIAL_UNAVAILABLE',
+          message: `saved login for ${winner.vendorName} could not be loaded`,
+          url: winner.pricingPageUrl,
+        });
+      }
+    }
+
     const prep = await runTinyFishPurchasePreparation({
       taskId: task.id,
       vendorName: winner.vendorName,
@@ -143,7 +185,7 @@ export async function runProcurementPurchasePreparation(params: {
       amount: amountInfo.amount,
       amountBasis: amountInfo.basis,
       formFillProfile: mappedProfile.fields,
-      credentialSecret: params.resumeCredentialSecret,
+      credentialSecret,
     });
 
     for (const step of prep.steps) {
@@ -157,6 +199,21 @@ export async function runProcurementPurchasePreparation(params: {
         code: 'TINYFISH_STEP',
         message: step.description,
         url: step.url,
+      });
+    }
+
+    if (
+      prep.blocker
+      && (prep.blocker.code === 'missing_credentials'
+        || prep.blocker.code === 'two_factor'
+        || prep.blocker.code === 'captcha'
+        || prep.blocker.code === 'security_confirmation')
+      && credentialSource !== 'none'
+    ) {
+      await markToolLoginFailure({
+        userId: task.userId,
+        toolKey: winner.vendorName,
+        message: prep.blocker.message,
       });
     }
 
@@ -244,6 +301,49 @@ export async function runProcurementPurchasePreparation(params: {
       });
 
       return;
+    }
+
+    const capturedCredentialSecret = credentialSource === 'user_input'
+      ? credentialSecret
+      : prep.credentialCapture?.secret;
+    const capturedLoginIdentifier = prep.credentialCapture?.loginIdentifier || mappedProfile.fields.email || undefined;
+
+    if (capturedCredentialSecret) {
+      try {
+        await registerToolFromSignup({
+          userId: task.userId,
+          toolKey: winner.vendorName,
+          displayName: winner.vendorName,
+          category: task.category || null,
+          loginUrl: winner.pricingPageUrl,
+          signupUrl: winner.pricingPageUrl,
+          loginIdentifier: capturedLoginIdentifier,
+          secret: capturedCredentialSecret,
+          secretType: 'password',
+          connectionType: 'password',
+          metadata: {
+            source: credentialSource === 'user_input'
+              ? 'procurement_purchase_preparation'
+              : 'procurement_purchase_preparation_capture',
+            taskId: task.id,
+            planName: winner.planName,
+            vendorName: winner.vendorName,
+            pricingPageUrl: winner.pricingPageUrl,
+            capturedCredential: credentialSource !== 'user_input',
+          },
+        });
+      } catch {
+        await appendLog({
+          userId: task.userId,
+          taskId: task.id,
+          actionType: 'auth',
+          status: 'running',
+          phase: 'purchase_prep',
+          event: 'vault_register_skipped',
+          code: 'VAULT_REGISTER_SKIPPED',
+          message: `login capture for ${winner.vendorName} was skipped`,
+        });
+      }
     }
 
     let pendingLedgerEntry = recommendation.purchasePrep?.pendingLedgerEntry;

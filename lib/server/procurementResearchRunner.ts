@@ -125,6 +125,7 @@ export async function runProcurementResearchTask(params: {
   const plannedTargetsRaw = task.targetVendors.map((vendor) => vendor.trim()).filter(Boolean);
   const invalidPlannedTargets = findInvalidVendorTargets(plannedTargetsRaw);
   const plannedTargets = sanitizeVendorTargets(plannedTargetsRaw, 10);
+  const scopeLocked = task.planningOutput.scopeLocked === true;
   let workingVendors = [...plannedTargets];
   const discoveryErrors: string[] = [];
 
@@ -144,46 +145,61 @@ export async function runProcurementResearchTask(params: {
     });
   }
 
-  try {
-    const discoveredRaw = await discoverTinyFishVendorCandidates({
-      goal: task.goal,
-      category: task.category,
-      existingTargets: plannedTargets,
-      maxCandidates: 10,
-    });
-    const discovered = sanitizeVendorTargets(discoveredRaw, 10);
-    workingVendors = Array.from(new Set([...plannedTargets, ...discovered]));
+  if (!scopeLocked) {
+    try {
+      const discoveredRaw = await discoverTinyFishVendorCandidates({
+        goal: task.goal,
+        category: task.category,
+        existingTargets: plannedTargets,
+        maxCandidates: 10,
+      });
+      const discovered = sanitizeVendorTargets(discoveredRaw, 10);
+      workingVendors = Array.from(new Set([...plannedTargets, ...discovered]));
+      await appendLog({
+        userId: task.userId,
+        taskId: task.id,
+        actionType: 'plan',
+        status: 'done',
+        phase: 'researching',
+        event: 'vendor_discovery_completed',
+        code: 'VENDOR_DISCOVERY_COMPLETED',
+        message: `TinyFish discovered ${discovered.length} candidate vendor(s) from live web research`,
+        details: { discoveredVendors: discovered },
+      });
+    } catch (error) {
+      const message = firstMeaningfulMessage(error);
+      discoveryErrors.push(message);
+      await appendLog({
+        userId: task.userId,
+        taskId: task.id,
+        actionType: 'plan',
+        status: 'error',
+        phase: 'researching',
+        event: 'vendor_discovery_failed',
+        code: 'VENDOR_DISCOVERY_FAILED',
+        message: `TinyFish vendor discovery failed: ${message}`,
+      });
+    }
+  } else {
     await appendLog({
       userId: task.userId,
       taskId: task.id,
       actionType: 'plan',
       status: 'done',
       phase: 'researching',
-      event: 'vendor_discovery_completed',
-      code: 'VENDOR_DISCOVERY_COMPLETED',
-      message: `TinyFish discovered ${discovered.length} candidate vendor(s) from live web research`,
-      details: { discoveredVendors: discovered },
-    });
-  } catch (error) {
-    const message = firstMeaningfulMessage(error);
-    discoveryErrors.push(message);
-    await appendLog({
-      userId: task.userId,
-      taskId: task.id,
-      actionType: 'plan',
-      status: 'error',
-      phase: 'researching',
-      event: 'vendor_discovery_failed',
-      code: 'VENDOR_DISCOVERY_FAILED',
-      message: `TinyFish vendor discovery failed: ${message}`,
+      event: 'vendor_discovery_skipped_scope_locked',
+      code: 'VENDOR_DISCOVERY_SKIPPED_SCOPE_LOCKED',
+      message: `skipping vendor discovery because comparison scope is locked to: ${plannedTargets.join(', ') || 'none'}`,
     });
   }
 
   if (workingVendors.length === 0) {
-    const clarificationQuestion = buildVendorClarificationQuestion({
-      goal: task.goal,
-      category: task.category,
-    });
+    const clarificationQuestion = scopeLocked
+      ? 'I need at least one vendor name to run this locked comparison. Which vendors should I compare?'
+      : buildVendorClarificationQuestion({
+        goal: task.goal,
+        category: task.category,
+      });
     await persistTaskUpdate(task, {
       status: 'needs_clarification',
       findings: {

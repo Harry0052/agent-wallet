@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import {
   Wallet, WalletSettings, ChatMessage, AgentTask,
   VendorOption, ApprovalData, ProcurementPlan, ProcurementTaskRecord, AgentStep,
+  LiveRunState, LiveRunEvent,
 } from '@/lib/types';
 import { uid } from '@/lib/utils';
 import * as walletService from '@/services/wallet';
@@ -18,6 +19,7 @@ interface AppState {
   activeTask: AgentTask | null;
   latestProcurementTask: ProcurementTaskRecord | null;
   latestProcurementPlan: ProcurementPlan | null;
+  liveRun: LiveRunState;
   showSettings: boolean;
   showHistory: boolean;
   isProcessing: boolean;
@@ -33,6 +35,9 @@ interface AppState {
   toggleSettings: () => void;
   toggleHistory: () => void;
   selectOption: (option: VendorOption) => void;
+  setLiveRunState: (updates: Partial<LiveRunState>) => void;
+  appendLiveRunEvent: (event: Omit<LiveRunEvent, 'id' | 'timestamp'> & { timestamp?: string }) => void;
+  resetLiveRunState: () => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -49,6 +54,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeTask, setActiveTask] = useState<AgentTask | null>(null);
   const [latestProcurementTask, setLatestProcurementTask] = useState<ProcurementTaskRecord | null>(null);
   const [latestProcurementPlan, setLatestProcurementPlan] = useState<ProcurementPlan | null>(null);
+  const [liveRun, setLiveRun] = useState<LiveRunState>({
+    runId: null,
+    status: 'idle',
+    events: [],
+    streamingUrl: null,
+    result: null,
+    error: null,
+    updatedAt: null,
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -68,6 +82,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
         copy[copy.length - 1] = { ...last, content, type: data ? 'agent-log' : 'text', data };
       }
       return copy;
+    });
+  }, []);
+
+  const setLiveRunState = useCallback((updates: Partial<LiveRunState>) => {
+    setLiveRun((prev) => ({
+      ...prev,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  const appendLiveRunEvent = useCallback((event: Omit<LiveRunEvent, 'id' | 'timestamp'> & { timestamp?: string }) => {
+    setLiveRun((prev) => ({
+      ...prev,
+      events: [
+        {
+          ...event,
+          id: uid(),
+          timestamp: event.timestamp || new Date().toISOString(),
+        },
+        ...prev.events,
+      ].slice(0, 100),
+      updatedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  const resetLiveRunState = useCallback(() => {
+    setLiveRun({
+      runId: null,
+      status: 'idle',
+      events: [],
+      streamingUrl: null,
+      result: null,
+      error: null,
+      updatedAt: new Date().toISOString(),
     });
   }, []);
 
@@ -1117,6 +1166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeTask,
     latestProcurementTask,
     latestProcurementPlan,
+    liveRun,
     showSettings,
     showHistory,
     isProcessing,
@@ -1131,6 +1181,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleSettings: () => setShowSettings((p) => !p),
     toggleHistory: () => setShowHistory((p) => !p),
     selectOption,
+    setLiveRunState,
+    appendLiveRunEvent,
+    resetLiveRunState,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

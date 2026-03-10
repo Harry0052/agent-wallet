@@ -41,8 +41,12 @@ export function classifyTaskError(input: {
   if (
     message.includes('failed to update')
     || message.includes('failed to create')
+    || message.includes('failed to persist agent task')
+    || message.includes('failed to supersede pending task')
     || message.includes('database')
+    || message.includes('could not determine data type of parameter')
     || message.includes('procurement_tasks')
+    || message.includes('agent_tasks')
     || message.includes('ledger_entries')
     || message.includes('maxclientsinsessionmode')
     || message.includes('max clients reached')

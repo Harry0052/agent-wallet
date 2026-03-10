@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { callClaudeMessagesApi } from '@/lib/server/claude';
+import { deriveVendorCandidatesFromContext, sanitizeVendorTargets } from '@/lib/server/vendorTargeting';
 
 const INTENT_VALUES = [
   'send_money',
@@ -35,6 +36,10 @@ const AgentIntentSchema = z.object({
   intent: z.enum(INTENT_VALUES),
   amount: z.number().nonnegative().nullable(),
   currency: z.literal('USD'),
+  normalized_goal: z.string().trim().min(1).nullable().optional(),
+  category: z.string().trim().min(1).nullable().optional(),
+  scope_locked: z.boolean().default(false),
+  candidate_vendors: z.array(z.string().trim().min(1)).max(12).default([]),
   recipient_name: z.string().trim().min(1).nullable(),
   delivery_method: z.enum(DELIVERY_METHOD_VALUES).nullable().optional(),
   recipient_stripe_account_id: z.string().trim().regex(/^acct_[A-Za-z0-9]+$/).nullable().optional(),
@@ -86,6 +91,7 @@ function parserPrompt(message: string, context?: string): string {
     '  procurement_task is for buying products/services/goods. "buy me X" = procurement, NOT send_money.',
     '- "find a streaming service with Top Gun Maverick", "compare CRMs" → compare_and_buy',
     '- "sign up for Notion Pro" → signup_and_prepare_checkout',
+    '- "log into Stripe", "reconnect Netflix", "use my saved Netflix login" → signup_and_prepare_checkout',
     '- "cancel my grammarly subscription" → cancel_subscription',
     '- "what did I spend today", "balance" → review_spend',
     '',
@@ -99,6 +105,9 @@ function parserPrompt(message: string, context?: string): string {
     '  Natural language amounts: "a dollar" → 1, "five" → 5, "twenty" → 20, "a hundred" → 100.',
     '- For procurement_task: extract budget from "under $X/mo" or similar as budget_limit.',
     '  merchant = the specific product/service name if mentioned.',
+    '- For signup_and_prepare_checkout: when user asks to log in/reconnect/use saved login, merchant is the service name (Stripe, Netflix, Notion, Gmail, etc.).',
+    '- For compare_and_buy/procurement_task: include normalized_goal, category, and candidate_vendors when possible.',
+    '- If the user explicitly names vendors (e.g. "between X and Y" or "X vs Y"), set scope_locked=true and keep candidate_vendors limited to those vendors.',
     '- Never fabricate recipient accounts, vendor pricing, completion state, or balances.',
     '- If message contains a Stripe connected account id (acct_...), place it in recipient_stripe_account_id.',
     '- required_profile_fields should include only fields needed to continue sign-up/checkout prep.',
@@ -341,6 +350,21 @@ function extractMerchantFromMessage(intent: AgentIntent['intent'], message: stri
     if (matched?.[1]) {
       return matched[1].trim().replace(/[.,!?]+$/, '');
     }
+
+    const loginMatched = message.match(/\b(?:log\s*into|log\s*in|login|sign\s*into|sign\s*in)(?:\s+to)?\s+(.+)$/i);
+    if (loginMatched?.[1]) {
+      return loginMatched[1].trim().replace(/[.,!?]+$/, '');
+    }
+
+    const reconnectMatched = message.match(/\breconnect\s+(.+)$/i);
+    if (reconnectMatched?.[1]) {
+      return reconnectMatched[1].trim().replace(/[.,!?]+$/, '');
+    }
+
+    const savedLoginMatched = message.match(/\buse\s+my\s+saved\s+(.+?)\s+login\b/i);
+    if (savedLoginMatched?.[1]) {
+      return savedLoginMatched[1].trim().replace(/[.,!?]+$/, '');
+    }
   }
 
   return null;
@@ -352,6 +376,15 @@ function inferIntent(message: string, candidate: string | null): AgentIntent['in
   }
 
   const lower = message.toLowerCase();
+  const comparisonLanguage = /\b(compare|versus|vs\.?|which is better|what is better|better for|choose between|best)\b/.test(lower);
+  const researchEntityLanguage = /\b(app|tool|software|platform|service|vendor|solution|crm|note[\s-]?taking|outreach|email|subscription)\b/.test(lower);
+  if (comparisonLanguage && researchEntityLanguage) return 'compare_and_buy';
+  if (/\b(cash\s*app|cashtag|acct_[a-z0-9]+|stripe\s+recipient)\b/.test(lower) || /\$[a-z][a-z0-9_]{1,}/i.test(message)) {
+    return 'send_money';
+  }
+  if (/\b(log\s*into|log\s*in|login|sign\s*into|sign\s*in|reconnect|saved\s+login|use\s+my\s+saved)\b/.test(lower)) {
+    return 'signup_and_prepare_checkout';
+  }
   // "buy me X" / "order X" / "get me X" → procurement (must be checked BEFORE send_money)
   if (/\b(buy\s+me|order\s+me|get\s+me|buy\s+a|order\s+a|find\s+me)\b/.test(lower)) return 'procurement_task';
   if (/\b(send|pay|transfer)\b/.test(lower)) return 'send_money';
@@ -359,9 +392,38 @@ function inferIntent(message: string, candidate: string | null): AgentIntent['in
   if (/\b(cancel|unsubscribe|downgrade)\b/.test(lower)) return 'cancel_subscription';
   if (/\b(balance|spent|spend|history|transactions?)\b/.test(lower)) return 'review_spend';
   if (/\b(sign\s*up|signup|register|checkout)\b/.test(lower)) return 'signup_and_prepare_checkout';
-  if (/\b(compare|rank|pick|best)\b/.test(lower) && /\b(buy|purchase)\b/.test(lower)) return 'compare_and_buy';
+  if (/\b(compare|rank|pick|best)\b/.test(lower)) return 'compare_and_buy';
   if (/\b(buy|purchase|order|get)\b/.test(lower)) return 'procurement_task';
   return 'procurement_task';
+}
+
+function inferProcurementCategory(message: string): string | null {
+  const lower = message.toLowerCase();
+  if (/\bnote[\s-]?taking|notes?|knowledge\s*base\b/.test(lower)) return 'note_taking';
+  if (/\bcrm|pipeline\s*management|sales\s*pipeline\b/.test(lower)) return 'crm';
+  if (/\bemail\s*outreach|cold\s*email|sales\s*engagement|outreach\b/.test(lower)) return 'email_outreach';
+  return null;
+}
+
+function extractCandidateVendorsFromMessage(message: string): string[] {
+  const candidates: string[] = [];
+
+  const versus = message.match(/\b([A-Za-z][A-Za-z0-9.+_-]{1,24})\s+(?:vs\.?|versus)\s+([A-Za-z][A-Za-z0-9.+_-]{1,24})\b/i);
+  if (versus?.[1] && versus?.[2]) {
+    candidates.push(versus[1], versus[2]);
+  }
+
+  const between = message.match(/\bchoose\s+between\s+(.+?)\s+and\s+(.+?)(?:\s+for|\s+under|\s+with|$)/i);
+  if (between?.[1] && between?.[2]) {
+    candidates.push(between[1], between[2]);
+  }
+
+  const genericBetween = message.match(/\bbetween\s+(.+?)\s+and\s+(.+?)(?:\s+for|\s+under|\s+with|$)/i);
+  if (genericBetween?.[1] && genericBetween?.[2]) {
+    candidates.push(genericBetween[1], genericBetween[2]);
+  }
+
+  return sanitizeVendorTargets(candidates.map((value) => value.trim()), 8);
 }
 
 function normalizeProfileUpdates(raw: Record<string, unknown>): AgentIntent['profile_updates'] {
@@ -437,6 +499,11 @@ function normalizeMissingFields(
   bankReference: string | null,
   merchant: string | null,
 ): string[] {
+  if (intent === 'compare_and_buy' || intent === 'procurement_task') {
+    // Ephemeral reasoning tasks can proceed using discovery from natural language.
+    return [];
+  }
+
   const explicit = readStringArray(raw, ['missing_fields', 'missingFields']);
   const aliasMap: Record<string, string> = {
     recipient_account: 'recipient_delivery_method',
@@ -483,6 +550,33 @@ function normalizeIntentPayload(parsedIntent: unknown, message: string): AgentIn
   const budgetLimit = budgetCandidate ?? (intent === 'procurement_task' || intent === 'compare_and_buy'
     ? extractBudgetFromMessage(message)
     : null);
+  const normalizedGoal = readString(raw, ['normalized_goal', 'normalizedGoal', 'goal', 'query'])
+    || ((intent === 'procurement_task' || intent === 'compare_and_buy') ? message.trim() : null);
+  const category = readString(raw, ['category'])
+    || ((intent === 'procurement_task' || intent === 'compare_and_buy') ? inferProcurementCategory(message) : null);
+  const candidateVendorRaw = readStringArray(raw, ['candidate_vendors', 'candidateVendors', 'targetVendorCandidates'])
+    .slice(0, 12);
+  const explicitCandidates = (intent === 'procurement_task' || intent === 'compare_and_buy')
+    ? extractCandidateVendorsFromMessage(message)
+    : [];
+  const rawScopeLocked = pickValue(raw, ['scope_locked', 'scopeLocked']) === true;
+  const scopeLocked = (intent === 'procurement_task' || intent === 'compare_and_buy')
+    ? (rawScopeLocked || explicitCandidates.length > 0)
+    : false;
+  const inferredCandidates = (intent === 'procurement_task' || intent === 'compare_and_buy') && !scopeLocked
+    ? deriveVendorCandidatesFromContext({
+      goal: normalizedGoal || message,
+      category,
+      maxCandidates: 8,
+    })
+    : [];
+  const lockedCandidates = explicitCandidates.length > 0 ? explicitCandidates : candidateVendorRaw;
+  const candidateVendors = sanitizeVendorTargets(
+    scopeLocked
+      ? lockedCandidates
+      : [...candidateVendorRaw, ...explicitCandidates, ...inferredCandidates],
+    8,
+  );
 
   const recipientName = readString(raw, ['recipient_name', 'recipientName', 'recipient', 'payee'])
     || (intent === 'send_money' ? extractRecipientFromMessage(message) : null);
@@ -531,6 +625,10 @@ function normalizeIntentPayload(parsedIntent: unknown, message: string): AgentIn
     intent,
     amount: amount !== null && amount >= 0 ? amount : null,
     currency: 'USD',
+    normalized_goal: normalizedGoal,
+    category,
+    scope_locked: scopeLocked,
+    candidate_vendors: candidateVendors,
     recipient_name: recipientName,
     delivery_method: deliveryMethod,
     recipient_stripe_account_id: validStripeAccountId,

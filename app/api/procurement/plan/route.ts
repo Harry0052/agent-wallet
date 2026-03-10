@@ -34,6 +34,7 @@ const RequestSchema = z.object({
 const PlanSchema = z.object({
   normalizedGoal: z.string().trim().min(1),
   category: z.string().trim().min(1),
+  scopeLocked: z.boolean(),
   targetVendorCandidates: z.array(z.string().trim().min(1)).max(25),
   budgetConstraint: z.object({
     amount: z.number().nonnegative().nullable(),
@@ -65,10 +66,10 @@ const PlanSchema = z.object({
     });
   }
 
-  if (!value.clarificationNeeded && value.targetVendorCandidates.length === 0) {
+  if (value.scopeLocked && value.targetVendorCandidates.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'targetVendorCandidates is required when clarificationNeeded is false',
+      message: 'targetVendorCandidates is required when scopeLocked is true',
       path: ['targetVendorCandidates'],
     });
   }
@@ -78,6 +79,7 @@ function emptyPlan(goal: string): ProcurementPlan {
   return {
     normalizedGoal: goal,
     category: 'general',
+    scopeLocked: false,
     targetVendorCandidates: [],
     budgetConstraint: {
       amount: null,
@@ -110,7 +112,8 @@ function planningPrompt(userMessage: string, wallet?: z.infer<typeof WalletInput
     '- Claude is for reasoning only; do not fabricate vendor prices, discounts, plan facts, feature claims, or availability facts.',
     '- You may suggest vendor candidates by name, but do not include any price facts or assertions about those vendors.',
     '- candidate_vendors must contain only concrete vendor/service names (or explicit target URLs), never the full user sentence.',
-    '- If you are uncertain about candidate_vendors, leave it empty and set clarification_needed=true with one useful question.',
+    '- If the user explicitly names vendors, keep candidate_vendors limited to only those vendors and set scope_locked=true.',
+    '- If you are uncertain about candidate_vendors, leave it empty; planning can still proceed with vendor discovery.',
     '- Normalize the user goal and extract budget constraints if clearly stated.',
     '- If key inputs are missing, set clarificationNeeded=true and provide concise follow-up questions.',
     '- Keep comparisonCriteria and mustHaveFeatures concise and decision-ready.',
@@ -126,6 +129,7 @@ function responseJsonSchema() {
     properties: {
       normalized_goal: { type: 'string' },
       category: { type: 'string' },
+      scope_locked: { type: 'boolean' },
       candidate_vendors: {
         type: 'array',
         items: { type: 'string' },
@@ -158,6 +162,7 @@ function responseJsonSchema() {
     required: [
       'normalized_goal',
       'category',
+      'scope_locked',
       'candidate_vendors',
       'budget_limit',
       'must_have_features',
@@ -212,6 +217,26 @@ function normalizeBudgetPeriod(value: unknown): 'monthly' | 'yearly' | 'one_time
   return 'unknown';
 }
 
+function extractExplicitVendorScopeFromMessage(message: string): string[] {
+  const candidates: string[] = [];
+  const versus = message.match(/\b([A-Za-z][A-Za-z0-9.+_-]{1,24})\s+(?:vs\.?|versus)\s+([A-Za-z][A-Za-z0-9.+_-]{1,24})\b/i);
+  if (versus?.[1] && versus?.[2]) {
+    candidates.push(versus[1], versus[2]);
+  }
+
+  const between = message.match(/\b(?:choose|compare)\s+between\s+(.+?)\s+and\s+(.+?)(?:\s+for|\s+under|\s+with|$)/i);
+  if (between?.[1] && between?.[2]) {
+    candidates.push(between[1], between[2]);
+  }
+
+  const genericBetween = message.match(/\bbetween\s+(.+?)\s+and\s+(.+?)(?:\s+for|\s+under|\s+with|$)/i);
+  if (genericBetween?.[1] && genericBetween?.[2]) {
+    candidates.push(genericBetween[1], genericBetween[2]);
+  }
+
+  return sanitizeVendorTargets(candidates, 8);
+}
+
 function normalizeProcurementPlan(rawPlan: unknown, userMessage: string): ProcurementPlan {
   const raw = asRecord(rawPlan);
   const normalizedGoal = toStringOrEmpty(pickValue(raw, ['normalizedGoal', 'normalized_goal'])) || userMessage;
@@ -223,24 +248,32 @@ function normalizeProcurementPlan(rawPlan: unknown, userMessage: string): Procur
     pickValue(raw, ['targetVendorCandidates', 'candidate_vendors']),
     25,
   );
+  const explicitScopeCandidates = extractExplicitVendorScopeFromMessage(userMessage);
   const validCandidates = sanitizeVendorTargets(rawCandidates, 25);
   const derivedCandidates = deriveVendorCandidatesFromContext({
     goal: normalizedGoal,
     category,
     maxCandidates: 8,
   });
-  const candidateVendors = validCandidates.length > 0 ? validCandidates : derivedCandidates;
+  const scopeLockedFlag = pickValue(raw, ['scopeLocked', 'scope_locked']) === true
+    || explicitScopeCandidates.length > 0;
+  const candidateVendors = scopeLockedFlag
+    ? (explicitScopeCandidates.length > 0 ? explicitScopeCandidates : validCandidates)
+    : (validCandidates.length > 0 ? validCandidates : derivedCandidates);
 
   const rawFollowUps = toStringArray(pickValue(raw, ['followUpQuestions', 'follow_up_questions']), 3);
   const clarificationNeededBase = typeof pickValue(raw, ['clarificationNeeded', 'clarification_needed']) === 'boolean'
     ? Boolean(pickValue(raw, ['clarificationNeeded', 'clarification_needed']))
     : rawFollowUps.length > 0;
-  const clarificationNeeded = clarificationNeededBase || candidateVendors.length === 0;
+  const discoveryReady = /\b(app|tool|software|platform|service|vendor|solution|subscription|crm|note|outreach|compare|find|best|cheapest|pricing)\b/i
+    .test(`${normalizedGoal} ${category}`.trim());
+  const clarificationNeeded = (clarificationNeededBase && !discoveryReady)
+    || (scopeLockedFlag && candidateVendors.length === 0);
   const followUpQuestions = clarificationNeeded
     ? (rawFollowUps.length > 0
       ? rawFollowUps
       : [buildVendorClarificationQuestion({ goal: normalizedGoal, category })])
-    : rawFollowUps;
+    : [];
 
   const comparisonCriteria = toStringArray(
     pickValue(raw, ['comparisonCriteria', 'comparison_criteria']),
@@ -254,6 +287,7 @@ function normalizeProcurementPlan(rawPlan: unknown, userMessage: string): Procur
   return {
     normalizedGoal,
     category,
+    scopeLocked: scopeLockedFlag,
     targetVendorCandidates: candidateVendors,
     budgetConstraint: {
       amount: toNumberOrNull(

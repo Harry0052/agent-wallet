@@ -28,6 +28,69 @@ export interface PurchasePrepBlocker {
   sensitive: boolean;
 }
 
+export interface PurchasePrepCredentialCapture {
+  loginIdentifier: string | null;
+  secret: string;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function pickStringValue(candidates: unknown[]): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return null;
+}
+
+function normalizeCredentialCapture(payload: TinyFishPurchasePrepResponse): PurchasePrepCredentialCapture | null {
+  const data = asRecord(payload.data) || {};
+  const credentials = asRecord(data.credentials) || {};
+  const account = asRecord(data.account) || {};
+
+  const loginIdentifier = pickStringValue([
+    data.loginIdentifier,
+    data.login_identifier,
+    data.accountEmail,
+    data.account_email,
+    data.email,
+    data.username,
+    data.user,
+    credentials.loginIdentifier,
+    credentials.login_identifier,
+    credentials.email,
+    credentials.username,
+    account.email,
+    account.username,
+  ]);
+
+  const secret = pickStringValue([
+    data.generatedPassword,
+    data.generated_password,
+    data.password,
+    data.credentialSecret,
+    data.credential_secret,
+    credentials.password,
+    credentials.secret,
+    credentials.token,
+    account.password,
+  ]);
+
+  if (!secret || secret.length < 4) {
+    return null;
+  }
+
+  return {
+    loginIdentifier,
+    secret,
+  };
+}
+
 function normalizeSteps(raw: unknown): AgentStep[] {
   if (!Array.isArray(raw)) return [];
 
@@ -124,6 +187,31 @@ function normalizeBlockers(payload: TinyFishPurchasePrepResponse): PurchasePrepB
     .filter((item): item is PurchasePrepBlocker => Boolean(item));
 }
 
+function buildPurchasePrepObjective(params: {
+  vendorName: string;
+  planName: string;
+}): string {
+  return [
+    `Prepare ${params.vendorName} ${params.planName} purchase flow and stop before payment confirmation.`,
+    'If login is required, use saved credentials when available.',
+    'Return JSON in this shape:',
+    '{',
+    '  "task_type": "login | signup",',
+    '  "tool": "string",',
+    '  "status": "success | failed | action_required",',
+    '  "created_tool": "boolean",',
+    '  "login_identifier": "string | null",',
+    '  "notes": "string | null"',
+    '}',
+    'If the task fails, return:',
+    '{',
+    '  "success": false,',
+    '  "error_type": "login_required | invalid_credentials | mfa_required | captcha | blocked | timeout",',
+    '  "error_message": "string"',
+    '}',
+  ].join('\n');
+}
+
 export async function runTinyFishPurchasePreparation(params: {
   taskId: string;
   vendorName: string;
@@ -138,6 +226,7 @@ export async function runTinyFishPurchasePreparation(params: {
   checkoutUrl?: string;
   proofUrls: string[];
   blocker?: PurchasePrepBlocker;
+  credentialCapture?: PurchasePrepCredentialCapture;
 }> {
   const apiKey = process.env.TINYFISH_API_KEY;
   if (!apiKey) {
@@ -166,7 +255,10 @@ export async function runTinyFishPurchasePreparation(params: {
       workflow: ['sign_up_or_sign_in', 'continue_onboarding', 'fill_contact_form', 'fill_billing_form', 'prepare_checkout'],
       profile: params.formFillProfile,
       credentialSecret: params.credentialSecret,
-      objective: `Prepare ${params.vendorName} ${params.planName} purchase flow and stop before payment confirmation.`,
+      objective: buildPurchasePrepObjective({
+        vendorName: params.vendorName,
+        planName: params.planName,
+      }),
     }),
     cache: 'no-store',
   });
@@ -188,6 +280,7 @@ export async function runTinyFishPurchasePreparation(params: {
   const proofUrls = normalizeProofUrls(payload);
   const blockers = normalizeBlockers(payload);
   const blocker = blockers[0];
+  const credentialCapture = normalizeCredentialCapture(payload) || undefined;
 
   if (!blocker && steps.length === 0 && !checkoutUrl && proofUrls.length === 0) {
     throw new Error('TinyFish purchase-prep returned no executable steps or proof artifacts');
@@ -198,5 +291,6 @@ export async function runTinyFishPurchasePreparation(params: {
     checkoutUrl,
     proofUrls,
     blocker,
+    credentialCapture,
   };
 }
