@@ -992,6 +992,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
             break;
           }
 
+          case 'candidate_sourcing_task': {
+            const runtimeExecution = orchestration.executionResult;
+            const taskId = typeof runtimeExecution?.sourcingTaskId === 'string'
+              ? runtimeExecution.sourcingTaskId
+              : orchestration.taskId;
+
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: typeof runtimeExecution?.message === 'string'
+                ? `${runtimeExecution.message} Track progress in Recruiting Workspace.`
+                : 'Candidate sourcing has started. I will shortlist top matches and publish a Google Sheets link in Recruiting Workspace.',
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+
+            addMessage({
+              id: uid(),
+              role: 'assistant',
+              content: `Task ID: ${taskId}\nStatus updates: queued -> running -> parsing -> scoring -> exporting -> completed`,
+              type: 'text',
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
           case 'signup_and_prepare_checkout': {
             if (orchestration.route === 'signup_and_prepare_checkout' && orchestration.signup?.merchant) {
               void (async () => {

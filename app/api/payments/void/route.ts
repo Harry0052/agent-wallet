@@ -78,7 +78,7 @@ function buildEngine() {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = getWalletUserId();
+  const userId = await getWalletUserId();
 
   try {
     const body = BodySchema.parse(await req.json());

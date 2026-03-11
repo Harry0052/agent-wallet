@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { parseAgentIntent } from '@/lib/server/agentIntent';
+import { requireAuthenticatedUser } from '@/lib/server/auth';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 
 export const runtime = 'nodejs';
@@ -11,6 +12,7 @@ const BodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuthenticatedUser();
     const body = BodySchema.parse(await req.json());
     const intent = await parseAgentIntent(body.message);
     return NextResponse.json({

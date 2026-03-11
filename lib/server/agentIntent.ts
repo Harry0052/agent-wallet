@@ -7,6 +7,7 @@ const INTENT_VALUES = [
   'compare_and_buy',
   'signup_and_prepare_checkout',
   'procurement_task',
+  'candidate_sourcing_task',
   'fund_wallet',
   'review_spend',
   'cancel_subscription',
@@ -79,6 +80,7 @@ function parserPrompt(message: string, context?: string): string {
     '- compare_and_buy: compare/rank/pick-best then buy',
     '- signup_and_prepare_checkout: explicit sign-up/form-fill/checkout-prep',
     '- procurement_task: buy/compare/find products/services/subscriptions',
+    '- candidate_sourcing_task: source candidates (e.g., Indeed/LinkedIn), shortlist talent, export results',
     '- fund_wallet: add/deposit money to the user wallet',
     '- review_spend: balance/history/budget/spend review',
     '- cancel_subscription: cancel/downgrade an existing SaaS subscription',
@@ -90,6 +92,7 @@ function parserPrompt(message: string, context?: string): string {
     '- "buy me coffee", "buy notion under 15/mo", "find me a CRM", "order lunch under $15", "get me a parking pass" → procurement_task',
     '  procurement_task is for buying products/services/goods. "buy me X" = procurement, NOT send_money.',
     '- "find a streaming service with Top Gun Maverick", "compare CRMs" → compare_and_buy',
+    '- "sign in to indeed, find 3 senior software engineers, shortlist and export to google sheets" → candidate_sourcing_task',
     '- "sign up for Notion Pro" → signup_and_prepare_checkout',
     '- "log into Stripe", "reconnect Netflix", "use my saved Netflix login" → signup_and_prepare_checkout',
     '- "cancel my grammarly subscription" → cancel_subscription',
@@ -104,6 +107,7 @@ function parserPrompt(message: string, context?: string): string {
     '  Extract bank_reference if user provides a bank reference/account hint.',
     '  Natural language amounts: "a dollar" → 1, "five" → 5, "twenty" → 20, "a hundred" → 100.',
     '- For procurement_task: extract budget from "under $X/mo" or similar as budget_limit.',
+    '- For candidate_sourcing_task: capture normalized_goal, category=\"candidate_sourcing\", and any location/skill constraints in description.',
     '  merchant = the specific product/service name if mentioned.',
     '- For signup_and_prepare_checkout: when user asks to log in/reconnect/use saved login, merchant is the service name (Stripe, Netflix, Notion, Gmail, etc.).',
     '- For compare_and_buy/procurement_task: include normalized_goal, category, and candidate_vendors when possible.',
@@ -378,6 +382,8 @@ function inferIntent(message: string, candidate: string | null): AgentIntent['in
   const lower = message.toLowerCase();
   const comparisonLanguage = /\b(compare|versus|vs\.?|which is better|what is better|better for|choose between|best)\b/.test(lower);
   const researchEntityLanguage = /\b(app|tool|software|platform|service|vendor|solution|crm|note[\s-]?taking|outreach|email|subscription)\b/.test(lower);
+  const sourcingLanguage = /\b(indeed|linkedin|candidate|candidates|recruit|recruiting|hire|hiring|shortlist|talent|software engineer profile)\b/.test(lower);
+  if (sourcingLanguage) return 'candidate_sourcing_task';
   if (comparisonLanguage && researchEntityLanguage) return 'compare_and_buy';
   if (/\b(cash\s*app|cashtag|acct_[a-z0-9]+|stripe\s+recipient)\b/.test(lower) || /\$[a-z][a-z0-9_]{1,}/i.test(message)) {
     return 'send_money';
@@ -502,7 +508,7 @@ function normalizeMissingFields(
   bankReference: string | null,
   merchant: string | null,
 ): string[] {
-  if (intent === 'compare_and_buy' || intent === 'procurement_task') {
+  if (intent === 'compare_and_buy' || intent === 'procurement_task' || intent === 'candidate_sourcing_task') {
     // Ephemeral reasoning tasks can proceed using discovery from natural language.
     return [];
   }
@@ -554,9 +560,11 @@ function normalizeIntentPayload(parsedIntent: unknown, message: string): AgentIn
     ? extractBudgetFromMessage(message)
     : null);
   const normalizedGoal = readString(raw, ['normalized_goal', 'normalizedGoal', 'goal', 'query'])
-    || ((intent === 'procurement_task' || intent === 'compare_and_buy') ? message.trim() : null);
+    || ((intent === 'procurement_task' || intent === 'compare_and_buy' || intent === 'candidate_sourcing_task') ? message.trim() : null);
   const category = readString(raw, ['category'])
-    || ((intent === 'procurement_task' || intent === 'compare_and_buy') ? inferProcurementCategory(message) : null);
+    || (intent === 'candidate_sourcing_task'
+      ? 'candidate_sourcing'
+      : ((intent === 'procurement_task' || intent === 'compare_and_buy') ? inferProcurementCategory(message) : null));
   const candidateVendorRaw = readStringArray(raw, ['candidate_vendors', 'candidateVendors', 'targetVendorCandidates'])
     .slice(0, 12);
   const explicitCandidates = (intent === 'procurement_task' || intent === 'compare_and_buy')

@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       consentVersion?: string;
     };
 
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const setup = await createFundingSetupIntent({
       userId,
       consentMetadata: {

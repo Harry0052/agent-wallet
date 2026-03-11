@@ -3,7 +3,6 @@ import Stripe from 'stripe';
 import {
   hasWebhookBeenProcessed,
   hasSuccessfulTopupForPaymentIntent,
-  getWalletUserId,
   markWebhookProcessed,
   recordLedgerEntryUnique,
   recordTopupCredit,
@@ -122,7 +121,19 @@ export async function POST(req: NextRequest) {
       }
 
       if (action === 'topup' && session.mode === 'payment') {
-        const userId = session.metadata?.wallet_user_id || getWalletUserId();
+        const userId = session.metadata?.wallet_user_id?.trim() || null;
+        if (!userId) {
+          logServerEvent('warn', 'stripe.webhook.topup_missing_user_id', {
+            eventId: event.id,
+            sessionId: session.id,
+          });
+          await markWebhookProcessed(event.id);
+          return NextResponse.json({
+            received: true,
+            ignored: true,
+            reason: 'missing_wallet_user_id',
+          });
+        }
         const amount = (session.amount_total || 0) / 100;
         if (amount > 0) {
           const paymentIntentId =
@@ -178,8 +189,19 @@ export async function POST(req: NextRequest) {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
       const action = paymentIntent.metadata?.wallet_action;
       if (action === 'topup') {
-        const userId =
-          paymentIntent.metadata?.wallet_user_id || getWalletUserId();
+        const userId = paymentIntent.metadata?.wallet_user_id?.trim() || null;
+        if (!userId) {
+          logServerEvent('warn', 'stripe.webhook.payment_intent_topup_missing_user_id', {
+            eventId: event.id,
+            paymentIntentId: paymentIntent.id,
+          });
+          await markWebhookProcessed(event.id);
+          return NextResponse.json({
+            received: true,
+            ignored: true,
+            reason: 'missing_wallet_user_id',
+          });
+        }
         const amount =
           (paymentIntent.amount_received || paymentIntent.amount || 0) / 100;
         if (amount > 0) {
@@ -225,7 +247,19 @@ export async function POST(req: NextRequest) {
       const paymentIntent = event.data.object as Stripe.PaymentIntent;
       const action = paymentIntent.metadata?.wallet_action;
       if (action === 'topup') {
-        const userId = paymentIntent.metadata?.wallet_user_id || getWalletUserId();
+        const userId = paymentIntent.metadata?.wallet_user_id?.trim() || null;
+        if (!userId) {
+          logServerEvent('warn', 'stripe.webhook.payment_intent_failed_missing_user_id', {
+            eventId: event.id,
+            paymentIntentId: paymentIntent.id,
+          });
+          await markWebhookProcessed(event.id);
+          return NextResponse.json({
+            received: true,
+            ignored: true,
+            reason: 'missing_wallet_user_id',
+          });
+        }
         const amount = (paymentIntent.amount || 0) / 100;
         if (amount > 0) {
           const source = await resolveFundingSource(stripe, paymentIntent.id);
@@ -266,7 +300,19 @@ export async function POST(req: NextRequest) {
       const charge = event.data.object as Stripe.Charge;
       const action = charge.metadata?.wallet_action;
       if (action === 'topup' && charge.amount_refunded) {
-        const userId = charge.metadata?.wallet_user_id || getWalletUserId();
+        const userId = charge.metadata?.wallet_user_id?.trim() || null;
+        if (!userId) {
+          logServerEvent('warn', 'stripe.webhook.charge_refunded_missing_user_id', {
+            eventId: event.id,
+            chargeId: charge.id,
+          });
+          await markWebhookProcessed(event.id);
+          return NextResponse.json({
+            received: true,
+            ignored: true,
+            reason: 'missing_wallet_user_id',
+          });
+        }
         const amount = charge.amount_refunded / 100;
 
         await recordLedgerEntryUnique({

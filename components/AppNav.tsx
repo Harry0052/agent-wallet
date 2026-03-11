@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   Activity,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { fmt } from "@/lib/utils";
+import { logout } from '@/services/auth';
 
 const navLinks = [
   { href: "/operator", label: "Dashboard", icon: Command },
@@ -45,6 +47,7 @@ function getSystemStatusState(
 }
 
 export function AppNav() {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { wallet, isProcessing, activeTask } = useApp();
@@ -56,6 +59,12 @@ export function AppNav() {
   const buildHref = (base: string) => {
     if (isDemoMode) return `${base}?demo=1`;
     return base;
+  };
+
+  const onLogout = async () => {
+    await logout();
+    router.replace('/login');
+    router.refresh();
   };
 
   return (
@@ -111,6 +120,13 @@ export function AppNav() {
                 {fmt(wallet.balance)}
               </span>
             </div>
+            <button
+              type="button"
+              className="aw-button-secondary px-3 py-1.5 text-xs"
+              onClick={() => { void onLogout(); }}
+            >
+              Logout
+            </button>
           </div>
         </div>
       </nav>

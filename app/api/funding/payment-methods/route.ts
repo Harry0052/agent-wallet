@@ -12,7 +12,7 @@ const DeleteBodySchema = z.object({
 
 export async function GET() {
   try {
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const methods = await listSavedFundingMethods(userId);
     return NextResponse.json({ ok: true, methods });
   } catch (error) {
@@ -26,7 +26,7 @@ export async function GET() {
 export async function DELETE(req: NextRequest) {
   try {
     const body = DeleteBodySchema.parse(await req.json());
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
 
     await removeSavedFundingMethod({
       userId,

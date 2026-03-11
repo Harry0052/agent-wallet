@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
     };
 
     const params = QuerySchema.parse(raw);
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
 
     const task = await getProcurementTask({ taskId: params.taskId, userId });
     if (!task) {

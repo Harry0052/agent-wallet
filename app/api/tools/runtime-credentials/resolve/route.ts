@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { isAuthError } from '@/lib/server/auth';
 import { getWalletUserId } from '@/lib/server/ledger';
 import { resolveRuntimeCredentialReference } from '@/lib/server/toolsVault';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
@@ -13,7 +14,7 @@ const BodySchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = BodySchema.parse(await req.json());
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const reference = await resolveRuntimeCredentialReference({
       userId,
       toolKey: body.toolKey,
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest) {
       ...response,
     });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof Error

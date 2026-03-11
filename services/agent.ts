@@ -33,6 +33,7 @@ export interface AgentIntentParseResult {
     | 'fund_wallet'
     | 'procurement_task'
     | 'compare_and_buy'
+    | 'candidate_sourcing_task'
     | 'signup_and_prepare_checkout'
     | 'cancel_subscription'
     | 'review_spend';
@@ -62,6 +63,7 @@ export interface AgentOrchestrationResult {
     | 'clarification'
     | 'send_money_approval'
     | 'procurement_task'
+    | 'candidate_sourcing_task'
     | 'signup_and_prepare_checkout'
     | 'fund_wallet'
     | 'review_spend'
@@ -82,6 +84,11 @@ export interface AgentOrchestrationResult {
   };
   procurement?: {
     goal: string;
+  };
+  candidateSourcing?: {
+    goal: string;
+    platform: 'indeed';
+    shortlistCount: number;
   };
   signup?: {
     merchant: string | null;
@@ -391,6 +398,7 @@ function setSignupExecution(task: AgentTask, patch: Partial<NonNullable<AgentTas
 }
 
 async function runSignupActivationVerification(params: {
+  userId: string;
   merchant: string;
   taskId: string;
   paymentFlowId: string;
@@ -455,7 +463,7 @@ async function runSignupActivationVerification(params: {
 
   const verification = await engine.verify({
     paymentId: params.paymentFlowId,
-    userId: 'wallet_user',
+    userId: params.userId,
     merchant: params.merchant,
     taskId: params.taskId,
     authorizedAt: params.authorizedAt,
@@ -928,6 +936,7 @@ export function handleHelp(cb: AgentCallbacks): void {
     `I can help with:\n` +
       `- **Send money**: "Send $10 to Alice", "Pay my fiancee $5"\n` +
       `- **Buy / Procure**: "Buy me coffee", "Find the best CRM under $15/mo"\n` +
+      `- **Source candidates**: "Find 3 senior software engineers on Indeed and export to Google Sheets"\n` +
       `- **Sign up**: "Sign up for Netflix", "Create a Hulu account"\n` +
       `- **Fund wallet**: "Add $20 to my wallet"\n` +
       `- **Cancel subscriptions**: "Cancel my Grammarly"\n` +
@@ -1348,6 +1357,7 @@ export async function completeSignupFlow(
   } as AgentLogData));
 
   const activation = await runSignupActivationVerification({
+    userId: `wallet:${paymentFlow?.id || task.id}`,
     merchant,
     taskId: task.id,
     paymentFlowId: paymentFlow?.id || `signup_${task.id}`,

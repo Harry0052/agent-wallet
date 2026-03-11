@@ -104,6 +104,18 @@ export interface UserAutofillProfile {
   updatedAt?: string;
 }
 
+export interface AppUserSettings {
+  userId: string;
+  locale: string;
+  timezone: string;
+  dashboardDefaultView: 'operator' | 'execution' | 'wallet' | 'tools' | string;
+  security: Record<string, unknown>;
+  agentDefaults: Record<string, unknown>;
+  notifications: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // -- Chat ----------------------------------------------------
 
 export type MessageRole = 'user' | 'assistant' | 'system';

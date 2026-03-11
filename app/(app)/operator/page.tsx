@@ -7,6 +7,7 @@ import { ChatInterface } from "@/components/ChatInterface";
 import { OpsDeck } from "@/components/OpsDeck";
 import { AgentRail } from "@/components/AgentRail";
 import { ProcurementPlanningPanel } from "@/components/ProcurementPlanningPanel";
+import { SourcingTaskPanel } from "@/components/SourcingTaskPanel";
 import { useApp } from "@/lib/store";
 
 function OperatorContent() {
@@ -140,6 +141,10 @@ function OperatorContent() {
               </div>
             </div>
             <ProcurementPlanningPanel />
+          </section>
+
+          <section className="aw-operator-zone">
+            <SourcingTaskPanel />
           </section>
         </div>
 

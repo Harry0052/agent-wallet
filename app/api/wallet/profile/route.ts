@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { isAuthError } from '@/lib/server/auth';
 import {
   getUserAutofillProfile,
   getWalletUserId,
@@ -26,9 +27,12 @@ const PatchSchema = z.object({
 
 export async function GET() {
   try {
-    const profile = await getUserAutofillProfile(getWalletUserId());
+    const profile = await getUserAutofillProfile(await getWalletUserId());
     return NextResponse.json({ profile });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to load profile' },
       { status: 500 },
@@ -39,11 +43,14 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   try {
     const patch = PatchSchema.parse(await req.json());
-    const profile = await upsertUserAutofillProfile(getWalletUserId(), patch);
+    const profile = await upsertUserAutofillProfile(await getWalletUserId(), patch);
     return NextResponse.json({ profile });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues.map((issue) => issue.message).join('; ') }, { status: 400 });
+    }
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
     return NextResponse.json(
@@ -52,4 +59,3 @@ export async function PATCH(req: NextRequest) {
     );
   }
 }
-

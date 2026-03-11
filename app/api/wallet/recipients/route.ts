@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Recipient } from '@/lib/types';
+import { isAuthError } from '@/lib/server/auth';
 import {
   addRecipient,
   getWallet,
@@ -13,7 +14,7 @@ export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const name = req.nextUrl.searchParams.get('name');
     if (name && name.trim()) {
       const recipient = await resolveRecipientByName(userId, name.trim());
@@ -23,6 +24,9 @@ export async function GET(req: NextRequest) {
     const wallet = await getWallet(userId);
     return NextResponse.json({ recipients: wallet.recipients });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to list recipients' },
       { status: 500 },
@@ -58,7 +62,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'stripeAccountId is required for stripe recipients' }, { status: 400 });
       }
       recipient = await addRecipient(
-        getWalletUserId(),
+        await getWalletUserId(),
         name,
         stripeAccountId,
         body.status || 'approved',
@@ -69,7 +73,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'cashAppCashtag is required for cash_app recipients' }, { status: 400 });
       }
       recipient = await upsertRecipientDelivery({
-        userId: getWalletUserId(),
+        userId: await getWalletUserId(),
         name,
         sendMethod,
         cashAppCashtag,
@@ -82,7 +86,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'bankReference is required for bank recipients' }, { status: 400 });
       }
       recipient = await upsertRecipientDelivery({
-        userId: getWalletUserId(),
+        userId: await getWalletUserId(),
         name,
         sendMethod,
         bankReference,
@@ -96,6 +100,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ recipient });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to add recipient' },
       { status: 500 },
@@ -110,13 +117,16 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'recipientId and status are required' }, { status: 400 });
     }
 
-    const recipient = await setRecipientStatus(getWalletUserId(), body.recipientId, body.status);
+    const recipient = await setRecipientStatus(await getWalletUserId(), body.recipientId, body.status);
     if (!recipient) {
       return NextResponse.json({ error: 'Recipient not found' }, { status: 404 });
     }
 
     return NextResponse.json({ recipient });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to update recipient' },
       { status: 500 },

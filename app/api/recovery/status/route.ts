@@ -124,7 +124,7 @@ async function loadStatus(input: {
 }
 
 export async function GET(req: NextRequest) {
-  const userId = getWalletUserId();
+  const userId = await getWalletUserId();
 
   try {
     const query = QuerySchema.parse({
@@ -172,7 +172,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = getWalletUserId();
+  const userId = await getWalletUserId();
 
   try {
     const body = BodySchema.parse(await req.json());

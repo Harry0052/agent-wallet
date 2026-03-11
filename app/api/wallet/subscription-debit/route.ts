@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAuthError } from '@/lib/server/auth';
 import {
   checkSubscriptionGuardrails,
   getWallet,
@@ -18,7 +19,7 @@ export const runtime = 'nodejs';
  * the subscription service itself handles the actual charge.
  */
 export async function POST(req: NextRequest) {
-  const userId = getWalletUserId();
+  const userId = await getWalletUserId();
 
   try {
     const body = (await req.json()) as {
@@ -122,6 +123,9 @@ export async function POST(req: NextRequest) {
       transaction,
     });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
     const message = error instanceof Error ? error.message : 'Failed to record subscription debit';
     const errorCode = classifyTaskError({ message });
     logServerEvent('error', 'wallet.subscription_debit.failed', {
@@ -140,7 +144,7 @@ export async function POST(req: NextRequest) {
  * Used when signup finalization fails after the wallet was already debited.
  */
 export async function DELETE(req: NextRequest) {
-  const userId = getWalletUserId();
+  const userId = await getWalletUserId();
 
   try {
     const body = (await req.json()) as {
@@ -206,6 +210,9 @@ export async function DELETE(req: NextRequest) {
       transaction,
     });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
     const message = error instanceof Error ? error.message : 'Failed to process subscription refund';
     const errorCode = classifyTaskError({ message });
     logServerEvent('error', 'wallet.subscription_refund.failed', {

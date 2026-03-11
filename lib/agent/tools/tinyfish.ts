@@ -4,6 +4,7 @@ import { getProcurementTask } from '@/lib/server/procurement';
 import { parseProcurementRecommendation } from '@/lib/server/procurementRecommendation';
 import { createSubscriptionAction, listSubscriptionActions } from '@/lib/server/subscriptions';
 import { runSubscriptionOperation } from '@/lib/server/subscriptionOperationRunner';
+import { startCandidateSourcingTask } from '@/lib/server/candidateSourcingRunner';
 import {
   discoverTinyFishVendorCandidates,
   type TinyFishProcurementFinding,
@@ -243,6 +244,22 @@ export async function runTinyFishTask(params: {
 
     if (params.orchestration.route === 'procurement_task') {
       return runProcurementExecution(params);
+    }
+
+    if (params.orchestration.route === 'candidate_sourcing_task') {
+      const started = await startCandidateSourcingTask({
+        userId: params.userId,
+        taskId: params.orchestration.taskId,
+      });
+
+      return {
+        status: 'queued',
+        message: started.message,
+        sourcingTaskId: started.taskId,
+        sourcingStatus: started.status,
+        started: started.started,
+        platform: 'indeed',
+      };
     }
 
     if (params.orchestration.route === 'signup_and_prepare_checkout') {

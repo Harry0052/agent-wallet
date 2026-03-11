@@ -73,7 +73,7 @@ function optionFromFinding(finding: Awaited<ReturnType<typeof listProcurementFin
 export async function POST(req: NextRequest) {
   try {
     const { taskId } = CompareSchema.parse(await req.json());
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     logServerEvent('info', 'procurement.compare.started', { userId, taskId });
 
     const task = await getProcurementTask({ taskId, userId });

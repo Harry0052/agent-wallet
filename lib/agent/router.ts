@@ -42,6 +42,7 @@ export function routeAgentAction(orchestration: AgentOrchestrationResult): Agent
 
   if (
     orchestration.route === 'procurement_task'
+    || orchestration.route === 'candidate_sourcing_task'
     || orchestration.route === 'signup_and_prepare_checkout'
     || orchestration.route === 'cancel_subscription'
   ) {

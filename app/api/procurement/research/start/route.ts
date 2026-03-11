@@ -14,7 +14,7 @@ const StartSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const { taskId } = StartSchema.parse(await req.json());
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     logServerEvent('info', 'procurement.research.start.requested', { userId, taskId });
 
     const task = await getProcurementTask({ taskId, userId });

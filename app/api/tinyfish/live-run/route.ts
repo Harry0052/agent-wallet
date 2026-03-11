@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuthenticatedUser } from '@/lib/server/auth';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -338,6 +339,7 @@ function clientErrorMessage(error: unknown): string {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuthenticatedUser();
     const body = (await req.json()) as {
       goal?: string;
       url?: string;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { isAuthError } from '@/lib/server/auth';
 import { getWalletUserId } from '@/lib/server/ledger';
 import {
   registerToolFromSignup,
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(apiError('VALIDATION_ERROR', 'A secret value is required', true), { status: 400 });
     }
 
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const connected = await registerToolFromSignup({
       userId,
       toolKey: body.toolKey,
@@ -66,6 +67,9 @@ export async function POST(req: NextRequest) {
       tool: connected,
     });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof Error

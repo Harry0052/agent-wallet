@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
       taskId: req.nextUrl.searchParams.get('taskId') || undefined,
     });
 
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const [activeSubscriptions, actions] = await Promise.all([
       listActiveSubscriptions(userId),
       listSubscriptionActions({

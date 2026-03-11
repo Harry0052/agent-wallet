@@ -17,7 +17,7 @@ const ApprovalSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = ApprovalSchema.parse(await req.json());
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     logServerEvent('info', 'procurement.approval.requested', {
       userId,
       taskId: body.taskId,

@@ -25,6 +25,7 @@ export type AgentRoute =
   | 'clarification'
   | 'send_money_approval'
   | 'procurement_task'
+  | 'candidate_sourcing_task'
   | 'signup_and_prepare_checkout'
   | 'fund_wallet'
   | 'review_spend'
@@ -48,6 +49,11 @@ export interface AgentOrchestrationResult {
   };
   procurement?: {
     goal: string;
+  };
+  candidateSourcing?: {
+    goal: string;
+    platform: 'indeed';
+    shortlistCount: number;
   };
   signup?: {
     merchant: string | null;
@@ -205,13 +211,13 @@ function recipientListLabel(recipients: Recipient[]): string {
 }
 
 function isEphemeralReasoningIntent(intent: AgentIntent['intent']): boolean {
-  return intent === 'compare_and_buy' || intent === 'procurement_task';
+  return intent === 'compare_and_buy' || intent === 'procurement_task' || intent === 'candidate_sourcing_task';
 }
 
 function messageLooksLikeNewReasoningTask(message: string): boolean {
   const lower = message.toLowerCase();
-  const reasoningCue = /\b(compare|versus|vs\.?|which is better|what is better|better for|choose between|best|find me|recommend)\b/.test(lower);
-  const domainCue = /\b(app|tool|software|platform|service|vendor|solution|crm|note[\s-]?taking|outreach|email|subscription)\b/.test(lower);
+  const reasoningCue = /\b(compare|versus|vs\.?|which is better|what is better|better for|choose between|best|find me|recommend|shortlist|hire|hiring|recruit)\b/.test(lower);
+  const domainCue = /\b(app|tool|software|platform|service|vendor|solution|crm|note[\s-]?taking|outreach|email|subscription|candidate|indeed|linkedin|engineer)\b/.test(lower);
   return reasoningCue && domainCue;
 }
 
@@ -344,6 +350,7 @@ function mergeIntentWithPending(
     || previousIntent === 'compare_and_buy'
     || previousIntent === 'signup_and_prepare_checkout'
     || previousIntent === 'procurement_task'
+    || previousIntent === 'candidate_sourcing_task'
     || previousIntent === 'fund_wallet'
     || previousIntent === 'review_spend'
     || previousIntent === 'cancel_subscription'
@@ -594,6 +601,7 @@ export async function orchestrateAgentMessage(params: {
     && intent.intent !== 'send_money'
     && intent.intent !== 'fund_wallet'
     && intent.intent !== 'cancel_subscription'
+    && intent.intent !== 'candidate_sourcing_task'
   ) {
     intent.intent = 'signup_and_prepare_checkout';
   }
@@ -1017,6 +1025,40 @@ export async function orchestrateAgentMessage(params: {
         : 'Starting procurement planning from your request.'),
       procurement: {
         goal: procurementGoal,
+      },
+    };
+  }
+
+  if (intent.intent === 'candidate_sourcing_task') {
+    const sourcingGoal = intent.normalized_goal || params.message;
+
+    await persistAgentTask({
+      userId: params.userId,
+      taskId,
+      taskType: 'candidate_sourcing_task',
+      intent: params.message,
+      status: 'ready',
+      input: {
+        ...intent,
+        category: intent.category || 'candidate_sourcing',
+      },
+      result: {
+        goal: sourcingGoal,
+        platform: 'indeed',
+        shortlistCount: 3,
+      },
+    });
+
+    return {
+      route: 'candidate_sourcing_task',
+      taskId,
+      status: 'ready',
+      intent,
+      message: composeMessage('Starting Indeed candidate sourcing and Google Sheets export workflow.'),
+      candidateSourcing: {
+        goal: sourcingGoal,
+        platform: 'indeed',
+        shortlistCount: 3,
       },
     };
   }

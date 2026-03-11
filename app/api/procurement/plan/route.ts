@@ -312,7 +312,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const input = RequestSchema.parse(await req.json());
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const userMessage = input.userMessage;
     requestedGoal = userMessage;
 
@@ -405,7 +405,7 @@ export async function POST(req: NextRequest) {
     let errorCode: TaskErrorCode = 'UNKNOWN_FAILURE';
     if (taskId) {
       try {
-        const userId = getWalletUserId();
+        const userId = await getWalletUserId();
         const fallbackGoal = requestedGoal || (error instanceof Error ? error.message : 'planning failed');
 
         await updateProcurementTask({

@@ -357,7 +357,7 @@ export async function POST(req: NextRequest) {
 
       for (const s of steps) {
         await recordWebAction({
-          userId: getWalletUserId(),
+          userId: await getWalletUserId(),
           taskId: typeof payload.taskId === 'string' ? payload.taskId : undefined,
           actionType: s.type,
           url: s.url,
@@ -487,7 +487,7 @@ export async function POST(req: NextRequest) {
 
     for (const s of steps) {
       await recordWebAction({
-        userId: getWalletUserId(),
+        userId: await getWalletUserId(),
         taskId: typeof body.payload?.taskId === 'string' ? body.payload.taskId : undefined,
         actionType: s.type,
         url: s.url,

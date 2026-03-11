@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 export async function GET() {
   try {
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const snapshot = await loadSessionSnapshot(userId);
     return NextResponse.json(snapshot);
   } catch (error) {
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     const body = await request.json();
 
     await saveSessionSnapshot(userId, {

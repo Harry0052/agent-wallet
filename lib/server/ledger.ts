@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Recipient, Transaction, UserAutofillProfile, Wallet, WalletSettings } from '@/lib/types';
 import { query } from '@/lib/server/db';
 import { logServerEvent } from '@/lib/server/observability';
+import { getWalletUserIdFromSession } from '@/lib/server/auth';
 
 const DEFAULT_SETTINGS: WalletSettings = {
   maxTransaction: 50,
@@ -299,8 +300,8 @@ async function getUserRow(userId: string): Promise<UserRow> {
   return result.rows[0];
 }
 
-export function getWalletUserId(): string {
-  return process.env.WALLET_USER_ID || 'default-user';
+export async function getWalletUserId(): Promise<string> {
+  return getWalletUserIdFromSession();
 }
 
 async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
@@ -1185,6 +1186,10 @@ export async function recordAgentTask(params: {
   taskId?: string;
 }): Promise<string> {
   const id = params.taskId || randomUUID();
+  const normalizedUserId = normalizeRequiredText(params.userId, '');
+  if (!normalizedUserId) {
+    throw new Error('recordAgentTask requires a non-empty userId');
+  }
   const safeInput = params.input
     ? sanitizeSensitivePayload(params.input) as Record<string, unknown>
     : undefined;
@@ -1193,7 +1198,7 @@ export async function recordAgentTask(params: {
     : undefined;
   const normalizedPayload = {
     id,
-    userId: normalizeRequiredText(params.userId, 'default-user'),
+    userId: normalizedUserId,
     taskType: normalizeRequiredText(params.taskType, 'unknown_task'),
     intent: normalizeRequiredText(redactSensitiveText(params.intent), 'unspecified'),
     status: normalizeRequiredText(params.status, 'ready'),
@@ -1307,9 +1312,13 @@ export async function supersedePendingAgentTask(params: {
   taskId: string;
   reason: string;
 }): Promise<void> {
+  const normalizedUserId = normalizeRequiredText(params.userId, '');
+  if (!normalizedUserId) {
+    throw new Error('supersedePendingAgentTask requires a non-empty userId');
+  }
   const normalizedPayload = {
     taskId: normalizeRequiredText(params.taskId, ''),
-    userId: normalizeRequiredText(params.userId, 'default-user'),
+    userId: normalizedUserId,
     reason: normalizeRequiredText(params.reason, 'Superseded by a new request'),
   };
 

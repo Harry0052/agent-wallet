@@ -86,6 +86,15 @@ interface VaultEntryRow {
   updated_at: string;
 }
 
+interface UserToolConfigRow {
+  id: string;
+  user_tool_id: string;
+  encrypted_config: string;
+  key_version: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface EventRow {
   id: string;
   user_tool_id: string;
@@ -726,6 +735,26 @@ async function loadVaultEntry(userToolId: string): Promise<VaultEntryRow | null>
   return result.rows[0] || null;
 }
 
+async function loadUserToolConfig(userToolId: string): Promise<UserToolConfigRow | null> {
+  const result = await query<UserToolConfigRow>(
+    `
+      SELECT
+        id,
+        user_tool_id,
+        encrypted_config,
+        key_version,
+        created_at,
+        updated_at
+      FROM user_tool_configs
+      WHERE user_tool_id = $1
+      LIMIT 1
+    `,
+    [userToolId],
+  );
+
+  return result.rows[0] || null;
+}
+
 async function upsertVaultEntry(input: {
   userToolId: string;
   secretType: ToolSecretType;
@@ -1161,6 +1190,13 @@ export async function removeTool(input: {
       `,
       [input.userToolId],
     );
+    await query(
+      `
+        DELETE FROM user_tool_configs
+        WHERE user_tool_id = $1
+      `,
+      [input.userToolId],
+    );
   }
 
   await recordToolEvent({
@@ -1168,6 +1204,72 @@ export async function removeTool(input: {
     eventType: 'removed',
     message: `Removed ${current.tool_display_name}`,
   });
+}
+
+export async function getToolConfigForUser(input: {
+  userId: string;
+  userToolId: string;
+}): Promise<Record<string, unknown> | null> {
+  const tool = await loadUserToolJoinedById(input.userId, input.userToolId);
+  if (!tool) {
+    throw new Error('Tool not found');
+  }
+
+  const row = await loadUserToolConfig(input.userToolId);
+  if (!row) return null;
+
+  try {
+    const config = decryptVaultValue(row.encrypted_config, row.key_version);
+    if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
+    return config as Record<string, unknown>;
+  } catch {
+    throw new Error('Stored tool config could not be decrypted');
+  }
+}
+
+export async function upsertToolConfigForUser(input: {
+  userId: string;
+  userToolId: string;
+  config: Record<string, unknown>;
+}): Promise<Record<string, unknown>> {
+  const tool = await loadUserToolJoinedById(input.userId, input.userToolId);
+  if (!tool) {
+    throw new Error('Tool not found');
+  }
+
+  const encrypted = encryptVaultValue(input.config);
+
+  await query(
+    `
+      INSERT INTO user_tool_configs (
+        id,
+        user_tool_id,
+        encrypted_config,
+        key_version,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, NOW(), NOW())
+      ON CONFLICT (user_tool_id) DO UPDATE SET
+        encrypted_config = EXCLUDED.encrypted_config,
+        key_version = EXCLUDED.key_version,
+        updated_at = NOW()
+    `,
+    [
+      randomUUID(),
+      input.userToolId,
+      encrypted.encrypted,
+      encrypted.keyVersion,
+    ],
+  );
+
+  await recordToolEvent({
+    userToolId: input.userToolId,
+    eventType: 'updated',
+    message: `Updated configuration for ${tool.tool_display_name}`,
+  });
+
+  return input.config;
 }
 
 export async function resolveToolForAction(input: {

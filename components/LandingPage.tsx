@@ -53,6 +53,18 @@ export function LandingPage() {
 
           <div className="flex items-center gap-3">
             <Link
+              href="/login"
+              className="hidden items-center gap-1.5 rounded-lg border border-[var(--aw-border)] bg-white px-4 py-2 text-[0.78rem] font-semibold text-[var(--aw-text-soft)] transition-colors hover:border-[var(--aw-border-strong)] hover:text-[var(--aw-primary-strong)] sm:inline-flex"
+            >
+              Log In
+            </Link>
+            <Link
+              href="/signup"
+              className="hidden items-center gap-1.5 rounded-lg border border-[var(--aw-border)] bg-white px-4 py-2 text-[0.78rem] font-semibold text-[var(--aw-text-soft)] transition-colors hover:border-[var(--aw-border-strong)] hover:text-[var(--aw-primary-strong)] sm:inline-flex"
+            >
+              Sign Up
+            </Link>
+            <Link
               href={dashboardHref}
               className="hidden items-center gap-1.5 rounded-lg border border-[var(--aw-border)] bg-white px-4 py-2 text-[0.78rem] font-semibold text-[var(--aw-text-soft)] transition-colors hover:border-[var(--aw-border-strong)] hover:text-[var(--aw-primary-strong)] sm:inline-flex"
             >

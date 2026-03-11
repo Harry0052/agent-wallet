@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuthenticatedUser } from '@/lib/server/auth';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,7 @@ type WalletInput = {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuthenticatedUser();
     const body = (await req.json()) as { userMessage?: string; wallet?: WalletInput };
     const userMessage = (body.userMessage || '').trim();
 

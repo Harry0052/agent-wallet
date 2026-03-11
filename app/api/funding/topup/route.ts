@@ -16,7 +16,7 @@ const BodySchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = BodySchema.parse(await req.json());
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
 
     if (Math.round(body.amount * 100) < 50) {
       return NextResponse.json(

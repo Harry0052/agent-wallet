@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { isAuthError } from '@/lib/server/auth';
 import { getWalletUserId } from '@/lib/server/ledger';
 import { removeTool } from '@/lib/server/toolsVault';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   try {
     const { id } = await context.params;
     const body = BodySchema.parse(await req.json().catch(() => ({})));
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
 
     await removeTool({
       userId,
@@ -24,6 +25,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof Error

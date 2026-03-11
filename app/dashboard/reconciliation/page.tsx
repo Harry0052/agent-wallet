@@ -1,10 +1,12 @@
 import { ReconciliationTable } from "@/components/reconciliation-table";
 import { getReconciliationData } from "@/lib/dashboard/getReconciliationData";
+import { requirePageAuth } from '@/lib/server/authGuards';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default async function ReconciliationDashboardPage() {
+  await requirePageAuth('/login');
   const data = await getReconciliationData({ limit: 250 });
 
   return (

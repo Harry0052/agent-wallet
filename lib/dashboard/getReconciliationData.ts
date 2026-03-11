@@ -321,7 +321,7 @@ export async function getReconciliationData(input?: {
   userId?: string;
   limit?: number;
 }): Promise<ReconciliationData> {
-  const userId = input?.userId || getWalletUserId();
+  const userId = input?.userId || await getWalletUserId();
   const limit = Number.isFinite(input?.limit) && (input?.limit || 0) > 0
     ? Math.min(Math.round(input?.limit || 200), 500)
     : 200;

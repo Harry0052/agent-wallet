@@ -1,9 +1,11 @@
 import { RecoveryTable } from '@/components/refunds/recovery-table';
+import { requirePageAuth } from '@/lib/server/authGuards';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export default function RefundCenterPage() {
+export default async function RefundCenterPage() {
+  await requirePageAuth('/login');
   return (
     <div className="aw-shell aw-body min-h-screen px-4 py-6 md:px-7 md:py-8">
       <div className="mx-auto w-full max-w-[1500px]">

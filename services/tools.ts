@@ -222,3 +222,53 @@ export async function removeTool(input: {
     throw new Error(formatApiError(body));
   }
 }
+
+export async function fetchToolConfig(userToolId: string): Promise<Record<string, unknown> | null> {
+  const response = await fetch(`/api/tools/${encodeURIComponent(userToolId)}/config`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    config?: Record<string, unknown> | null;
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok) {
+    throw new Error(formatApiError(body));
+  }
+
+  if (body.config && (typeof body.config !== 'object' || Array.isArray(body.config))) {
+    throw new Error('Tool config response is invalid');
+  }
+
+  return body.config || null;
+}
+
+export async function updateToolConfig(input: {
+  userToolId: string;
+  config: Record<string, unknown>;
+}): Promise<Record<string, unknown>> {
+  const response = await fetch(`/api/tools/${encodeURIComponent(input.userToolId)}/config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      config: input.config,
+    }),
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    config?: Record<string, unknown>;
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !body.config) {
+    throw new Error(formatApiError(body));
+  }
+
+  return body.config;
+}

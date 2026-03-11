@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(apiError('VALIDATION_ERROR', 'Minimum top-up is $0.50', true), { status: 400 });
     }
 
-    const userId = getWalletUserId();
+    const userId = await getWalletUserId();
     logServerEvent('info', 'funding.session.started', { userId, amount });
 
     const session = await createTopupCheckoutSession({

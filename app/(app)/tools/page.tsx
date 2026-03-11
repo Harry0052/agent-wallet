@@ -30,12 +30,14 @@ import type {
 import { fmtFull } from "@/lib/utils";
 import {
   connectTool,
+  fetchToolConfig,
   fetchToolEvents,
   fetchToolsCatalog,
   fetchUserTools,
   reconnectTool,
   removeTool,
   setToolEnabled,
+  updateToolConfig,
 } from "@/services/tools";
 
 const ICON_BY_KEY: Record<string, LucideIcon> = {
@@ -190,6 +192,10 @@ export default function ToolsPage() {
   const [isSavingToolId, setIsSavingToolId] = useState<string | null>(null);
   const [reconnectSecret, setReconnectSecret] = useState("");
   const [reconnectIdentifier, setReconnectIdentifier] = useState("");
+  const [toolConfigText, setToolConfigText] = useState("{}");
+  const [toolConfigError, setToolConfigError] = useState<string | null>(null);
+  const [isSavingToolConfig, setIsSavingToolConfig] = useState(false);
+  const [isLoadingToolConfig, setIsLoadingToolConfig] = useState(false);
   const [isStartingStripeSetup, setIsStartingStripeSetup] = useState(false);
 
   const selectedTool = useMemo(
@@ -255,6 +261,29 @@ export default function ToolsPage() {
         );
       } finally {
         setIsLoadingEvents(false);
+      }
+    })();
+  }, [selectedToolId]);
+
+  useEffect(() => {
+    if (!selectedToolId) {
+      setToolConfigText("{}");
+      setToolConfigError(null);
+      setIsLoadingToolConfig(false);
+      return;
+    }
+
+    void (async () => {
+      setIsLoadingToolConfig(true);
+      setToolConfigError(null);
+      try {
+        const config = await fetchToolConfig(selectedToolId);
+        setToolConfigText(JSON.stringify(config || {}, null, 2));
+      } catch (error) {
+        setToolConfigText("{}");
+        setToolConfigError(error instanceof Error ? error.message : "Failed to load tool config");
+      } finally {
+        setIsLoadingToolConfig(false);
       }
     })();
   }, [selectedToolId]);
@@ -376,6 +405,37 @@ export default function ToolsPage() {
       setError(err instanceof Error ? err.message : "Failed to remove tool");
     } finally {
       setIsSavingToolId(null);
+    }
+  };
+
+  const submitToolConfig = async () => {
+    if (!selectedTool) return;
+    setToolConfigError(null);
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(toolConfigText);
+    } catch {
+      setToolConfigError("Tool config must be valid JSON.");
+      return;
+    }
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      setToolConfigError("Tool config must be a JSON object.");
+      return;
+    }
+
+    setIsSavingToolConfig(true);
+    try {
+      const updated = await updateToolConfig({
+        userToolId: selectedTool.id,
+        config: parsed as Record<string, unknown>,
+      });
+      setToolConfigText(JSON.stringify(updated, null, 2));
+    } catch (error) {
+      setToolConfigError(error instanceof Error ? error.message : "Failed to save tool config");
+    } finally {
+      setIsSavingToolConfig(false);
     }
   };
 
@@ -886,6 +946,42 @@ export default function ToolsPage() {
                 </div>
               </div>
             )}
+
+            <div className="mt-4 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Tool configuration</p>
+                {isLoadingToolConfig && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-[var(--aw-text-muted)]">
+                    <Loader2 size={11} className="animate-spin" />
+                    Loading
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-[var(--aw-text-soft)]">
+                Private per-user settings for this integration. Secrets remain in vault.
+              </p>
+              <textarea
+                className="aw-input mt-2 min-h-[7.5rem] w-full p-2.5 font-mono text-xs"
+                value={toolConfigText}
+                onChange={(event) => setToolConfigText(event.target.value)}
+                spellCheck={false}
+              />
+              {toolConfigError && (
+                <p className="mt-2 text-xs text-[var(--aw-danger)]">{toolConfigError}</p>
+              )}
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  className="aw-button-secondary px-3 py-1.5 text-xs"
+                  onClick={() => {
+                    void submitToolConfig();
+                  }}
+                  disabled={isSavingToolConfig || isLoadingToolConfig}
+                >
+                  {isSavingToolConfig ? "Saving..." : "Save config"}
+                </button>
+              </div>
+            </div>
 
             <div className="mt-4 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-muted)] p-3">
               <div className="flex items-center justify-between gap-2">

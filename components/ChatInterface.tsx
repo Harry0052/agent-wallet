@@ -58,6 +58,7 @@ export function ChatInterface() {
   const suggestions = [
     "Find the best note taking app under 15 dollars a month",
     "Compare Notion and Obsidian for college note taking",
+    "Sign in to Indeed, shortlist 3 senior software engineers with TypeScript and AWS, and export to Google Sheets",
     "Send Liz 5 dollars on Cash App",
     "Cancel my Grammarly subscription and show savings",
     "Top up my wallet by 25 dollars",
