@@ -1023,6 +1023,51 @@ export async function checkGuardrails(params: {
   return { allowed: true, recipient };
 }
 
+/**
+ * Lightweight guardrails check for subscription debits.
+ * Checks budget, limits, and merchant lists but does NOT require a Stripe
+ * Connect recipient — subscriptions are ledger-only debits.
+ */
+export async function checkSubscriptionGuardrails(params: {
+  userId: string;
+  amount: number;
+  merchant?: string;
+}): Promise<{ allowed: boolean; reason?: string }> {
+  const wallet = await getWallet(params.userId);
+
+  if (!Number.isFinite(params.amount) || params.amount <= 0) {
+    return { allowed: false, reason: 'Invalid amount' };
+  }
+
+  if (params.amount > wallet.balance) {
+    return { allowed: false, reason: 'Insufficient balance' };
+  }
+
+  if (params.amount > wallet.settings.maxTransaction) {
+    return { allowed: false, reason: `Exceeds max transaction of $${wallet.settings.maxTransaction.toFixed(2)}` };
+  }
+
+  const dailySpent = sumSucceededDebitsSince(wallet.transactions, startOfDayMs());
+  if (dailySpent + params.amount > wallet.settings.dailyLimit) {
+    return { allowed: false, reason: `Would exceed daily limit of $${wallet.settings.dailyLimit.toFixed(2)}` };
+  }
+
+  const monthlySpent = sumSucceededDebitsSince(wallet.transactions, startOfMonthMs());
+  if (monthlySpent + params.amount > wallet.settings.monthlyBudget) {
+    return { allowed: false, reason: `Would exceed monthly budget of $${wallet.settings.monthlyBudget.toFixed(2)}` };
+  }
+
+  if (merchantMatches(params.merchant, wallet.settings.blockedMerchants)) {
+    return { allowed: false, reason: 'Merchant is blocked by guardrails' };
+  }
+
+  if (wallet.settings.allowedMerchants.length > 0 && !merchantMatches(params.merchant, wallet.settings.allowedMerchants)) {
+    return { allowed: false, reason: 'Merchant is not in allowed list' };
+  }
+
+  return { allowed: true };
+}
+
 export async function recordWebAction(params: {
   userId: string;
   taskId?: string;

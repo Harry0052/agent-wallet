@@ -84,6 +84,44 @@ export async function sendMoney(payload: SendMoneyPayload): Promise<SendMoneyRes
   return jsonOrThrow<SendMoneyResult>(res);
 }
 
+export interface SubscriptionDebitPayload {
+  amount: number;
+  merchant: string;
+  description?: string;
+  approved?: boolean;
+  idempotencyKey?: string;
+}
+
+export interface SubscriptionDebitResult {
+  wallet: Wallet;
+  transaction: Transaction;
+}
+
+export async function subscriptionDebit(payload: SubscriptionDebitPayload): Promise<SubscriptionDebitResult> {
+  const res = await fetch('/api/wallet/subscription-debit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return jsonOrThrow<SubscriptionDebitResult>(res);
+}
+
+export async function refundSubscriptionDebit(payload: {
+  amount: number;
+  merchant: string;
+  reason?: string;
+  idempotencyKey?: string;
+}): Promise<{ wallet: Wallet; transaction: Transaction }> {
+  const res = await fetch('/api/wallet/subscription-debit', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return jsonOrThrow<{ wallet: Wallet; transaction: Transaction }>(res);
+}
+
 function startOfDayMs(now = new Date()): number {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
@@ -115,9 +153,16 @@ function merchantMatches(name: string | undefined, list: string[]): boolean {
   return list.some((item) => normalized.includes(item.toLowerCase()));
 }
 
-export function canSpendSnapshot(wallet: Wallet, amount: number, merchant?: string): { allowed: boolean; reason?: string } {
+export function canSpendSnapshot(
+  wallet: Wallet,
+  amount: number,
+  merchant?: string,
+  options?: { ignoreBalance?: boolean },
+): { allowed: boolean; reason?: string } {
   if (amount <= 0) return { allowed: false, reason: 'Invalid amount' };
-  if (amount > wallet.balance) return { allowed: false, reason: 'Insufficient balance' };
+  if (!options?.ignoreBalance && amount > wallet.balance) {
+    return { allowed: false, reason: 'Insufficient balance' };
+  }
   if (amount > wallet.settings.maxTransaction) {
     return { allowed: false, reason: `Exceeds max transaction of $${wallet.settings.maxTransaction.toFixed(2)}` };
   }
@@ -141,4 +186,149 @@ export function canSpendSnapshot(wallet: Wallet, amount: number, merchant?: stri
   }
 
   return { allowed: true };
+}
+
+export interface TwoPhasePaymentFlow {
+  id: string;
+  taskId: string | null;
+  merchant: string;
+  amount: number;
+  currency: string;
+  fundingMode: 'STRIPE_AUTH_CAPTURE' | 'PREPAID_BALANCE';
+  status:
+    | 'authorization_pending'
+    | 'activation_pending'
+    | 'activated'
+    | 'activation_failed'
+    | 'capture_pending'
+    | 'captured'
+    | 'refund_pending'
+    | 'refunded'
+    | 'failed';
+  requiresActivationVerification: boolean;
+  stripePaymentIntentId: string | null;
+  activationVerifiedAt: string | null;
+  authorizedAt: string | null;
+  capturedAt: string | null;
+  refundedAt: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthorizePaymentPayload {
+  merchant: string;
+  amount: number;
+  currency?: string;
+  taskId?: string;
+  idempotencyKey: string;
+  fundingMode?: 'STRIPE_AUTH_CAPTURE' | 'PREPAID_BALANCE';
+  allowPrepaidFallback?: boolean;
+  requiresActivationVerification?: boolean;
+  preferredPaymentMethodId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CapturePaymentPayload {
+  paymentId: string;
+  idempotencyKey: string;
+  activationVerified: boolean;
+  activationEvidence?: Record<string, unknown>;
+  activationFailureReason?: string;
+  preferredPaymentMethodId?: string;
+}
+
+export interface VoidPaymentPayload {
+  paymentId: string;
+  idempotencyKey: string;
+  reason: string;
+}
+
+export interface RefundInitiatePayload {
+  paymentFlowId: string;
+  idempotencyKey: string;
+  activationFailureReason?: string;
+  activationEvidence?: Record<string, unknown>;
+  allowWithoutActivationFailure?: boolean;
+}
+
+export interface RefundCaseRecord {
+  id: string;
+  paymentFlowId: string;
+  status: string;
+  merchant: string;
+  amount: number;
+  currency: string;
+  activationFailureReason: string | null;
+  userExplanation?: string | null;
+}
+
+export async function authorizeSubscriptionPayment(payload: AuthorizePaymentPayload): Promise<{
+  payment: TwoPhasePaymentFlow;
+  idempotentReplay: boolean;
+}> {
+  const res = await fetch('/api/payments/authorize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return jsonOrThrow<{
+    payment: TwoPhasePaymentFlow;
+    idempotentReplay: boolean;
+  }>(res);
+}
+
+export async function captureSubscriptionPayment(payload: CapturePaymentPayload): Promise<{
+  payment: TwoPhasePaymentFlow;
+  idempotentReplay: boolean;
+  retryScheduled: boolean;
+  nextRetryAt: string | null;
+}> {
+  const res = await fetch('/api/payments/capture', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return jsonOrThrow<{
+    payment: TwoPhasePaymentFlow;
+    idempotentReplay: boolean;
+    retryScheduled: boolean;
+    nextRetryAt: string | null;
+  }>(res);
+}
+
+export async function voidSubscriptionPayment(payload: VoidPaymentPayload): Promise<{
+  payment: TwoPhasePaymentFlow;
+  idempotentReplay: boolean;
+}> {
+  const res = await fetch('/api/payments/void', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return jsonOrThrow<{
+    payment: TwoPhasePaymentFlow;
+    idempotentReplay: boolean;
+  }>(res);
+}
+
+export async function initiateRefundWorkflow(payload: RefundInitiatePayload): Promise<{
+  refundCase: RefundCaseRecord;
+  auditLogs: Array<Record<string, unknown>>;
+  userExplanation: string;
+}> {
+  const res = await fetch('/api/refunds/initiate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return jsonOrThrow<{
+    refundCase: RefundCaseRecord;
+    auditLogs: Array<Record<string, unknown>>;
+    userExplanation: string;
+  }>(res);
 }

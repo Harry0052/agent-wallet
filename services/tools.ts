@@ -172,6 +172,34 @@ export async function reconnectTool(input: {
   return body.tool;
 }
 
+export async function registerToolFromSignup(input: {
+  toolKey: string;
+  displayName: string;
+  connectionType: ToolConnectionType;
+  loginIdentifier: string;
+  category?: string;
+  signupUrl?: string;
+}): Promise<UserToolRecord> {
+  const response = await fetch('/api/tools/register-from-signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    tool?: UserToolRecord;
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !body.tool) {
+    throw new Error(formatApiError(body));
+  }
+
+  return body.tool;
+}
+
 export async function removeTool(input: {
   userToolId: string;
   deleteSecrets?: boolean;

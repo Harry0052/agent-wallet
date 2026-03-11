@@ -93,7 +93,7 @@ function textHasToken(text: string, token: string): boolean {
 
 function detectToolRequestMode(message: string): 'login' | 'signup' | null {
   const lower = message.toLowerCase();
-  const signup = /\b(sign\s*up|signup|register|create\s+account)\b/.test(lower);
+  const signup = /\b(sign\s*up|signup|register|create\s+account|subscribe\s+to|subscribe\s+for|enroll\s+in)\b/.test(lower);
   const login = /\b(log\s*into|log\s*in|login|sign\s*into|sign\s*in|reconnect|saved\s+login|use\s+my\s+saved)\b/.test(lower);
   if (signup) return 'signup';
   if (login) return 'login';
@@ -590,7 +590,7 @@ export async function orchestrateAgentMessage(params: {
   }
   if (
     requestedCatalogTool
-    && toolRequestMode === 'login'
+    && (toolRequestMode === 'login' || toolRequestMode === 'signup')
     && intent.intent !== 'send_money'
     && intent.intent !== 'fund_wallet'
     && intent.intent !== 'cancel_subscription'

@@ -49,7 +49,8 @@ export type TransactionType =
   | 'refund'
   | 'reversal'
   | 'procurement_commitment'
-  | 'subscription_savings_projection';
+  | 'subscription_savings_projection'
+  | 'subscription_debit';
 export type TransactionDirection = 'credit' | 'debit';
 export type TransactionStatus = 'pending' | 'succeeded' | 'failed' | 'canceled';
 
@@ -115,14 +116,15 @@ export type MessageType =
   | 'agent-log'      // TinyFish action log
   | 'evidence'       // TinyFish extracted evidence
   | 'thinking'       // agent "thinking" indicator
-  | 'task-progress'; // live task state machine progress
+  | 'task-progress'  // live task state machine progress
+  | 'signup-summary'; // post-signup summary card
 
 export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
   type: MessageType;
-  data?: OptionsData | ApprovalData | ReceiptData | AgentLogData | FundingData | EvidenceData | TaskProgressData;
+  data?: OptionsData | ApprovalData | ReceiptData | AgentLogData | FundingData | EvidenceData | TaskProgressData | SignupSummaryData;
   timestamp: string;
 }
 
@@ -173,6 +175,7 @@ export interface FundingData {
 
 export interface AgentLogData {
   steps: AgentStep[];
+  payload?: Record<string, unknown>;
 }
 
 export interface EvidenceRecord {
@@ -187,6 +190,31 @@ export interface EvidenceRecord {
 
 export interface EvidenceData {
   findings: EvidenceRecord[];
+}
+
+export interface SignupSummaryData {
+  merchant: string;
+  plan: string;
+  price: number;
+  billingCycle: string;
+  loginIdentifierMasked: string;
+  toolId: string | null;
+  subscriptionAdded: boolean;
+  status: 'complete' | 'action_required';
+  blockerMessage?: string;
+}
+
+// -- Memory --------------------------------------------------
+
+export type MemoryKey =
+  | 'session:active_task'
+  | 'session:messages'
+  | 'session:live_run';
+
+export interface SessionSnapshot {
+  messages: ChatMessage[];
+  activeTask: AgentTask | null;
+  liveRun: LiveRunState | null;
 }
 
 // -- Procurement ---------------------------------------------
@@ -564,4 +592,48 @@ export interface AgentTask {
   completedAt?: string;
   pendingRecipientName?: string;
   pendingAmount?: number;
+  signupMerchant?: string;
+  signupPlan?: string;
+  signupPrice?: number;
+  signupBillingCycle?: string;
+  failure?: {
+    code: string;
+    stage: string;
+    message: string;
+    userMessage?: string;
+    recoverable?: boolean;
+    blockedReasons?: string[];
+    details?: Record<string, unknown>;
+  } | null;
+  signupExecution?: {
+    compatibility?: Record<string, unknown>;
+    riskGate?: Record<string, unknown>;
+    payment?: {
+      paymentFlowId?: string;
+      fundingMode?: string;
+      authorizationStatus?: string;
+      captureStatus?: string;
+      authorizedAt?: string | null;
+      capturedAt?: string | null;
+      refundedAt?: string | null;
+      retryScheduled?: boolean;
+      nextRetryAt?: string | null;
+    };
+    activation?: {
+      status: 'PENDING' | 'ACTIVE' | 'FAILED' | 'UNKNOWN';
+      verifiedAt: string | null;
+      settlementRecommendation: string;
+      nextAction: string;
+      evidenceCount: number;
+      evidence: Array<Record<string, unknown>>;
+      toolId?: string | null;
+    };
+    refund?: {
+      initiated: boolean;
+      refundCaseId?: string;
+      status?: string;
+      userExplanation?: string;
+    };
+    blocker?: Record<string, unknown> | null;
+  };
 }

@@ -385,13 +385,16 @@ function inferIntent(message: string, candidate: string | null): AgentIntent['in
   if (/\b(log\s*into|log\s*in|login|sign\s*into|sign\s*in|reconnect|saved\s+login|use\s+my\s+saved)\b/.test(lower)) {
     return 'signup_and_prepare_checkout';
   }
+  if (/\b(subscribe\s+to|sign\s*up\s+for|signup\s+for|register\s+for|enroll\s+in)\b/.test(lower)) {
+    return 'signup_and_prepare_checkout';
+  }
   // "buy me X" / "order X" / "get me X" → procurement (must be checked BEFORE send_money)
   if (/\b(buy\s+me|order\s+me|get\s+me|buy\s+a|order\s+a|find\s+me)\b/.test(lower)) return 'procurement_task';
   if (/\b(send|pay|transfer)\b/.test(lower)) return 'send_money';
   if (/\b(top\s*up|topup|fund|deposit)\b/.test(lower)) return 'fund_wallet';
   if (/\b(cancel|unsubscribe|downgrade)\b/.test(lower)) return 'cancel_subscription';
   if (/\b(balance|spent|spend|history|transactions?)\b/.test(lower)) return 'review_spend';
-  if (/\b(sign\s*up|signup|register|checkout)\b/.test(lower)) return 'signup_and_prepare_checkout';
+  if (/\b(sign\s*up|signup|register|checkout|subscribe)\b/.test(lower)) return 'signup_and_prepare_checkout';
   if (/\b(compare|rank|pick|best)\b/.test(lower)) return 'compare_and_buy';
   if (/\b(buy|purchase|order|get)\b/.test(lower)) return 'procurement_task';
   return 'procurement_task';

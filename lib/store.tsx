@@ -12,6 +12,7 @@ import * as agent from '@/services/agent';
 import * as fundingService from '@/services/funding';
 import * as procurementService from '@/services/procurement';
 import * as subscriptionService from '@/services/subscriptions';
+import * as memoryService from '@/services/memory';
 
 interface AppState {
   wallet: Wallet;
@@ -69,8 +70,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [sessionRestored, setSessionRestored] = useState(false);
 
   const walletRef = useRef(wallet);
+  const approvalInFlightRef = useRef(false);
   walletRef.current = wallet;
 
   const addMessage = useCallback((message: ChatMessage) => {
@@ -314,23 +317,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [addMessage, pollForTopupConfirmation]);
 
   useEffect(() => {
-    void refreshWallet();
+    let cancelled = false;
+
+    async function restoreSession() {
+      await refreshWallet();
+
+      try {
+        const snapshot = await memoryService.loadSession();
+
+        if (cancelled) return;
+
+        if (snapshot.messages && snapshot.messages.length > 0) {
+          setMessages(snapshot.messages);
+        } else {
+          setMessages([{
+            id: 'welcome',
+            role: 'assistant',
+            content: 'Agent Wallet is ready. Tell me what you need — I\'ll handle the work and only pause for approvals or clarifications.',
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          }]);
+        }
+
+        if (snapshot.activeTask) setActiveTask(snapshot.activeTask);
+        if (snapshot.liveRun) setLiveRun(snapshot.liveRun);
+      } catch {
+        if (cancelled) return;
+        // Fall back to welcome message on error
+        setMessages((prev) => {
+          if (prev.length > 0) return prev;
+          return [{
+            id: 'welcome',
+            role: 'assistant',
+            content: 'Agent Wallet is ready. Tell me what you need — I\'ll handle the work and only pause for approvals or clarifications.',
+            type: 'text',
+            timestamp: new Date().toISOString(),
+          }];
+        });
+      }
+
+      if (!cancelled) setSessionRestored(true);
+    }
+
+    void restoreSession();
+
+    return () => { cancelled = true; };
   }, [refreshWallet]);
 
+  // Debounced save: persist session state 1.5s after changes
   useEffect(() => {
-    setMessages((prev) => {
-      if (prev.length > 0) return prev;
-      return [
-        {
-          id: 'welcome',
-          role: 'assistant',
-          content: 'Agent Wallet is ready. Tell me what you need — I\'ll handle the work and only pause for approvals or clarifications.',
-          type: 'text',
-          timestamp: new Date().toISOString(),
-        },
-      ];
-    });
-  }, []);
+    if (!sessionRestored) return;
+
+    const timer = setTimeout(() => {
+      void memoryService.saveSession({ messages, activeTask, liveRun });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [messages, activeTask, liveRun, sessionRestored]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -950,17 +993,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
 
           case 'signup_and_prepare_checkout': {
-            // If server already set up signup route, show status. Otherwise fall to procurement.
             if (orchestration.route === 'signup_and_prepare_checkout' && orchestration.signup?.merchant) {
-              addMessage({
-                id: uid(),
-                role: 'assistant',
-                content: `Starting sign-up and checkout preparation for **${orchestration.signup.merchant}**. TinyFish will handle the browser workflow autonomously.`,
-                type: 'text',
-                timestamp: new Date().toISOString(),
-              });
+              void (async () => {
+                try {
+                  const signupTask = await agent.handleSignupFlow({
+                    merchant: orchestration.signup!.merchant!,
+                    signupUrl: undefined,
+                    toolKey: orchestration.signup!.toolKey || undefined,
+                    toolDisplayName: orchestration.signup!.toolDisplayName || undefined,
+                    cb: callbacks,
+                  });
+                  setActiveTask(signupTask);
+                } catch (err) {
+                  addMessage({
+                    id: uid(),
+                    role: 'assistant',
+                    content: err instanceof Error ? `Signup failed: ${err.message}` : 'Signup failed.',
+                    type: 'text',
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              })();
             } else {
-              // Need full procurement pipeline
               void runAutonomousProcurementMission(text).catch((err) => {
                 addMessage({
                   id: uid(),
@@ -1264,24 +1318,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [isProcessing, activeTask, callbacks, addMessage, refreshWallet, continueWithNewRecipient, runAutonomousProcurementMission]);
 
   const approveTask = useCallback(async (taskId: string) => {
+    if (isProcessing || approvalInFlightRef.current) return;
     if (!activeTask || activeTask.id !== taskId || !activeTask.selectedOption) return;
+    approvalInFlightRef.current = true;
     setIsProcessing(true);
 
-    addMessage({
-      id: uid(),
-      role: 'user',
-      content: 'Approved',
-      type: 'text',
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      addMessage({
+        id: uid(),
+        role: 'user',
+        content: 'Approved',
+        type: 'text',
+        timestamp: new Date().toISOString(),
+      });
 
-    const completed = activeTask.category === 'send'
-      ? await agent.completeSendFlow(activeTask, activeTask.selectedOption, callbacks)
-      : await agent.completePurchase(activeTask, activeTask.selectedOption, callbacks);
+      let completed: AgentTask;
+      if (activeTask.category === 'signup') {
+        completed = await agent.completeSignupFlow(activeTask, {
+          merchant: activeTask.signupMerchant || activeTask.selectedOption.name,
+          toolKey: undefined,
+          toolDisplayName: undefined,
+          cb: callbacks,
+        });
+      } else if (activeTask.category === 'send') {
+        completed = await agent.completeSendFlow(activeTask, activeTask.selectedOption, callbacks);
+      } else {
+        completed = await agent.completePurchase(activeTask, activeTask.selectedOption, callbacks);
+      }
 
-    setActiveTask(completed);
-    setIsProcessing(false);
-  }, [activeTask, addMessage, callbacks]);
+      setActiveTask(completed);
+    } catch (error) {
+      addMessage({
+        id: uid(),
+        role: 'assistant',
+        content: error instanceof Error ? `Approval failed: ${error.message}` : 'Approval failed.',
+        type: 'text',
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      approvalInFlightRef.current = false;
+      setIsProcessing(false);
+    }
+  }, [isProcessing, activeTask, addMessage, callbacks]);
 
   const rejectTask = useCallback((taskId: string) => {
     if (!activeTask || activeTask.id !== taskId) return;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChatMessage as Msg, OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData, EvidenceData, TaskProgressData, TaskState } from '@/lib/types';
+import { ChatMessage as Msg, OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData, EvidenceData, TaskProgressData, TaskState, SignupSummaryData } from '@/lib/types';
 import { useApp } from '@/lib/store';
 import { fmt, fmtTime, cn, domainFromUrl } from '@/lib/utils';
 
@@ -52,7 +52,7 @@ function OptionCards({ data }: { data: OptionsData }) {
 }
 
 function ApprovalCard({ data }: { data: ApprovalData }) {
-  const { approveTask, rejectTask } = useApp();
+  const { approveTask, rejectTask, isProcessing } = useApp();
 
   return (
     <div className="mt-3 rounded-2xl border border-[var(--aw-border-strong)] bg-[var(--aw-primary-soft)] p-3.5 space-y-3">
@@ -66,13 +66,21 @@ function ApprovalCard({ data }: { data: ApprovalData }) {
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => approveTask(data.taskId)}
-          className="aw-button-primary py-2 text-xs"
+          disabled={isProcessing}
+          className={cn(
+            'aw-button-primary py-2 text-xs',
+            isProcessing && 'cursor-not-allowed opacity-60',
+          )}
         >
           Approve
         </button>
         <button
           onClick={() => rejectTask(data.taskId)}
-          className="aw-button-secondary py-2 text-xs"
+          disabled={isProcessing}
+          className={cn(
+            'aw-button-secondary py-2 text-xs',
+            isProcessing && 'cursor-not-allowed opacity-60',
+          )}
         >
           Reject
         </button>
@@ -264,6 +272,60 @@ function EvidencePanel({ data }: { data: EvidenceData }) {
   );
 }
 
+function SignupSummaryCard({ data }: { data: SignupSummaryData }) {
+  const isComplete = data.status === 'complete';
+  return (
+    <div className={cn(
+      'mt-3 rounded-2xl border p-3.5 space-y-2',
+      isComplete
+        ? 'border-[rgba(88,166,132,0.6)] bg-[rgba(88,166,132,0.14)]'
+        : 'border-[rgba(234,179,8,0.6)] bg-[rgba(234,179,8,0.10)]',
+    )}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--aw-text)] truncate">{data.merchant}</p>
+          <p className="text-xs text-[var(--aw-text-soft)] truncate">{data.plan} — {data.billingCycle}</p>
+        </div>
+        <span className={cn(
+          'rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] font-medium',
+          isComplete
+            ? 'bg-[rgba(88,166,132,0.2)] text-[var(--aw-success)]'
+            : 'bg-[rgba(234,179,8,0.2)] text-[var(--aw-warning)]',
+        )}>
+          {isComplete ? 'Connected' : 'Action required'}
+        </span>
+      </div>
+      <div className="space-y-1 border-t border-[var(--aw-border)] pt-2 text-xs">
+        {data.price > 0 && (
+          <div className="flex justify-between text-[var(--aw-text-soft)]">
+            <span>Price</span>
+            <span>{fmt(data.price)}/{data.billingCycle}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-[var(--aw-text-soft)]">
+          <span>Login</span>
+          <span className="font-mono">{data.loginIdentifierMasked}</span>
+        </div>
+        {data.toolId && (
+          <div className="flex justify-between text-[var(--aw-text-soft)]">
+            <span>Tool</span>
+            <span>Saved to Vault</span>
+          </div>
+        )}
+        {data.subscriptionAdded && (
+          <div className="flex justify-between text-[var(--aw-text-soft)]">
+            <span>Subscription</span>
+            <span>Tracked</span>
+          </div>
+        )}
+      </div>
+      {data.blockerMessage && (
+        <p className="text-xs text-[var(--aw-warning)] mt-1">{data.blockerMessage}</p>
+      )}
+    </div>
+  );
+}
+
 const STATE_STYLES: Record<TaskState, { dot: string; label: string }> = {
   received: { dot: 'bg-[var(--aw-text-muted)]', label: 'Received' },
   parsing: { dot: 'bg-[var(--aw-primary)] animate-pulse', label: 'Parsing' },
@@ -341,6 +403,7 @@ export function ChatMessageBubble({ message }: { message: Msg }) {
         {message.type === 'agent-log' && message.data && <AgentLog data={message.data as AgentLogData} />}
         {message.type === 'evidence' && message.data && <EvidencePanel data={message.data as EvidenceData} />}
         {message.type === 'task-progress' && message.data && <TaskProgressPanel data={message.data as TaskProgressData} />}
+        {message.type === 'signup-summary' && message.data && <SignupSummaryCard data={message.data as SignupSummaryData} />}
 
         <p className={cn('mt-1.5 text-[10px]', isUser ? 'text-[var(--aw-primary-strong)]' : 'text-[var(--aw-text-muted)]')}>
           {fmtTime(message.timestamp)}

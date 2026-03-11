@@ -5,6 +5,13 @@ interface TinyFishApiResponse<T> {
   data?: T;
   steps?: AgentStep[];
   error?: string;
+  failure?: {
+    code: string;
+    stage?: string;
+    message: string;
+    recoverable?: boolean;
+    details?: Record<string, unknown>;
+  };
 }
 
 interface VendorResearchResult {
@@ -22,10 +29,16 @@ async function callTinyFish<T>(action: string, payload: unknown): Promise<TinyFi
   const body = (await res.json()) as TinyFishApiResponse<T>;
 
   if (!res.ok) {
+    if (body.failure?.code && body.failure.message) {
+      throw new Error(`${body.failure.code}: ${body.failure.message}`);
+    }
     throw new Error(body.error || `TinyFish request failed (${res.status})`);
   }
 
   if (!body.ok) {
+    if (body.failure?.code && body.failure.message) {
+      throw new Error(`${body.failure.code}: ${body.failure.message}`);
+    }
     throw new Error(body.error || 'TinyFish returned a failed response');
   }
 
@@ -110,5 +123,94 @@ export async function confirmPurchase(
   return {
     steps: response.steps || [],
     success: Boolean(response.data?.success),
+  };
+}
+
+export async function prepareSignup(input: {
+  service: string;
+  signupUrl?: string;
+  plan?: string;
+}): Promise<{
+  steps: AgentStep[];
+  success: boolean;
+  plan?: string;
+  price?: number;
+  billingCycle?: string;
+  blocker?: { code: string; message: string };
+  failure?: {
+    code: string;
+    stage?: string;
+    message: string;
+    recoverable?: boolean;
+    details?: Record<string, unknown>;
+  };
+}> {
+  const response = await callTinyFish<{
+    success: boolean;
+    plan?: string;
+    price?: number;
+    billingCycle?: string;
+    blocker?: { code: string; message: string };
+    failure?: {
+      code: string;
+      stage?: string;
+      message: string;
+      recoverable?: boolean;
+      details?: Record<string, unknown>;
+    };
+  }>('signup-prepare', input);
+
+  return {
+    steps: response.steps || [],
+    success: Boolean(response.data?.success),
+    plan: response.data?.plan,
+    price: response.data?.price,
+    billingCycle: response.data?.billingCycle,
+    blocker: response.data?.blocker,
+    failure: response.data?.failure || response.failure,
+  };
+}
+
+export async function finalizeSignup(input: {
+  service: string;
+  taskId: string;
+}): Promise<{
+  steps: AgentStep[];
+  success: boolean;
+  loginIdentifierMasked?: string;
+  toolId?: string;
+  subscriptionAdded?: boolean;
+  blocker?: { code: string; message: string };
+  failure?: {
+    code: string;
+    stage?: string;
+    message: string;
+    recoverable?: boolean;
+    details?: Record<string, unknown>;
+  };
+}> {
+  const response = await callTinyFish<{
+    success: boolean;
+    loginIdentifierMasked?: string;
+    toolId?: string;
+    subscriptionAdded?: boolean;
+    blocker?: { code: string; message: string };
+    failure?: {
+      code: string;
+      stage?: string;
+      message: string;
+      recoverable?: boolean;
+      details?: Record<string, unknown>;
+    };
+  }>('signup-finalize', input);
+
+  return {
+    steps: response.steps || [],
+    success: Boolean(response.data?.success),
+    loginIdentifierMasked: response.data?.loginIdentifierMasked,
+    toolId: response.data?.toolId,
+    subscriptionAdded: Boolean(response.data?.subscriptionAdded),
+    blocker: response.data?.blocker,
+    failure: response.data?.failure || response.failure,
   };
 }

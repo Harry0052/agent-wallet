@@ -1,12 +1,19 @@
 import {
   ChatMessage, AgentTask, VendorOption, TaskState, TaskProgressData,
   OptionsData, ApprovalData, ReceiptData, AgentLogData, FundingData, EvidenceData,
+  SignupSummaryData,
 } from '@/lib/types';
 import { uid, delay } from '@/lib/utils';
 import * as tinyfish from './tinyfish';
 import * as walletService from './wallet';
+import * as toolsService from './tools';
 import { buildReasoningPlan, type ReasoningPlan } from './reasoning';
-import type { Wallet, Recipient } from '@/lib/types';
+import type { Wallet, Recipient, UserToolRecord } from '@/lib/types';
+import { evaluateSignupSafety, type SignupFlowBlocker } from '@/lib/signup/safety';
+import { createActivationVerificationEngine } from '@/lib/activation/engine';
+import { createApiCheckProvider } from '@/lib/activation/providers/apiCheck';
+import { mapErrorToFailure } from '@/lib/failures/mapError';
+import { FailureSource, WalletFailureCode } from '@/lib/failures/codes';
 
 // ---------------------------------------------------------------------------
 // Intent types
@@ -272,6 +279,206 @@ function planToSteps(plan: ReasoningPlan): AgentLogData {
         timestamp: new Date().toISOString(),
       })),
     ],
+  };
+}
+
+function normalizeMatchToken(input: string | null | undefined): string {
+  if (!input) return '';
+  return input.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function toolMatchesService(tool: UserToolRecord, merchant: string): boolean {
+  const merchantToken = normalizeMatchToken(merchant);
+  if (!merchantToken) return false;
+
+  const candidates = [
+    tool.tool.key,
+    tool.tool.displayName,
+    tool.label || '',
+  ].map((value) => normalizeMatchToken(value));
+
+  return candidates.some((candidate) => (
+    candidate.length > 0
+    && (candidate.includes(merchantToken) || merchantToken.includes(candidate))
+  ));
+}
+
+async function verifyProvisionedServiceTool(params: {
+  merchant: string;
+  expectedToolId?: string;
+  attempts?: number;
+  waitMs?: number;
+}): Promise<{ ok: boolean; tool?: UserToolRecord; reason?: string }> {
+  const attempts = Math.max(1, params.attempts ?? 6);
+  const waitMs = Math.max(250, params.waitMs ?? 1500);
+  let lastError: string | undefined;
+
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const tools = await toolsService.fetchUserTools();
+      const scoped = params.expectedToolId
+        ? tools.filter((tool) => tool.id === params.expectedToolId)
+        : tools.filter((tool) => toolMatchesService(tool, params.merchant));
+
+      const provisioned = scoped.find((tool) => (
+        tool.status === 'connected'
+        && tool.enabled
+        && tool.hasSecret
+      ));
+
+      if (provisioned) {
+        return { ok: true, tool: provisioned };
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Failed to query tools';
+    }
+
+    if (i < attempts - 1) {
+      await delay(waitMs);
+    }
+  }
+
+  if (params.expectedToolId) {
+    return {
+      ok: false,
+      reason: lastError || `Tool ${params.expectedToolId} was not connected with stored credentials`,
+    };
+  }
+
+  return {
+    ok: false,
+    reason: lastError || `No ${params.merchant} tool with stored credentials was found`,
+  };
+}
+
+function inferAntiBotRiskFromBlocker(code?: string): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+  const normalized = (code || '').toLowerCase();
+  if (!normalized) return 'MEDIUM';
+  if (normalized.includes('captcha') || normalized.includes('bot')) return 'CRITICAL';
+  if (normalized.includes('blocked') || normalized.includes('challenge')) return 'HIGH';
+  return 'MEDIUM';
+}
+
+function inferProvisioningConfidence(merchant: string): number {
+  const normalized = merchant.toLowerCase();
+  if (normalized.includes('aws') || normalized.includes('openai') || normalized.includes('cloudflare')) return 0.9;
+  if (normalized.includes('netflix') || normalized.includes('hulu') || normalized.includes('disney')) return 0.68;
+  if (normalized.includes('adobe')) return 0.62;
+  return 0.7;
+}
+
+function applySignupFailure(task: AgentTask, blocker: SignupFlowBlocker): void {
+  task.failure = {
+    code: blocker.code,
+    stage: blocker.stage,
+    message: blocker.message,
+    userMessage: blocker.userMessage,
+    recoverable: blocker.recoverable,
+    blockedReasons: blocker.blockedReasons,
+    details: blocker.details,
+  };
+  task.signupExecution = {
+    ...(task.signupExecution || {}),
+    blocker: task.failure,
+  };
+}
+
+function setSignupExecution(task: AgentTask, patch: Partial<NonNullable<AgentTask['signupExecution']>>): void {
+  task.signupExecution = {
+    ...(task.signupExecution || {}),
+    ...patch,
+  };
+}
+
+async function runSignupActivationVerification(params: {
+  merchant: string;
+  taskId: string;
+  paymentFlowId: string;
+  authorizedAt: string;
+  expectedToolId?: string;
+}): Promise<{
+  activationStatus: 'PENDING' | 'ACTIVE' | 'FAILED' | 'UNKNOWN';
+  evidence: Array<Record<string, unknown>>;
+  verifiedAt: string | null;
+  nextAction: string;
+  settlementRecommendation: string;
+  tool: UserToolRecord | null;
+}> {
+  let provisionedTool: UserToolRecord | null = null;
+
+  const apiProvider = createApiCheckProvider({
+    providerId: 'tool-provisioning-check',
+    async check() {
+      const result = await verifyProvisionedServiceTool({
+        merchant: params.merchant,
+        expectedToolId: params.expectedToolId,
+        attempts: 6,
+        waitMs: 1300,
+      });
+
+      if (result.ok) {
+        provisionedTool = result.tool || null;
+        return {
+          status: 'ACTIVE' as const,
+          observedAt: new Date().toISOString(),
+          referenceId: result.tool?.id || undefined,
+          summary: `${params.merchant} tool is connected with stored credentials.`,
+          confidence: 0.93,
+          raw: {
+            toolId: result.tool?.id || null,
+            enabled: result.tool?.enabled || false,
+            hasSecret: result.tool?.hasSecret || false,
+          },
+        };
+      }
+
+      return {
+        status: 'FAILED' as const,
+        observedAt: new Date().toISOString(),
+        summary: result.reason || `${params.merchant} service credentials were not provisioned.`,
+        confidence: 0.9,
+        raw: {
+          reason: result.reason || null,
+          expectedToolId: params.expectedToolId || null,
+        },
+      };
+    },
+  });
+
+  const engine = createActivationVerificationEngine({
+    providers: [apiProvider],
+    policy: {
+      activationTimeoutMs: 15_000,
+      safeModeOnTimeout: true,
+    },
+  });
+
+  const verification = await engine.verify({
+    paymentId: params.paymentFlowId,
+    userId: 'wallet_user',
+    merchant: params.merchant,
+    taskId: params.taskId,
+    authorizedAt: params.authorizedAt,
+  });
+
+  const normalizedEvidence = verification.evidence.map((item) => ({
+    provider: item.provider,
+    method: item.method,
+    status: item.status,
+    observedAt: item.observedAt,
+    summary: item.summary,
+    referenceId: item.referenceId || null,
+    confidence: item.confidence ?? null,
+    raw: item.raw || null,
+  }));
+
+  return {
+    activationStatus: verification.activationStatus,
+    evidence: normalizedEvidence,
+    verifiedAt: verification.verifiedAt,
+    nextAction: verification.nextAction,
+    settlementRecommendation: verification.settlementRecommendation,
+    tool: provisionedTool,
   };
 }
 
@@ -721,9 +928,608 @@ export function handleHelp(cb: AgentCallbacks): void {
     `I can help with:\n` +
       `- **Send money**: "Send $10 to Alice", "Pay my fiancee $5"\n` +
       `- **Buy / Procure**: "Buy me coffee", "Find the best CRM under $15/mo"\n` +
+      `- **Sign up**: "Sign up for Netflix", "Create a Hulu account"\n` +
       `- **Fund wallet**: "Add $20 to my wallet"\n` +
       `- **Cancel subscriptions**: "Cancel my Grammarly"\n` +
       `- **Review spending**: "What's my balance?"\n\n` +
       `I'll handle the work autonomously and only pause for approvals, clarifications, or credentials.`,
   ));
+}
+
+// ---------------------------------------------------------------------------
+// Signup flow — prepare (TinyFish navigates, fills forms, finds plan/price)
+// ---------------------------------------------------------------------------
+
+export async function handleSignupFlow(params: {
+  merchant: string;
+  signupUrl?: string;
+  toolKey?: string;
+  toolDisplayName?: string;
+  cb: AgentCallbacks;
+}): Promise<AgentTask> {
+  const { merchant, signupUrl, toolKey, toolDisplayName, cb } = params;
+  const w = cb.getWallet();
+  const task = createTask(`Sign up for ${merchant}`, 'signup', w.settings.maxTransaction);
+  task.signupMerchant = merchant;
+
+  const progressLabels: Array<{ state: TaskState; label: string }> = [
+    { state: 'received', label: 'Request received' },
+    { state: 'parsing', label: `Intent: signup for ${merchant}` },
+  ];
+
+  const preflightSafety = evaluateSignupSafety({
+    merchant,
+    currency: w.currency,
+    antiBotRisk: 'MEDIUM',
+    knownRefundReliability: 'UNKNOWN',
+    accountStatus: 'UNKNOWN',
+    accountCreationRequired: true,
+    serviceProvisioningConfidence: inferProvisioningConfidence(merchant),
+    activationVerificationMethods: ['POST_PURCHASE_ACCOUNT_STATE_CHECK'],
+    reserveOnlySupported: true,
+  });
+
+  setSignupExecution(task, {
+    compatibility: preflightSafety.compatibility as unknown as Record<string, unknown>,
+    riskGate: preflightSafety.risk as unknown as Record<string, unknown>,
+  });
+
+  if (!preflightSafety.allowed && preflightSafety.blocker) {
+    task.taskState = 'failed';
+    task.status = 'cancelled';
+    progressLabels.push({ state: 'failed', label: `Blocked by ${preflightSafety.blocker.code}` });
+    applySignupFailure(task, preflightSafety.blocker);
+    cb.addMessage(progressMsg(
+      `Execution blocked before signup: ${preflightSafety.blocker.userMessage}`,
+      task,
+      progressLabels,
+    ));
+    cb.addMessage(msg(
+      'assistant',
+      'Structured failure recorded.',
+      'agent-log',
+      {
+        steps: [],
+        payload: {
+          failure: task.failure,
+          compatibility: task.signupExecution?.compatibility,
+          riskGate: task.signupExecution?.riskGate,
+        },
+      } as AgentLogData,
+    ));
+    return task;
+  }
+
+  task.taskState = 'executing';
+  progressLabels.push({ state: 'executing', label: `TinyFish navigating ${merchant} signup...` });
+  cb.addMessage(progressMsg(
+    `Launching TinyFish to prepare ${merchant} signup...`,
+    task,
+    progressLabels,
+  ));
+
+  const prepResult = await tinyfish.prepareSignup({
+    service: merchant,
+    signupUrl,
+  });
+
+  task.steps.push(...prepResult.steps);
+
+  cb.addMessage(msg('assistant', `TinyFish signup preparation complete.`, 'agent-log', {
+    steps: prepResult.steps,
+  } as AgentLogData));
+
+  if (!prepResult.success || prepResult.blocker) {
+    task.taskState = 'failed';
+    task.status = 'cancelled';
+    const mapped = mapErrorToFailure({
+      message: prepResult.blocker?.message || prepResult.failure?.message || 'Signup preparation failed.',
+      source: FailureSource.MERCHANT,
+      merchant,
+      stage: 'signup',
+      paymentStatus: 'unknown',
+      activationStatus: 'UNKNOWN',
+      metadata: {
+        tinyfish_blocker_code: prepResult.blocker?.code || prepResult.failure?.code || null,
+      },
+    });
+    applySignupFailure(task, {
+      code: mapped.code,
+      stage: 'compatibility',
+      message: prepResult.blocker?.message || prepResult.failure?.message || mapped.message,
+      userMessage: mapped.userMessage,
+      blockedReasons: [prepResult.blocker?.message || prepResult.failure?.message || mapped.detectionReason],
+      recoverable: mapped.recoverable,
+      details: {
+        tinyfishBlockerCode: prepResult.blocker?.code || prepResult.failure?.code || null,
+        confidence: mapped.confidence,
+        detectionReason: mapped.detectionReason,
+      },
+    });
+    cb.addMessage(msg(
+      'assistant',
+      `Action required: ${task.failure?.userMessage || 'Signup preparation failed.'}`,
+    ));
+    cb.addMessage(msg(
+      'assistant',
+      'Structured failure recorded.',
+      'agent-log',
+      { steps: prepResult.steps, payload: { failure: task.failure } } as AgentLogData,
+    ));
+    return task;
+  }
+
+  const plan = prepResult.plan || 'Standard';
+  const price = prepResult.price ?? 0;
+  const billingCycle = prepResult.billingCycle || 'monthly';
+
+  task.signupPlan = plan;
+  task.signupPrice = price;
+  task.signupBillingCycle = billingCycle;
+
+  if (price > 0) {
+    const check = walletService.canSpendSnapshot(w, price, merchant, { ignoreBalance: true });
+    if (!check.allowed) {
+      task.taskState = 'failed';
+      task.status = 'cancelled';
+      applySignupFailure(task, {
+        code: WalletFailureCode.POLICY_BLOCKED,
+        stage: 'pre_charge_risk',
+        message: check.reason || 'Wallet policy check failed.',
+        userMessage: check.reason || 'Wallet policy check failed.',
+        blockedReasons: [check.reason || 'Wallet policy check failed'],
+        recoverable: true,
+        details: {
+          amount: price,
+          merchant,
+        },
+      });
+      cb.addMessage(msg(
+        'assistant',
+        `Blocked by guardrails: ${check.reason}.`,
+      ));
+      return task;
+    }
+  }
+
+  if (price > 0 && price >= w.settings.approvalThreshold) {
+    task.taskState = 'awaiting_approval';
+    task.status = 'awaiting-approval';
+    task.selectedOption = {
+      id: uid(),
+      name: toolDisplayName || merchant,
+      item: `${plan} plan`,
+      price,
+    };
+
+    cb.addMessage(msg(
+      'assistant',
+      `Approve ${merchant} ${plan} for $${price.toFixed(2)}/${billingCycle} using Agent Wallet funds?`,
+      'approval',
+      {
+        merchant,
+        item: `${plan} — ${billingCycle}`,
+        amount: price,
+        taskId: task.id,
+      } as ApprovalData,
+    ));
+    return task;
+  }
+
+  // Auto-approve (under threshold or free)
+  return completeSignupFlow(task, {
+    merchant,
+    toolKey,
+    toolDisplayName,
+    cb,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Signup flow — finalize (wallet debit → TinyFish completes signup → register)
+// ---------------------------------------------------------------------------
+
+export async function completeSignupFlow(
+  task: AgentTask,
+  params: {
+    merchant: string;
+    toolKey?: string | null;
+    toolDisplayName?: string | null;
+    cb: AgentCallbacks;
+  },
+): Promise<AgentTask> {
+  const { merchant, cb } = params;
+  const plan = task.signupPlan || 'Standard';
+  const price = task.signupPrice ?? 0;
+  const billingCycle = task.signupBillingCycle || 'monthly';
+  const previousBalance = cb.getWallet().balance;
+  const priorFailureCode = task.failure?.code;
+
+  task.taskState = 'executing';
+  task.failure = null;
+  cb.addMessage(msg('assistant', `Processing payment and finalizing ${merchant} signup...`, 'thinking'));
+
+  const failWithBlocker = (blocker: SignupFlowBlocker): AgentTask => {
+    applySignupFailure(task, blocker);
+    task.taskState = 'failed';
+    task.status = 'cancelled';
+    cb.addMessage(msg(
+      'assistant',
+      `Action required: ${blocker.userMessage}`,
+    ));
+    cb.addMessage(msg(
+      'assistant',
+      'Structured failure recorded.',
+      'agent-log',
+      {
+        steps: [],
+        payload: {
+          failure: task.failure,
+          execution: task.signupExecution || null,
+        },
+      } as AgentLogData,
+    ));
+    return task;
+  };
+
+  const safety = evaluateSignupSafety({
+    merchant,
+    currency: cb.getWallet().currency,
+    antiBotRisk: inferAntiBotRiskFromBlocker(priorFailureCode),
+    knownRefundReliability: 'UNKNOWN',
+    accountStatus: 'UNKNOWN',
+    accountCreationRequired: true,
+    serviceProvisioningConfidence: inferProvisioningConfidence(merchant),
+    activationVerificationMethods: ['POST_PURCHASE_ACCOUNT_STATE_CHECK'],
+    reserveOnlySupported: true,
+  });
+
+  setSignupExecution(task, {
+    compatibility: safety.compatibility as unknown as Record<string, unknown>,
+    riskGate: safety.risk as unknown as Record<string, unknown>,
+  });
+
+  if (!safety.allowed && safety.blocker) {
+    return failWithBlocker(safety.blocker);
+  }
+
+  let paymentFlow: walletService.TwoPhasePaymentFlow | null = null;
+
+  if (price > 0) {
+    const latestWallet = cb.getWallet();
+    const check = walletService.canSpendSnapshot(latestWallet, price, merchant, { ignoreBalance: true });
+    if (!check.allowed) {
+      return failWithBlocker({
+        code: WalletFailureCode.POLICY_BLOCKED,
+        stage: 'pre_charge_risk',
+        message: check.reason || 'Payment blocked by wallet guardrails.',
+        userMessage: check.reason || 'Payment blocked by wallet guardrails.',
+        blockedReasons: [check.reason || 'Payment blocked by wallet guardrails'],
+        recoverable: true,
+        details: {
+          amount: price,
+          merchant,
+        },
+      });
+    }
+
+    try {
+      const authorization = await walletService.authorizeSubscriptionPayment({
+        merchant,
+        amount: price,
+        currency: latestWallet.currency,
+        taskId: task.id,
+        idempotencyKey: `${task.id}:authorize`,
+        allowPrepaidFallback: true,
+        requiresActivationVerification: true,
+        metadata: {
+          signup_plan: plan,
+          signup_billing_cycle: billingCycle,
+          compatibility_tier: safety.compatibility.compatibilityTier,
+          compatibility_decision_id: safety.compatibility.decisionId,
+          risk_decision_id: safety.risk.decisionId,
+          risk_score: safety.risk.score.overallScore,
+          risk_decision: safety.risk.decision,
+          blocker_code: null,
+        },
+      });
+
+      paymentFlow = authorization.payment;
+      setSignupExecution(task, {
+        payment: {
+          paymentFlowId: paymentFlow.id,
+          fundingMode: paymentFlow.fundingMode,
+          authorizationStatus: paymentFlow.status,
+          authorizedAt: paymentFlow.authorizedAt,
+          capturedAt: paymentFlow.capturedAt,
+          refundedAt: paymentFlow.refundedAt,
+        },
+      });
+    } catch (error) {
+      const mapped = mapErrorToFailure({
+        message: error instanceof Error ? error.message : 'Payment authorization failed.',
+        source: FailureSource.PAYMENT_PROCESSOR,
+        merchant,
+        stage: 'payment',
+        paymentStatus: 'failed',
+        activationStatus: 'UNKNOWN',
+      });
+      return failWithBlocker({
+        code: mapped.code,
+        stage: 'pre_charge_risk',
+        message: mapped.message,
+        userMessage: mapped.userMessage,
+        blockedReasons: [mapped.detectionReason],
+        recoverable: mapped.recoverable,
+        details: {
+          confidence: mapped.confidence,
+          detectionReason: mapped.detectionReason,
+        },
+      });
+    }
+  }
+
+  // Finalize signup via TinyFish (credentials stored server-side in Vault).
+  let finalResult: Awaited<ReturnType<typeof tinyfish.finalizeSignup>>;
+  try {
+    finalResult = await tinyfish.finalizeSignup({
+      service: merchant,
+      taskId: task.id,
+    });
+  } catch (error) {
+    if (paymentFlow) {
+      await walletService.voidSubscriptionPayment({
+        paymentId: paymentFlow.id,
+        idempotencyKey: `${task.id}:void:finalize_error`,
+        reason: 'signup_finalization_call_failed',
+      }).catch(() => undefined);
+    }
+    const mapped = mapErrorToFailure({
+      message: error instanceof Error ? error.message : 'Signup finalization failed.',
+      source: FailureSource.MERCHANT,
+      merchant,
+      stage: 'signup',
+      paymentStatus: paymentFlow ? paymentFlow.status : 'unknown',
+      activationStatus: 'UNKNOWN',
+    });
+    return failWithBlocker({
+      code: mapped.code,
+      stage: 'compatibility',
+      message: mapped.message,
+      userMessage: mapped.userMessage,
+      blockedReasons: [mapped.detectionReason],
+      recoverable: mapped.recoverable,
+      details: {
+        confidence: mapped.confidence,
+        detectionReason: mapped.detectionReason,
+      },
+    });
+  }
+
+  task.steps.push(...finalResult.steps);
+
+  if (!finalResult.success) {
+    if (paymentFlow) {
+      await walletService.voidSubscriptionPayment({
+        paymentId: paymentFlow.id,
+        idempotencyKey: `${task.id}:void:finalize_failed`,
+        reason: finalResult.blocker?.message || finalResult.failure?.message || 'signup_finalization_failed',
+      }).catch(() => undefined);
+    }
+
+    const mapped = mapErrorToFailure({
+      message: finalResult.blocker?.message || finalResult.failure?.message || 'Signup finalization failed.',
+      source: FailureSource.MERCHANT,
+      merchant,
+      stage: 'signup',
+      paymentStatus: paymentFlow ? paymentFlow.status : 'unknown',
+      activationStatus: 'UNKNOWN',
+      metadata: {
+        tinyfish_blocker_code: finalResult.blocker?.code || finalResult.failure?.code || null,
+      },
+    });
+    return failWithBlocker({
+      code: mapped.code,
+      stage: 'compatibility',
+      message: mapped.message,
+      userMessage: mapped.userMessage,
+      blockedReasons: [mapped.detectionReason],
+      recoverable: mapped.recoverable,
+      details: {
+        tinyfishBlockerCode: finalResult.blocker?.code || finalResult.failure?.code || null,
+        confidence: mapped.confidence,
+        detectionReason: mapped.detectionReason,
+      },
+    });
+  }
+
+  cb.addMessage(msg('assistant', 'Signup finalized. Running activation verification...', 'agent-log', {
+    steps: finalResult.steps,
+  } as AgentLogData));
+
+  const activation = await runSignupActivationVerification({
+    merchant,
+    taskId: task.id,
+    paymentFlowId: paymentFlow?.id || `signup_${task.id}`,
+    authorizedAt: paymentFlow?.authorizedAt || new Date().toISOString(),
+    expectedToolId: finalResult.toolId || undefined,
+  });
+
+  setSignupExecution(task, {
+    activation: {
+      status: activation.activationStatus,
+      verifiedAt: activation.verifiedAt,
+      settlementRecommendation: activation.settlementRecommendation,
+      nextAction: activation.nextAction,
+      evidenceCount: activation.evidence.length,
+      evidence: activation.evidence,
+      toolId: activation.tool?.id || finalResult.toolId || null,
+    },
+  });
+
+  const firstActivationSummary = (() => {
+    const first = activation.evidence[0];
+    if (!first) return undefined;
+    return typeof first.summary === 'string' ? first.summary : undefined;
+  })();
+  const activationReasonList = activation.evidence
+    .map((item) => (typeof item.summary === 'string' ? item.summary : null))
+    .filter((item): item is string => Boolean(item));
+
+  if (paymentFlow && price > 0) {
+    try {
+      const capture = await walletService.captureSubscriptionPayment({
+        paymentId: paymentFlow.id,
+        idempotencyKey: `${task.id}:capture`,
+        activationVerified: activation.activationStatus === 'ACTIVE',
+        activationEvidence: {
+          activationStatus: activation.activationStatus,
+          evidence: activation.evidence,
+          blocker_code: activation.activationStatus === 'ACTIVE' ? null : WalletFailureCode.ACTIVATION_UNVERIFIED,
+          risk_score: (task.signupExecution?.riskGate as { score?: { overallScore?: number } })?.score?.overallScore ?? null,
+        },
+        activationFailureReason: activation.activationStatus === 'ACTIVE'
+          ? undefined
+          : firstActivationSummary || 'Activation could not be verified',
+      });
+      paymentFlow = capture.payment;
+      setSignupExecution(task, {
+        payment: {
+          paymentFlowId: paymentFlow.id,
+          fundingMode: paymentFlow.fundingMode,
+          authorizationStatus: paymentFlow.status,
+          captureStatus: paymentFlow.status,
+          authorizedAt: paymentFlow.authorizedAt,
+          capturedAt: paymentFlow.capturedAt,
+          refundedAt: paymentFlow.refundedAt,
+          retryScheduled: capture.retryScheduled,
+          nextRetryAt: capture.nextRetryAt,
+        },
+      });
+    } catch (error) {
+      const mapped = mapErrorToFailure({
+        message: error instanceof Error ? error.message : 'Payment capture failed',
+        source: FailureSource.PAYMENT_PROCESSOR,
+        merchant,
+        stage: 'payment',
+        paymentStatus: paymentFlow.status,
+        activationStatus: activation.activationStatus,
+      });
+      return failWithBlocker({
+        code: mapped.code,
+        stage: 'pre_charge_risk',
+        message: mapped.message,
+        userMessage: mapped.userMessage,
+        blockedReasons: [mapped.detectionReason],
+        recoverable: mapped.recoverable,
+        details: {
+          confidence: mapped.confidence,
+          detectionReason: mapped.detectionReason,
+        },
+      });
+    }
+  }
+
+  if (activation.activationStatus !== 'ACTIVE') {
+    let finalBlockerCode = WalletFailureCode.ACTIVATION_UNVERIFIED;
+    if (paymentFlow?.status === 'captured') {
+      finalBlockerCode = WalletFailureCode.PAYMENT_CAPTURED_ACTIVATION_FAILED;
+      try {
+        const refund = await walletService.initiateRefundWorkflow({
+          paymentFlowId: paymentFlow.id,
+          idempotencyKey: `${task.id}:refund:auto`,
+          activationFailureReason: firstActivationSummary || 'Activation verification failed post-capture',
+          activationEvidence: {
+            activationStatus: activation.activationStatus,
+            evidence: activation.evidence,
+            blocker_code: WalletFailureCode.PAYMENT_CAPTURED_ACTIVATION_FAILED,
+          },
+          allowWithoutActivationFailure: true,
+        });
+        setSignupExecution(task, {
+          refund: {
+            initiated: true,
+            refundCaseId: refund.refundCase.id,
+            status: refund.refundCase.status,
+            userExplanation: refund.userExplanation,
+          },
+        });
+        cb.addMessage(msg('assistant', refund.userExplanation || 'Refund workflow initiated automatically.'));
+      } catch (refundError) {
+        setSignupExecution(task, {
+          refund: {
+            initiated: false,
+            status: 'failed',
+            userExplanation: refundError instanceof Error ? refundError.message : 'Refund initiation failed',
+          },
+        });
+        cb.addMessage(msg('assistant', 'Automatic refund initiation failed. Support review is required.'));
+      }
+    }
+
+    return failWithBlocker({
+      code: finalBlockerCode,
+      stage: 'pre_charge_risk',
+      message: firstActivationSummary || 'Activation verification failed.',
+      userMessage: firstActivationSummary || 'Activation verification failed.',
+      blockedReasons: activationReasonList.length > 0 ? activationReasonList : ['activation_evidence'],
+      recoverable: true,
+      details: {
+        activationStatus: activation.activationStatus,
+        settlementRecommendation: activation.settlementRecommendation,
+        paymentStatus: paymentFlow?.status || 'none',
+      },
+    });
+  }
+
+  if (price > 0 && paymentFlow && paymentFlow.status !== 'captured') {
+    return failWithBlocker({
+      code: WalletFailureCode.PAYMENT_AUTHORIZATION_FAILED,
+      stage: 'pre_charge_risk',
+      message: `Payment flow ended in status ${paymentFlow.status} before capture.`,
+      userMessage: `Payment capture is not complete (status: ${paymentFlow.status}).`,
+      blockedReasons: [`Payment status ${paymentFlow.status}`],
+      recoverable: true,
+      details: {
+        paymentFlowId: paymentFlow.id,
+        paymentStatus: paymentFlow.status,
+      },
+    });
+  }
+
+  // Emit signup summary (no raw credentials — only masked info from server)
+  const summaryData: SignupSummaryData = {
+    merchant,
+    plan,
+    price,
+    billingCycle,
+    loginIdentifierMasked: finalResult.loginIdentifierMasked || '••••',
+    toolId: activation.tool?.id || finalResult.toolId || null,
+    subscriptionAdded: Boolean(finalResult.subscriptionAdded || activation.tool),
+    status: 'complete',
+  };
+
+  cb.addMessage(msg('assistant', `${merchant} signup complete.`, 'signup-summary', summaryData));
+
+  if (price > 0 && paymentFlow?.fundingMode === 'PREPAID_BALANCE') {
+    await cb.refreshWallet();
+    const newBalance = cb.getWallet().balance;
+    cb.addMessage(msg('assistant', 'Wallet updated.', 'receipt', {
+      merchant,
+      item: `${plan} — ${billingCycle}`,
+      amount: price,
+      previousBalance,
+      newBalance,
+      transactionId: paymentFlow?.id || task.id,
+    } as ReceiptData));
+  } else if (price > 0) {
+    cb.addMessage(msg('assistant', `Payment captured successfully for ${merchant}.`));
+  }
+
+  task.failure = null;
+  setSignupExecution(task, { blocker: null });
+  task.taskState = 'completed';
+  task.status = 'completed';
+  task.completedAt = new Date().toISOString();
+  return task;
 }

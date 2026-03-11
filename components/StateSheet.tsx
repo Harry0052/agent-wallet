@@ -244,7 +244,8 @@ export function StateSheet() {
           <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               onClick={() => approveTask(activeTask.id)}
-              className="aw-button-primary py-2.5 text-sm"
+              disabled={isProcessing}
+              className={`aw-button-primary py-2.5 text-sm ${isProcessing ? "cursor-not-allowed opacity-60" : ""}`}
             >
               <span className="inline-flex items-center gap-1.5">
                 <CheckCircle2 size={14} />
@@ -253,7 +254,8 @@ export function StateSheet() {
             </button>
             <button
               onClick={() => rejectTask(activeTask.id)}
-              className="aw-button-secondary py-2.5 text-sm"
+              disabled={isProcessing}
+              className={`aw-button-secondary py-2.5 text-sm ${isProcessing ? "cursor-not-allowed opacity-60" : ""}`}
             >
               <span className="inline-flex items-center gap-1.5">
                 <AlertCircle size={14} />

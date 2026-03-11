@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   Command,
   Layers3,
@@ -18,6 +19,7 @@ const navLinks = [
   { href: "/execution", label: "Tasks", icon: Activity },
   { href: "/tools", label: "Tools", icon: BarChart3 },
   { href: "/wallet", label: "Wallet", icon: WalletCards },
+  { href: "/refunds", label: "Recovery", icon: AlertTriangle },
   { href: "/subscriptions", label: "Billing", icon: Layers3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
