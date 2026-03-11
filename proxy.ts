@@ -3,21 +3,24 @@ import { isProtectedApi, isProtectedPage } from '@/lib/auth/protection';
 
 const AUTH_COOKIE = 'aw_session';
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
   const hasSession = Boolean(request.cookies.get(AUTH_COOKIE)?.value);
 
   if (!hasSession && isProtectedPage(pathname)) {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('next', pathname);
+    loginUrl.searchParams.set('next', `${pathname}${search}`);
     return NextResponse.redirect(loginUrl);
   }
 
   if (!hasSession && isProtectedApi(pathname)) {
-    return NextResponse.json({
-      ok: false,
-      error: 'Authentication required.',
-    }, { status: 401 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'Authentication required.',
+      },
+      { status: 401 }
+    );
   }
 
   return NextResponse.next();
