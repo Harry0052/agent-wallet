@@ -168,6 +168,13 @@ function parseStringArray(input: unknown): string[] {
     .filter(Boolean);
 }
 
+function assertNoUndefinedParams(params: unknown[], queryName: string): void {
+  const undefinedIndex = params.findIndex((value) => value === undefined);
+  if (undefinedIndex !== -1) {
+    throw new Error(`DB_VALIDATION: ${queryName} received undefined parameter $${undefinedIndex + 1}`);
+  }
+}
+
 function toRecoveryCase(row: RecoveryCaseRow): RecoveryCaseRecord {
   return {
     id: row.id,
@@ -312,6 +319,7 @@ async function ensureRecoverySchema(): Promise<void> {
 
 async function selectCase(whereClause: string, params: unknown[]): Promise<RecoveryCaseRecord | null> {
   await ensureRecoverySchema();
+  assertNoUndefinedParams(params, 'recovery_cases.select_case');
   const result = await query<RecoveryCaseRow>(
     `
       SELECT
@@ -370,28 +378,49 @@ export function createPostgresRecoveryStore(): RecoveryStore {
           ? input.userFacingMessage
           : 'This purchase state changed unexpectedly and needs manual review.';
 
+        const updateParams = [
+          existing.id,
+          input.transactionId,
+          input.paymentFlowId || null,
+          input.ledgerEntryId || null,
+          input.merchant,
+          input.amount,
+          input.currency,
+          nextState,
+          nextAction,
+          nextReason,
+          nextMessage,
+          input.canSelfServe && !nextNeedsManualReview,
+          JSON.stringify(input.auditRequirements),
+          input.evidence ? JSON.stringify(input.evidence) : null,
+          input.unresolved,
+          nextNeedsManualReview,
+        ];
+        assertNoUndefinedParams(updateParams, 'recovery_cases.update');
+
         const result = await query<RecoveryCaseRow>(
           `
             UPDATE recovery_cases
             SET
-              payment_flow_id = COALESCE($3, payment_flow_id),
-              ledger_entry_id = COALESCE($4, ledger_entry_id),
-              merchant = $5,
-              amount = $6,
-              currency = lower($7),
-              current_state = $8,
-              recommended_recovery_action = $9,
-              reason = $10,
-              user_facing_message = $11,
-              can_self_serve = $12,
+              payment_flow_id = COALESCE($3::text, payment_flow_id),
+              ledger_entry_id = COALESCE($4::text, ledger_entry_id),
+              merchant = $5::text,
+              amount = $6::numeric,
+              currency = lower($7::text),
+              current_state = $8::text,
+              recommended_recovery_action = $9::text,
+              reason = $10::text,
+              user_facing_message = $11::text,
+              can_self_serve = $12::boolean,
               audit_requirements = $13::jsonb,
               evidence = $14::jsonb,
-              unresolved = $15,
-              needs_manual_review = $16,
+              unresolved = $15::boolean,
+              needs_manual_review = $16::boolean,
               last_reconciled_at = NOW(),
               resolved_at = CASE WHEN $15 THEN NULL ELSE COALESCE(resolved_at, NOW()) END,
               updated_at = NOW()
             WHERE id = $1
+              AND transaction_id = $2::text
             RETURNING
               id,
               user_id,
@@ -415,27 +444,31 @@ export function createPostgresRecoveryStore(): RecoveryStore {
               created_at::text,
               updated_at::text
           `,
-          [
-            existing.id,
-            input.transactionId,
-            input.paymentFlowId || null,
-            input.ledgerEntryId || null,
-            input.merchant,
-            input.amount,
-            input.currency,
-            nextState,
-            nextAction,
-            nextReason,
-            nextMessage,
-            input.canSelfServe && !nextNeedsManualReview,
-            JSON.stringify(input.auditRequirements),
-            input.evidence ? JSON.stringify(input.evidence) : null,
-            input.unresolved,
-            nextNeedsManualReview,
-          ],
+          updateParams,
         );
         return toRecoveryCase(result.rows[0]);
       }
+
+      const insertParams = [
+        randomUUID(),
+        input.userId,
+        input.transactionId,
+        input.paymentFlowId || null,
+        input.ledgerEntryId || null,
+        input.merchant,
+        input.amount,
+        input.currency,
+        input.currentState,
+        input.recommendedRecoveryAction,
+        input.reason,
+        input.userFacingMessage,
+        input.canSelfServe,
+        JSON.stringify(input.auditRequirements),
+        input.evidence ? JSON.stringify(input.evidence) : null,
+        input.unresolved,
+        input.needsManualReview,
+      ];
+      assertNoUndefinedParams(insertParams, 'recovery_cases.insert');
 
       const result = await query<RecoveryCaseRow>(
         `
@@ -459,7 +492,7 @@ export function createPostgresRecoveryStore(): RecoveryStore {
             needs_manual_review
           )
           VALUES (
-            $1, $2, $3, $4, $5, $6, $7, lower($8), $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17
+            $1, $2::text, $3::text, $4::text, $5::text, $6::text, $7::numeric, lower($8::text), $9::text, $10::text, $11::text, $12::text, $13::boolean, $14::jsonb, $15::jsonb, $16::boolean, $17::boolean
           )
           RETURNING
             id,
@@ -484,25 +517,7 @@ export function createPostgresRecoveryStore(): RecoveryStore {
             created_at::text,
             updated_at::text
         `,
-        [
-          randomUUID(),
-          input.userId,
-          input.transactionId,
-          input.paymentFlowId || null,
-          input.ledgerEntryId || null,
-          input.merchant,
-          input.amount,
-          input.currency,
-          input.currentState,
-          input.recommendedRecoveryAction,
-          input.reason,
-          input.userFacingMessage,
-          input.canSelfServe,
-          JSON.stringify(input.auditRequirements),
-          input.evidence ? JSON.stringify(input.evidence) : null,
-          input.unresolved,
-          input.needsManualReview,
-        ],
+        insertParams,
       );
       return toRecoveryCase(result.rows[0]);
     },
@@ -552,7 +567,11 @@ export function createPostgresRecoveryStore(): RecoveryStore {
           ORDER BY unresolved DESC, updated_at DESC
           LIMIT $3
         `,
-        [input.userId, unresolvedOnly, limit],
+        (() => {
+          const params = [input.userId, unresolvedOnly, limit];
+          assertNoUndefinedParams(params, 'recovery_cases.list');
+          return params;
+        })(),
       );
       return result.rows.map(toRecoveryCase);
     },
@@ -560,6 +579,20 @@ export function createPostgresRecoveryStore(): RecoveryStore {
     async appendAudit(input) {
       await ensureRecoverySchema();
       const auditId = randomUUID();
+      const insertAuditParams = [
+        auditId,
+        input.recoveryCaseId,
+        input.userId,
+        input.actorType,
+        input.actorId,
+        input.action,
+        input.fromState,
+        input.toState,
+        input.details ? JSON.stringify(input.details) : null,
+        input.idempotencyKey || null,
+      ];
+      assertNoUndefinedParams(insertAuditParams, 'recovery_audit_logs.insert');
+
       const result = await query<RecoveryAuditRow>(
         `
           INSERT INTO recovery_audit_logs (
@@ -589,21 +622,13 @@ export function createPostgresRecoveryStore(): RecoveryStore {
             idempotency_key,
             created_at::text
         `,
-        [
-          auditId,
-          input.recoveryCaseId,
-          input.userId,
-          input.actorType,
-          input.actorId,
-          input.action,
-          input.fromState,
-          input.toState,
-          input.details ? JSON.stringify(input.details) : null,
-          input.idempotencyKey || null,
-        ],
+        insertAuditParams,
       );
 
       if (result.rows[0]) return toRecoveryAudit(result.rows[0]);
+
+      const selectAuditParams = [input.recoveryCaseId, input.action, input.idempotencyKey || null];
+      assertNoUndefinedParams(selectAuditParams, 'recovery_audit_logs.select_existing');
 
       const existing = await query<RecoveryAuditRow>(
         `
@@ -626,7 +651,7 @@ export function createPostgresRecoveryStore(): RecoveryStore {
           ORDER BY created_at DESC
           LIMIT 1
         `,
-        [input.recoveryCaseId, input.action, input.idempotencyKey || null],
+        selectAuditParams,
       );
       if (!existing.rows[0]) throw new Error('Failed to append recovery audit log');
       return toRecoveryAudit(existing.rows[0]);
@@ -634,6 +659,9 @@ export function createPostgresRecoveryStore(): RecoveryStore {
 
     async listAuditLogs(userId, recoveryCaseId) {
       await ensureRecoverySchema();
+      const auditListParams = [userId, recoveryCaseId];
+      assertNoUndefinedParams(auditListParams, 'recovery_audit_logs.list');
+
       const result = await query<RecoveryAuditRow>(
         `
           SELECT
@@ -653,7 +681,7 @@ export function createPostgresRecoveryStore(): RecoveryStore {
             AND recovery_case_id = $2
           ORDER BY created_at ASC
         `,
-        [userId, recoveryCaseId],
+        auditListParams,
       );
       return result.rows.map(toRecoveryAudit);
     },

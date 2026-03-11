@@ -4,15 +4,11 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChatInterface } from "@/components/ChatInterface";
-import { OpsDeck } from "@/components/OpsDeck";
-import { AgentRail } from "@/components/AgentRail";
 import { ProcurementPlanningPanel } from "@/components/ProcurementPlanningPanel";
-import { SourcingTaskPanel } from "@/components/SourcingTaskPanel";
 import { useApp } from "@/lib/store";
 
 function OperatorContent() {
   const searchParams = useSearchParams();
-  const isDemoMode = searchParams.get("demo") === "1";
   const isLandingEntry = searchParams.get("entry") === "landing";
   const { isProcessing, activeTask } = useApp();
 
@@ -107,71 +103,36 @@ function OperatorContent() {
         </div>
       </div>
 
-      <div
-        className={`grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] ${isLandingEntry ? "aw-enter-reveal" : ""}`}
+      <section
+        className={isLandingEntry ? "aw-enter-reveal" : ""}
         style={isLandingEntry ? { animationDelay: "150ms" } : undefined}
       >
-        <div
-          className={`space-y-6 ${isLandingEntry ? "aw-enter-reveal-fast" : ""}`}
-          style={isLandingEntry ? { animationDelay: "210ms" } : undefined}
-        >
-          <section className="aw-surface-elevated aw-command-zone flex min-h-[34rem] flex-col overflow-hidden xl:min-h-[40rem]">
-            <div className="border-b border-[var(--aw-border)] px-5 py-4 md:px-6">
-              <p className="aw-kicker">Task Console</p>
-              <h2 className="mt-1 text-[1.25rem] font-semibold tracking-[-0.015em] text-[var(--aw-text)]">
-                Run a task
-              </h2>
-              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[var(--aw-text-soft)]">
-                Keep prompts clear and short. The app handles research, policy
-                checks, and approvals.
-              </p>
-            </div>
-            <div className="min-h-0 flex-1">
-              <ChatInterface />
-            </div>
-          </section>
-
-          <section className="aw-operator-zone">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="aw-kicker">Recommendations</p>
-                <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
-                  Review findings, compare options, and prepare approvals.
-                </p>
-              </div>
-            </div>
-            <ProcurementPlanningPanel />
-          </section>
-
-          <section className="aw-operator-zone">
-            <SourcingTaskPanel />
-          </section>
+        <div className="mb-3">
+          <p className="aw-kicker">Task Workspace</p>
+          <h2 className="mt-1 text-[1.25rem] font-semibold tracking-[-0.015em] text-[var(--aw-text)]">
+            Branch tasks from a single command root
+          </h2>
+          <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-[var(--aw-text-soft)]">
+            The command dock stays at the bottom center while each submitted
+            task opens its own workspace panel above.
+          </p>
         </div>
+        <ChatInterface />
+      </section>
 
-        <aside
-          className={`space-y-6 ${isLandingEntry ? "aw-enter-reveal-fast" : ""}`}
-          style={isLandingEntry ? { animationDelay: "260ms" } : undefined}
-        >
-          <section className="aw-operator-zone">
-            <div className="mb-3">
-              <p className="aw-kicker">Task Rail</p>
-              <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
-                See each step as tasks run on the live web.
-              </p>
-            </div>
-            <AgentRail demoMode={isDemoMode} />
-          </section>
-
-          <section className="aw-operator-zone">
-            <div className="mb-3">
-              <p className="aw-kicker">Approvals and Ledger</p>
-              <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
-                Approvals, guardrails, and recent wallet changes.
-              </p>
-            </div>
-            <OpsDeck demoMode={isDemoMode} />
-          </section>
-        </aside>
+      <div
+        className={`mt-6 ${isLandingEntry ? "aw-enter-reveal-fast" : ""}`}
+        style={isLandingEntry ? { animationDelay: "240ms" } : undefined}
+      >
+        <section className="aw-operator-zone">
+          <div className="mb-3">
+            <p className="aw-kicker">Procurement Workspace</p>
+            <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
+              Manage live research and approvals when a procurement mission is active.
+            </p>
+          </div>
+          <ProcurementPlanningPanel />
+        </section>
       </div>
     </div>
   );

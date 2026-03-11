@@ -1,5 +1,6 @@
 "use client";
 
+import { RecoveryTable } from "@/components/refunds/recovery-table";
 import { WalletCard } from "@/components/WalletCard";
 import { TransactionHistory } from "@/components/TransactionHistory";
 
@@ -19,6 +20,19 @@ export default function WalletPage() {
         <WalletCard />
         <TransactionHistory alwaysShow />
       </div>
+
+      <section className="mt-6">
+        <div className="mb-3">
+          <p className="aw-kicker">Financial Recovery</p>
+          <h2 className="mt-1 text-[1.1rem] font-semibold text-[var(--aw-text)]">
+            Refund Center
+          </h2>
+          <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
+            Resolve failed purchases with reversals, refund requests, and live status tracking.
+          </p>
+        </div>
+        <RecoveryTable />
+      </section>
     </div>
   );
 }

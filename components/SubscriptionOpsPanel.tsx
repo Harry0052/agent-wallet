@@ -48,6 +48,7 @@ export function SubscriptionOpsPanel({ alwaysShow: _alwaysShow }: { alwaysShow?:
     null,
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRunningOperation, setIsRunningOperation] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,24 +147,40 @@ export function SubscriptionOpsPanel({ alwaysShow: _alwaysShow }: { alwaysShow?:
     }
   };
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setError(null);
+    try {
+      await refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to refresh subscription operations",
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <section className="aw-surface p-4 md:p-5 animate-sheet-rise">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="aw-kicker">Billing</p>
+          <p className="aw-kicker">Subscriptions</p>
           <h3 className="mt-1 text-base font-semibold text-[var(--aw-text)]">
             Subscription Tasks
           </h3>
         </div>
         <button
           onClick={() => {
-            void refresh();
+            void handleRefresh();
           }}
           className="aw-button-secondary px-3 py-1.5 text-xs"
-          disabled={isLoading}
+          disabled={isLoading || isRefreshing}
         >
           <span className="inline-flex items-center gap-1">
-            <RefreshCw size={12} />
+            <RefreshCw size={12} className={isRefreshing ? "animate-spin" : ""} />
             Refresh
           </span>
         </button>

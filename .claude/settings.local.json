@@ -12,7 +12,8 @@
       "Bash(lsof -ti:3000)",
       "Bash(kill 18968)",
       "Bash(npm test)",
-      "Bash(xargs kill -9)"
+      "Bash(xargs kill -9)",
+      "Bash(kill 43110)"
     ]
   }
 }

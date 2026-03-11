@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   Activity,
-  AlertTriangle,
-  BarChart3,
   Command,
   Layers3,
   Settings,
   WalletCards,
+  Wrench,
 } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { fmt } from "@/lib/utils";
@@ -19,10 +18,9 @@ import { logout } from '@/services/auth';
 const navLinks = [
   { href: "/operator", label: "Dashboard", icon: Command },
   { href: "/execution", label: "Tasks", icon: Activity },
-  { href: "/tools", label: "Tools", icon: BarChart3 },
+  { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/wallet", label: "Wallet", icon: WalletCards },
-  { href: "/refunds", label: "Recovery", icon: AlertTriangle },
-  { href: "/subscriptions", label: "Billing", icon: Layers3 },
+  { href: "/subscriptions", label: "Subscriptions", icon: Layers3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

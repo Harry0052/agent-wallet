@@ -298,6 +298,31 @@ export async function authenticateWithPassword(input: {
   };
 }
 
+export async function verifyPasswordForUser(input: {
+  appUserId: string;
+  password: string;
+}): Promise<void> {
+  const passwordResult = await query<PasswordRow>(
+    `
+      SELECT user_id, password_hash
+      FROM app_user_passwords
+      WHERE user_id = $1
+      LIMIT 1
+    `,
+    [input.appUserId],
+  );
+
+  const passwordRow = passwordResult.rows[0];
+  if (!passwordRow) {
+    throw new AuthError('Password verification failed.', 401);
+  }
+
+  const isValid = await verifyPassword(input.password, passwordRow.password_hash);
+  if (!isValid) {
+    throw new AuthError('Password verification failed.', 401);
+  }
+}
+
 export async function createSession(input: {
   appUserId: string;
   ip?: string | null;

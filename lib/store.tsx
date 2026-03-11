@@ -13,6 +13,8 @@ import * as fundingService from '@/services/funding';
 import * as procurementService from '@/services/procurement';
 import * as subscriptionService from '@/services/subscriptions';
 import * as memoryService from '@/services/memory';
+import * as chatHistoryService from '@/services/chatHistory';
+import type { SavedConversation } from '@/services/chatHistory';
 
 interface AppState {
   wallet: Wallet;
@@ -24,6 +26,10 @@ interface AppState {
   showSettings: boolean;
   showHistory: boolean;
   isProcessing: boolean;
+  queuedTaskCount: number;
+  chatHistory: SavedConversation[];
+  showChatHistory: boolean;
+  activeConversationId: string | null;
 
   sendMessage: (text: string) => void;
   approveTask: (taskId: string) => void;
@@ -42,6 +48,10 @@ interface AppState {
   setLiveRunState: (updates: Partial<LiveRunState>) => void;
   appendLiveRunEvent: (event: Omit<LiveRunEvent, 'id' | 'timestamp'> & { timestamp?: string }) => void;
   resetLiveRunState: () => void;
+  startNewChat: () => void;
+  loadChat: (id: string) => void;
+  deleteChatFromHistory: (id: string) => void;
+  toggleChatHistory: () => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -70,10 +80,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
   const [sessionRestored, setSessionRestored] = useState(false);
+  const [chatHistory, setChatHistory] = useState<SavedConversation[]>([]);
+  const [showChatHistory, setShowChatHistory] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
   const walletRef = useRef(wallet);
   const approvalInFlightRef = useRef(false);
+  const queueDrainingRef = useRef(false);
   walletRef.current = wallet;
 
   const addMessage = useCallback((message: ChatMessage) => {
@@ -696,12 +711,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // -----------------------------------------------------------------------
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isProcessing) return;
+    const trimmedText = text.trim();
+    if (!trimmedText) return;
+
+    if (isProcessing) {
+      setQueuedMessages((prev) => [...prev, trimmedText]);
+      return;
+    }
 
     const userMsg: ChatMessage = {
       id: uid(),
       role: 'user',
-      content: text,
+      content: trimmedText,
       type: 'text',
       timestamp: new Date().toISOString(),
     };
@@ -714,7 +735,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Handle pending recipient resolution (user is providing Stripe ID)
       // -----------------------------------------------------------------
       if (activeTask?.taskState === 'resolving_recipient' && activeTask.pendingRecipientName && activeTask.pendingAmount) {
-        const trimmed = text.trim();
+        const trimmed = trimmedText;
 
         if (agent.isNegativeResponse(trimmed)) {
           addMessage({
@@ -765,7 +786,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Handle pending approval
       // -----------------------------------------------------------------
       if (activeTask?.status === 'awaiting-approval' && activeTask.selectedOption) {
-        if (agent.isAffirmativeResponse(text)) {
+        if (agent.isAffirmativeResponse(trimmedText)) {
           const completed = activeTask.category === 'send'
             ? await agent.completeSendFlow(activeTask, activeTask.selectedOption, callbacks)
             : await agent.completePurchase(activeTask, activeTask.selectedOption, callbacks);
@@ -774,7 +795,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (agent.isNegativeResponse(text)) {
+        if (agent.isNegativeResponse(trimmedText)) {
           addMessage({
             id: uid(),
             role: 'assistant',
@@ -791,7 +812,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // -----------------------------------------------------------------
       // Quick-match local intents (settings, help, history) before OpenAI
       // -----------------------------------------------------------------
-      const normalizedText = text.trim().toLowerCase();
+      const normalizedText = trimmedText.toLowerCase();
 
       if (/^(settings|config|preferences|budget|cap|limit|guardrail)/i.test(normalizedText)) {
         setShowSettings(true);
@@ -836,7 +857,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timestamp: new Date().toISOString(),
       });
 
-      const orchestration = await agent.orchestrateAgentMessage(text);
+      const orchestration = await agent.orchestrateAgentMessage(trimmedText);
       const parsed = orchestration.intent;
 
       if (Array.isArray(orchestration.lifecycle) && orchestration.lifecycle.length > 0) {
@@ -980,7 +1001,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           case 'procurement_task':
           case 'compare_and_buy': {
             // Run procurement in the background so the user is not blocked
-            void runAutonomousProcurementMission(text).catch((err) => {
+            void runAutonomousProcurementMission(trimmedText).catch((err) => {
               addMessage({
                 id: uid(),
                 role: 'assistant',
@@ -1002,8 +1023,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               id: uid(),
               role: 'assistant',
               content: typeof runtimeExecution?.message === 'string'
-                ? `${runtimeExecution.message} Track progress in Recruiting Workspace.`
-                : 'Candidate sourcing has started. I will shortlist top matches and publish a Google Sheets link in Recruiting Workspace.',
+                ? `${runtimeExecution.message} Track progress in the task workspace.`
+                : 'Candidate sourcing has started. I will shortlist top matches and publish a Google Sheets link in the task workspace.',
               type: 'text',
               timestamp: new Date().toISOString(),
             });
@@ -1041,7 +1062,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 }
               })();
             } else {
-              void runAutonomousProcurementMission(text).catch((err) => {
+              void runAutonomousProcurementMission(trimmedText).catch((err) => {
                 addMessage({
                   id: uid(),
                   role: 'assistant',
@@ -1100,7 +1121,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               });
               setActiveTask(task);
             } else {
-              const pendingTask = agent.createTask(text, 'send', amount);
+              const pendingTask = agent.createTask(trimmedText, 'send', amount);
               pendingTask.taskState = 'resolving_recipient';
               pendingTask.pendingRecipientName = recipientHint;
               pendingTask.pendingAmount = amount;
@@ -1244,7 +1265,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
             agent.handleFundFlow({
               action: 'fund',
-              query: text,
+              query: trimmedText,
               amount,
             }, callbacks);
             break;
@@ -1342,6 +1363,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setIsProcessing(false);
   }, [isProcessing, activeTask, callbacks, addMessage, refreshWallet, continueWithNewRecipient, runAutonomousProcurementMission]);
+
+  useEffect(() => {
+    if (isProcessing || queueDrainingRef.current || queuedMessages.length === 0) return;
+
+    const [nextMessage, ...remaining] = queuedMessages;
+    queueDrainingRef.current = true;
+    setQueuedMessages(remaining);
+
+    void (async () => {
+      try {
+        await sendMessage(nextMessage);
+      } finally {
+        queueDrainingRef.current = false;
+      }
+    })();
+  }, [isProcessing, queuedMessages, sendMessage]);
 
   const approveTask = useCallback(async (taskId: string) => {
     if (isProcessing || approvalInFlightRef.current) return;
@@ -1471,6 +1508,94 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [addMessage]);
 
+  // -- Chat history -------------------------------------------------------
+
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    setChatHistory(chatHistoryService.loadHistory());
+  }, []);
+
+  // Auto-save current conversation to history after messages change
+  const activeConversationIdRef = useRef(activeConversationId);
+  activeConversationIdRef.current = activeConversationId;
+
+  useEffect(() => {
+    if (!sessionRestored || messages.length < 2) return;
+
+    const timer = setTimeout(() => {
+      const savedId = chatHistoryService.saveConversation(
+        messages,
+        activeConversationIdRef.current,
+      );
+      if (savedId && !activeConversationIdRef.current) {
+        setActiveConversationId(savedId);
+      }
+      setChatHistory(chatHistoryService.loadHistory());
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [messages, sessionRestored]);
+
+  const startNewChat = useCallback(() => {
+    // Save current conversation before clearing
+    if (messages.length >= 2) {
+      const savedId = chatHistoryService.saveConversation(messages, activeConversationId);
+      if (savedId) setChatHistory(chatHistoryService.loadHistory());
+    }
+
+    setMessages([{
+      id: 'welcome',
+      role: 'assistant',
+      content: 'Agent Wallet is ready. Tell me what you need — I\'ll handle the work and only pause for approvals or clarifications.',
+      type: 'text',
+      timestamp: new Date().toISOString(),
+    }]);
+    setActiveTask(null);
+    setActiveConversationId(null);
+    setShowChatHistory(false);
+    setQueuedMessages([]);
+  }, [messages, activeConversationId]);
+
+  const loadChat = useCallback((id: string) => {
+    // Save current conversation before switching
+    if (messages.length >= 2) {
+      chatHistoryService.saveConversation(messages, activeConversationId);
+    }
+
+    const conv = chatHistoryService.getConversation(id);
+    if (conv) {
+      setMessages(conv.messages);
+      setActiveConversationId(conv.id);
+      setActiveTask(null);
+      setQueuedMessages([]);
+    }
+    setShowChatHistory(false);
+    setChatHistory(chatHistoryService.loadHistory());
+  }, [messages, activeConversationId]);
+
+  const deleteChatFromHistory = useCallback((id: string) => {
+    chatHistoryService.deleteConversation(id);
+    setChatHistory(chatHistoryService.loadHistory());
+
+    // If deleted chat is the active one, start fresh
+    if (activeConversationId === id) {
+      setMessages([{
+        id: 'welcome',
+        role: 'assistant',
+        content: 'Agent Wallet is ready. Tell me what you need — I\'ll handle the work and only pause for approvals or clarifications.',
+        type: 'text',
+        timestamp: new Date().toISOString(),
+      }]);
+      setActiveTask(null);
+      setActiveConversationId(null);
+      setQueuedMessages([]);
+    }
+  }, [activeConversationId]);
+
+  const toggleChatHistory = useCallback(() => {
+    setShowChatHistory((p) => !p);
+  }, []);
+
   const value: AppState = {
     wallet,
     messages,
@@ -1481,6 +1606,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showSettings,
     showHistory,
     isProcessing,
+    queuedTaskCount: queuedMessages.length,
+    chatHistory,
+    showChatHistory,
+    activeConversationId,
     sendMessage,
     approveTask,
     rejectTask,
@@ -1495,6 +1624,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLiveRunState,
     appendLiveRunEvent,
     resetLiveRunState,
+    startNewChat,
+    loadChat,
+    deleteChatFromHistory,
+    toggleChatHistory,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,4 +1,10 @@
-import { Pool, type PoolConfig, type QueryResult, type QueryResultRow } from 'pg';
+import {
+  Pool,
+  type PoolClient,
+  type PoolConfig,
+  type QueryResult,
+  type QueryResultRow,
+} from 'pg';
 import { getDatabaseUrl } from '@/lib/server/env';
 
 declare global {
@@ -86,6 +92,28 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
 export async function withTransaction<T>(fn: (client: Pool) => Promise<T>): Promise<T> {
   await ensureSchema();
   return fn(getPool());
+}
+
+export async function withDbTransaction<T>(
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  await ensureSchema();
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Ignore rollback errors and rethrow original error.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function ensureSchema(): Promise<void> {
