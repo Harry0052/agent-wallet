@@ -6,7 +6,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   Activity,
   Command,
-  Layers3,
   Receipt,
   Settings,
   WalletCards,
@@ -22,7 +21,6 @@ const navLinks = [
   { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/wallet", label: "Wallet", icon: WalletCards },
   { href: "/statements", label: "Statements", icon: Receipt },
-  { href: "/subscriptions", label: "Subscriptions", icon: Layers3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

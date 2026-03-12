@@ -4,6 +4,9 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { query } from '@/lib/server/db';
+import { assertNodeRuntime } from '@/lib/server/runtimeGuard';
+
+assertNodeRuntime();
 
 const SECURITY_EVENTS_LOG_PATH = 'security/securityEvents.log';
 const MIN_SCHEDULE_INTERVAL_MS = 60_000;
@@ -271,4 +274,3 @@ export function startDataRetentionScheduler(): void {
     });
   });
 }
-

@@ -2,6 +2,9 @@ import 'server-only';
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { assertNodeRuntime } from '@/lib/server/runtimeGuard';
+
+assertNodeRuntime();
 
 type SecretRecord = Record<string, string>;
 

@@ -81,6 +81,9 @@ export function StatementsWorkspace() {
   );
   const [statementLoading, setStatementLoading] = useState(false);
   const [statementError, setStatementError] = useState<string | null>(null);
+  const [detailView, setDetailView] = useState<"subscriptions" | "statements">(
+    "subscriptions",
+  );
 
   const loadInitial = useCallback(async () => {
     setIsLoading(true);
@@ -172,6 +175,11 @@ export function StatementsWorkspace() {
     return `${best.subscription}: ${best.recommendation} (${best.reason})`;
   }, [analysis]);
 
+  const selectedAccount = useMemo(
+    () => accounts.find((account) => account.id === selectedAccountId) || null,
+    [accounts, selectedAccountId],
+  );
+
   const onAccountFilterChange = <K extends keyof AccountFilters>(
     key: K,
     value: AccountFilters[K],
@@ -231,212 +239,278 @@ export function StatementsWorkspace() {
       </section>
 
       <section className="mt-5 aw-surface p-4 md:p-5">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="aw-kicker">Accounts</p>
+            <p className="aw-kicker">Subscriptions</p>
             <h2 className="mt-1 text-base font-semibold text-[var(--aw-text)]">
-              Account Cards
+              Subscriptions + Statements
             </h2>
+          </div>
+          <div className="inline-flex rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-1">
+            <button
+              type="button"
+              onClick={() => setDetailView("subscriptions")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                detailView === "subscriptions"
+                  ? "bg-[var(--aw-primary-soft)] text-[var(--aw-primary-strong)]"
+                  : "text-[var(--aw-text-soft)] hover:text-[var(--aw-text)]"
+              }`}
+            >
+              Subscriptions
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetailView("statements")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                detailView === "statements"
+                  ? "bg-[var(--aw-primary-soft)] text-[var(--aw-primary-strong)]"
+                  : "text-[var(--aw-text-soft)] hover:text-[var(--aw-text)]"
+              }`}
+            >
+              Statements
+            </button>
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          {accounts.map((account) => {
-            const isActive = selectedAccountId === account.id;
-            return (
-              <button
-                type="button"
-                key={account.id}
-                onClick={() => {
-                  setSelectedAccountId(account.id);
-                  setAccountFilters((prev) => ({ ...prev, page: 1 }));
-                }}
-                className={`rounded-xl border px-3 py-3 text-left transition ${
-                  isActive
-                    ? "border-[var(--aw-primary-strong)] bg-[var(--aw-primary-soft)]"
-                    : "border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] hover:border-[var(--aw-border-strong)]"
-                }`}
-              >
-                <p className="text-sm font-semibold text-[var(--aw-text)]">
-                  {accountLabel(account)}
+        <div className="mt-3 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-3">
+          <div className="flex items-start gap-2">
+            <Sparkles size={15} className="mt-0.5 text-[var(--aw-primary-strong)]" />
+            <div>
+              <p className="text-sm text-[var(--aw-text)]">{aiInsightHeadline}</p>
+              {aiRecommendation ? (
+                <p className="mt-1 text-xs text-[var(--aw-text-soft)]">
+                  Recommendation: {aiRecommendation}
                 </p>
-                <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
-                  {titleCase(account.account_type)} • {account.institution_name}
+              ) : (
+                <p className="mt-1 text-xs text-[var(--aw-text-soft)]">
+                  Guidance only. No subscription changes are executed from this page.
                 </p>
-              </button>
-            );
-          })}
-          {accounts.length === 0 ? (
-            <p className="text-sm text-[var(--aw-text-muted)]">
-              No linked accounts found yet.
-            </p>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="mt-5 aw-surface p-4 md:p-5">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="aw-kicker">Statement</p>
-            <h2 className="mt-1 text-base font-semibold text-[var(--aw-text)]">
-              {accountStatement?.account_name || "Account Transactions"}
-            </h2>
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-5">
-          <input
-            type="date"
-            className="aw-input h-10 text-sm"
-            value={accountFilters.date_from}
-            onChange={(event) => onAccountFilterChange("date_from", event.target.value)}
-          />
-          <input
-            type="date"
-            className="aw-input h-10 text-sm"
-            value={accountFilters.date_to}
-            onChange={(event) => onAccountFilterChange("date_to", event.target.value)}
-          />
-          <input
-            type="text"
-            className="aw-input h-10 text-sm"
-            value={accountFilters.merchant}
-            placeholder="Merchant"
-            onChange={(event) => onAccountFilterChange("merchant", event.target.value)}
-          />
-          <input
-            type="text"
-            className="aw-input h-10 text-sm"
-            value={accountFilters.category}
-            placeholder="Category"
-            onChange={(event) => onAccountFilterChange("category", event.target.value)}
-          />
-          <select
-            className="aw-input h-10 text-sm"
-            value={accountFilters.pending}
-            onChange={(event) =>
-              onAccountFilterChange("pending", event.target.value as AccountFilters["pending"])
-            }
-          >
-            <option value="">All statuses</option>
-            <option value="false">Posted</option>
-            <option value="true">Pending</option>
-          </select>
-        </div>
-
-        {statementError ? (
-          <p className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[var(--aw-danger)]/30 bg-[var(--aw-danger)]/10 px-3 py-2 text-xs text-[var(--aw-danger)]">
-            <AlertCircle size={12} />
-            {statementError}
-          </p>
-        ) : null}
-
-        {statementLoading ? (
-          <p className="mt-4 inline-flex items-center gap-2 text-sm text-[var(--aw-text-muted)]">
-            <Loader2 size={14} className="animate-spin" />
-            Loading transactions...
-          </p>
-        ) : (
-          <div className="mt-4 space-y-2">
-            <div className="grid grid-cols-[1.4fr_0.7fr_0.8fr_0.6fr_0.8fr] gap-2 px-2 text-[10px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">
-              <span>Merchant</span>
-              <span className="text-right">Amount</span>
-              <span>Date</span>
-              <span>Status</span>
-              <span>Category</span>
+              )}
             </div>
-            <div className="aw-scroll max-h-[26rem] space-y-2 overflow-y-auto pr-1">
-              {(accountStatement?.transactions || []).map((tx) => (
-                <article
-                  key={tx.id}
-                  className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2.5"
-                >
-                  <div className="grid grid-cols-[1.4fr_0.7fr_0.8fr_0.6fr_0.8fr] gap-2 text-sm">
-                    <span className="truncate text-[var(--aw-text)]">{tx.merchant_name}</span>
-                    <span className="text-right font-semibold text-[var(--aw-text)]">
-                      {fmt(Math.abs(tx.amount))}
-                    </span>
-                    <span className="text-[var(--aw-text-soft)]">{fmtDate(tx.occurred_at)}</span>
-                    <span
-                      className={`uppercase text-[11px] ${
-                        tx.pending ? "text-[var(--aw-warning)]" : "text-[var(--aw-success)]"
-                      }`}
-                    >
-                      {tx.pending ? "pending" : "posted"}
-                    </span>
-                    <span className="truncate text-[var(--aw-text-soft)]">
-                      {titleCase(tx.category)}
-                    </span>
-                  </div>
-                </article>
-              ))}
-              {(accountStatement?.transactions.length || 0) === 0 ? (
-                <p className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-5 text-center text-sm text-[var(--aw-text-muted)]">
-                  No transactions for this account with current filters.
+          </div>
+        </div>
+
+        {detailView === "subscriptions" ? (
+          isLoading ? (
+            <p className="mt-4 inline-flex items-center gap-2 text-sm text-[var(--aw-text-muted)]">
+              <Loader2 size={14} className="animate-spin" />
+              Loading subscriptions...
+            </p>
+          ) : (
+            <div className="aw-scroll mt-3 max-h-[20rem] overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {subscriptions.map((subscription) => (
+                  <article
+                    key={subscription.id}
+                    className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-[var(--aw-text)]">
+                        {subscription.merchant}
+                      </p>
+                      <span className="rounded-full border border-[var(--aw-border)] px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">
+                        {titleCase(subscription.status)}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[var(--aw-text)]">
+                        {fmt(subscription.estimated_monthly_cost)}
+                        <span className="ml-1 text-xs font-normal text-[var(--aw-text-soft)]">
+                          /month
+                        </span>
+                      </p>
+                      <p className="text-xs text-[var(--aw-text-soft)]">
+                        {titleCase(subscription.recurrence_interval)}
+                      </p>
+                    </div>
+                    <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
+                      Confidence {Math.round(subscription.confidence * 100)}% · Last seen{" "}
+                      {fmtDate(subscription.last_seen)}
+                    </p>
+                  </article>
+                ))}
+                {subscriptions.length === 0 ? (
+                  <p className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-5 text-sm text-[var(--aw-text-muted)] md:col-span-2">
+                    No recurring subscriptions detected yet.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="mt-3">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              {accounts.map((account) => {
+                const isActive = selectedAccountId === account.id;
+                return (
+                  <button
+                    type="button"
+                    key={account.id}
+                    onClick={() => {
+                      setSelectedAccountId(account.id);
+                      setAccountFilters((prev) => ({ ...prev, page: 1 }));
+                    }}
+                    className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                      isActive
+                        ? "border-[var(--aw-primary-strong)] bg-[var(--aw-primary-soft)]"
+                        : "border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] hover:border-[var(--aw-border-strong)]"
+                    }`}
+                  >
+                    <p className="truncate text-sm font-semibold text-[var(--aw-text)]">
+                      {accountLabel(account)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
+                      {titleCase(account.account_type)} • {account.institution_name}
+                    </p>
+                  </button>
+                );
+              })}
+              {accounts.length === 0 ? (
+                <p className="text-sm text-[var(--aw-text-muted)] md:col-span-3">
+                  No linked accounts found yet.
                 </p>
               ) : null}
             </div>
 
-            {accountStatement?.pagination ? (
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <p className="text-xs text-[var(--aw-text-muted)]">
-                  Page {accountStatement.pagination.page} of{" "}
-                  {accountStatement.pagination.total_pages} •{" "}
-                  {accountStatement.pagination.total} transactions
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="aw-button-secondary h-8 px-3 text-xs"
-                    disabled={accountStatement.pagination.page <= 1}
-                    onClick={() =>
-                      onAccountFilterChange(
-                        "page",
-                        Math.max(1, accountFilters.page - 1),
-                      )
-                    }
-                  >
-                    Previous
-                  </button>
-                  <button
-                    type="button"
-                    className="aw-button-secondary h-8 px-3 text-xs"
-                    disabled={!accountStatement.pagination.has_next}
-                    onClick={() =>
-                      onAccountFilterChange("page", accountFilters.page + 1)
-                    }
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-5">
+              <input
+                type="date"
+                className="aw-input h-10 text-sm"
+                value={accountFilters.date_from}
+                onChange={(event) => onAccountFilterChange("date_from", event.target.value)}
+              />
+              <input
+                type="date"
+                className="aw-input h-10 text-sm"
+                value={accountFilters.date_to}
+                onChange={(event) => onAccountFilterChange("date_to", event.target.value)}
+              />
+              <input
+                type="text"
+                className="aw-input h-10 text-sm"
+                value={accountFilters.merchant}
+                placeholder="Merchant"
+                onChange={(event) => onAccountFilterChange("merchant", event.target.value)}
+              />
+              <input
+                type="text"
+                className="aw-input h-10 text-sm"
+                value={accountFilters.category}
+                placeholder="Category"
+                onChange={(event) => onAccountFilterChange("category", event.target.value)}
+              />
+              <select
+                className="aw-input h-10 text-sm"
+                value={accountFilters.pending}
+                onChange={(event) =>
+                  onAccountFilterChange("pending", event.target.value as AccountFilters["pending"])
+                }
+              >
+                <option value="">All statuses</option>
+                <option value="false">Posted</option>
+                <option value="true">Pending</option>
+              </select>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2.5">
+              <p className="text-xs text-[var(--aw-text-muted)]">
+                {selectedAccount
+                  ? `Viewing ${accountStatement?.account_name || accountLabel(selectedAccount)}`
+                  : "Choose an account to view statement transactions."}
+              </p>
+            </div>
+
+            {statementError ? (
+              <p className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[var(--aw-danger)]/30 bg-[var(--aw-danger)]/10 px-3 py-2 text-xs text-[var(--aw-danger)]">
+                <AlertCircle size={12} />
+                {statementError}
+              </p>
             ) : null}
+
+            {statementLoading ? (
+              <p className="mt-4 inline-flex items-center gap-2 text-sm text-[var(--aw-text-muted)]">
+                <Loader2 size={14} className="animate-spin" />
+                Loading transactions...
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                <div className="grid grid-cols-[1.4fr_0.7fr_0.8fr_0.6fr_0.8fr] gap-2 px-2 text-[10px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">
+                  <span>Merchant</span>
+                  <span className="text-right">Amount</span>
+                  <span>Date</span>
+                  <span>Status</span>
+                  <span>Category</span>
+                </div>
+                <div className="aw-scroll max-h-[19rem] space-y-2 overflow-y-auto pr-1">
+                  {(accountStatement?.transactions || []).map((tx) => (
+                    <article
+                      key={tx.id}
+                      className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2.5"
+                    >
+                      <div className="grid grid-cols-[1.4fr_0.7fr_0.8fr_0.6fr_0.8fr] gap-2 text-sm">
+                        <span className="truncate text-[var(--aw-text)]">{tx.merchant_name}</span>
+                        <span className="text-right font-semibold text-[var(--aw-text)]">
+                          {fmt(Math.abs(tx.amount))}
+                        </span>
+                        <span className="text-[var(--aw-text-soft)]">{fmtDate(tx.occurred_at)}</span>
+                        <span
+                          className={`uppercase text-[11px] ${
+                            tx.pending ? "text-[var(--aw-warning)]" : "text-[var(--aw-success)]"
+                          }`}
+                        >
+                          {tx.pending ? "pending" : "posted"}
+                        </span>
+                        <span className="truncate text-[var(--aw-text-soft)]">
+                          {titleCase(tx.category)}
+                        </span>
+                      </div>
+                    </article>
+                  ))}
+                  {(accountStatement?.transactions.length || 0) === 0 ? (
+                    <p className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-5 text-center text-sm text-[var(--aw-text-muted)]">
+                      No transactions for this account with current filters.
+                    </p>
+                  ) : null}
+                </div>
+
+                {accountStatement?.pagination ? (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="text-xs text-[var(--aw-text-muted)]">
+                      Page {accountStatement.pagination.page} of{" "}
+                      {accountStatement.pagination.total_pages} •{" "}
+                      {accountStatement.pagination.total} transactions
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="aw-button-secondary h-8 px-3 text-xs"
+                        disabled={accountStatement.pagination.page <= 1}
+                        onClick={() =>
+                          onAccountFilterChange(
+                            "page",
+                            Math.max(1, accountFilters.page - 1),
+                          )
+                        }
+                      >
+                        Previous
+                      </button>
+                      <button
+                        type="button"
+                        className="aw-button-secondary h-8 px-3 text-xs"
+                        disabled={!accountStatement.pagination.has_next}
+                        onClick={() =>
+                          onAccountFilterChange("page", accountFilters.page + 1)
+                        }
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
-      </section>
-
-      <section className="mt-5 aw-surface p-4 md:p-5">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-[var(--aw-primary-strong)]" />
-          <div>
-            <p className="aw-kicker">AI Insights</p>
-            <h2 className="mt-1 text-base font-semibold text-[var(--aw-text)]">
-              AI Insights
-            </h2>
-          </div>
-        </div>
-        <div className="mt-3 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-3">
-          <p className="text-sm text-[var(--aw-text)]">{aiInsightHeadline}</p>
-          {aiRecommendation ? (
-            <p className="mt-2 text-xs text-[var(--aw-text-soft)]">
-              Recommendation: {aiRecommendation}
-            </p>
-          ) : (
-            <p className="mt-2 text-xs text-[var(--aw-text-soft)]">
-              No cancellation actions are executed here; this panel only provides guidance.
-            </p>
-          )}
-        </div>
       </section>
     </div>
   );

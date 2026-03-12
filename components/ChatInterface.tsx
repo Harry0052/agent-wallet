@@ -25,15 +25,6 @@ interface TaskWorkspacePanelView extends TaskWorkspacePanel {
   isActive: boolean;
 }
 
-const suggestions = [
-  "Find the best note taking app under 15 dollars a month",
-  "Compare Notion and Obsidian for college note taking",
-  "Sign in to Indeed, shortlist 3 senior software engineers with TypeScript and AWS, and export to Google Sheets",
-  "Send Liz 5 dollars on Cash App",
-  "Cancel my Grammarly subscription and show savings",
-  "Top up my wallet by 25 dollars",
-];
-
 function panelStateLabel(state: PanelVisualState): string {
   if (state === "running") return "Running";
   if (state === "queued") return "Queued";
@@ -295,11 +286,6 @@ export function ChatInterface() {
     setInput("");
   };
 
-  const handleSuggestion = (suggestion: string) => {
-    if (!createWorkspace(suggestion)) return;
-    sendMessage(suggestion);
-  };
-
   const closeWorkspace = (panelId: string) => {
     setTaskPanels((prev) => prev.filter((panel) => panel.id !== panelId));
     setActivePanelId((prev) => (prev === panelId ? null : prev));
@@ -327,18 +313,9 @@ export function ChatInterface() {
             <p className="mt-2 max-w-2xl text-sm text-[var(--aw-text-soft)]">
               Each submitted task opens its own workspace above. Keep issuing new tasks from the center dock while previous workspaces continue.
             </p>
-            <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
-              {suggestions.slice(0, 4).map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  onClick={() => handleSuggestion(suggestion)}
-                  className="aw-button-secondary justify-start px-3 py-2 text-left text-xs"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
+            <p className="mt-4 text-xs text-[var(--aw-text-muted)]">
+              Start from the command dock below. Task workspaces will appear here after your first run.
+            </p>
           </div>
         ) : (
           <div
