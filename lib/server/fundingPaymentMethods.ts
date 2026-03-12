@@ -1,7 +1,9 @@
 import 'server-only';
+
 import { randomUUID } from 'node:crypto';
 import type { SavedPaymentMethod } from '@/lib/types';
 import { query } from '@/lib/server/db';
+import { decryptData, encryptData, hashSensitiveValue } from '@/security/encryption';
 
 const DEFAULT_WALLET_SETTINGS = {
   maxTransaction: 50,
@@ -13,11 +15,19 @@ const DEFAULT_WALLET_SETTINGS = {
   blockedMerchants: [],
 };
 
+const HASH_PREFIX = 'h1:';
+const STRIPE_CUSTOMER_HASH_SCOPE = 'wallet_users.stripe_customer_id';
+const STRIPE_PAYMENT_METHOD_HASH_SCOPE = 'wallet_payment_methods.stripe_payment_method_id';
+
 type PaymentMethodRow = {
   id: string;
   user_id: string;
   stripe_customer_id: string;
+  stripe_customer_id_encrypted: string | null;
+  stripe_customer_id_key_version: string | null;
   stripe_payment_method_id: string;
+  stripe_payment_method_id_encrypted: string | null;
+  stripe_payment_method_id_key_version: string | null;
   brand: string | null;
   last4: string | null;
   exp_month: number | null;
@@ -33,14 +43,64 @@ type PaymentMethodRow = {
 
 type WalletUserCustomerRow = {
   stripe_customer_id: string | null;
+  stripe_customer_id_encrypted: string | null;
+  stripe_customer_id_key_version: string | null;
 };
 
-function toSavedPaymentMethod(row: PaymentMethodRow): SavedPaymentMethod {
+function hashStripeCustomerId(value: string): string {
+  return hashSensitiveValue(value, STRIPE_CUSTOMER_HASH_SCOPE);
+}
+
+function hashStripePaymentMethodId(value: string): string {
+  return hashSensitiveValue(value, STRIPE_PAYMENT_METHOD_HASH_SCOPE);
+}
+
+function looksHashed(value: string): boolean {
+  return value.startsWith(HASH_PREFIX);
+}
+
+function decryptSensitiveString(input: {
+  encrypted: string | null;
+  keyVersion: string | null;
+  fallback: string | null;
+}): string | null {
+  if (input.encrypted && input.keyVersion) {
+    try {
+      const decrypted = decryptData<unknown>(input.encrypted, input.keyVersion);
+      if (typeof decrypted === 'string' && decrypted.trim()) {
+        return decrypted;
+      }
+    } catch {
+      // Fall back for legacy plaintext rows.
+    }
+  }
+
+  if (!input.fallback) return null;
+  if (looksHashed(input.fallback)) return null;
+  return input.fallback;
+}
+
+function toSavedPaymentMethod(row: PaymentMethodRow): SavedPaymentMethod | null {
+  const stripeCustomerId = decryptSensitiveString({
+    encrypted: row.stripe_customer_id_encrypted,
+    keyVersion: row.stripe_customer_id_key_version,
+    fallback: row.stripe_customer_id,
+  });
+  const stripePaymentMethodId = decryptSensitiveString({
+    encrypted: row.stripe_payment_method_id_encrypted,
+    keyVersion: row.stripe_payment_method_id_key_version,
+    fallback: row.stripe_payment_method_id,
+  });
+
+  if (!stripeCustomerId || !stripePaymentMethodId) {
+    return null;
+  }
+
   return {
     id: row.id,
     userId: row.user_id,
-    stripeCustomerId: row.stripe_customer_id,
-    stripePaymentMethodId: row.stripe_payment_method_id,
+    stripeCustomerId,
+    stripePaymentMethodId,
     brand: row.brand,
     last4: row.last4,
     expMonth: row.exp_month,
@@ -81,12 +141,44 @@ function normalizeConsentMetadata(input: Record<string, unknown> | null | undefi
   return Object.fromEntries(entries);
 }
 
+async function readActiveCustomerFromSavedMethod(userId: string): Promise<string | null> {
+  const result = await query<{
+    stripe_customer_id: string;
+    stripe_customer_id_encrypted: string | null;
+    stripe_customer_id_key_version: string | null;
+  }>(
+    `
+      SELECT
+        stripe_customer_id,
+        stripe_customer_id_encrypted,
+        stripe_customer_id_key_version
+      FROM wallet_payment_methods
+      WHERE user_id = $1
+        AND status = 'active'
+      ORDER BY is_default DESC, updated_at DESC
+      LIMIT 1
+    `,
+    [userId],
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+  return decryptSensitiveString({
+    encrypted: row.stripe_customer_id_encrypted,
+    keyVersion: row.stripe_customer_id_key_version,
+    fallback: row.stripe_customer_id,
+  });
+}
+
 export async function getStripeCustomerIdForUser(userId: string): Promise<string | null> {
   await ensureWalletUserRow(userId);
 
   const result = await query<WalletUserCustomerRow>(
     `
-      SELECT stripe_customer_id
+      SELECT
+        stripe_customer_id,
+        stripe_customer_id_encrypted,
+        stripe_customer_id_key_version
       FROM wallet_users
       WHERE user_id = $1
       LIMIT 1
@@ -94,7 +186,24 @@ export async function getStripeCustomerIdForUser(userId: string): Promise<string
     [userId],
   );
 
-  return result.rows[0]?.stripe_customer_id || null;
+  const current = result.rows[0];
+  const decrypted = current
+    ? decryptSensitiveString({
+      encrypted: current.stripe_customer_id_encrypted,
+      keyVersion: current.stripe_customer_id_key_version,
+      fallback: current.stripe_customer_id,
+    })
+    : null;
+
+  if (decrypted) {
+    return decrypted;
+  }
+
+  const recovered = await readActiveCustomerFromSavedMethod(userId);
+  if (recovered) {
+    await setStripeCustomerIdForUser(userId, recovered);
+  }
+  return recovered;
 }
 
 export async function setStripeCustomerIdForUser(userId: string, stripeCustomerId: string): Promise<void> {
@@ -103,14 +212,19 @@ export async function setStripeCustomerIdForUser(userId: string, stripeCustomerI
 
   await ensureWalletUserRow(userId);
 
+  const encrypted = encryptData(normalized);
+  const hashed = hashStripeCustomerId(normalized);
+
   await query(
     `
       UPDATE wallet_users
       SET stripe_customer_id = $2,
+          stripe_customer_id_encrypted = $3,
+          stripe_customer_id_key_version = $4,
           updated_at = NOW()
       WHERE user_id = $1
     `,
-    [userId, normalized],
+    [userId, hashed, encrypted.encrypted, encrypted.keyVersion],
   );
 }
 
@@ -121,7 +235,11 @@ export async function listSavedPaymentMethodsForUser(userId: string): Promise<Sa
         id,
         user_id,
         stripe_customer_id,
+        stripe_customer_id_encrypted,
+        stripe_customer_id_key_version,
         stripe_payment_method_id,
+        stripe_payment_method_id_encrypted,
+        stripe_payment_method_id_key_version,
         brand,
         last4,
         exp_month,
@@ -141,7 +259,9 @@ export async function listSavedPaymentMethodsForUser(userId: string): Promise<Sa
     [userId],
   );
 
-  return result.rows.map(toSavedPaymentMethod);
+  return result.rows
+    .map(toSavedPaymentMethod)
+    .filter((method): method is SavedPaymentMethod => Boolean(method));
 }
 
 export async function getSavedPaymentMethodForUser(input: {
@@ -150,6 +270,7 @@ export async function getSavedPaymentMethodForUser(input: {
 }): Promise<SavedPaymentMethod | null> {
   const pmId = input.stripePaymentMethodId.trim();
   if (!pmId) return null;
+  const pmHash = hashStripePaymentMethodId(pmId);
 
   const result = await query<PaymentMethodRow>(
     `
@@ -157,7 +278,11 @@ export async function getSavedPaymentMethodForUser(input: {
         id,
         user_id,
         stripe_customer_id,
+        stripe_customer_id_encrypted,
+        stripe_customer_id_key_version,
         stripe_payment_method_id,
+        stripe_payment_method_id_encrypted,
+        stripe_payment_method_id_key_version,
         brand,
         last4,
         exp_month,
@@ -171,10 +296,10 @@ export async function getSavedPaymentMethodForUser(input: {
         updated_at::text
       FROM wallet_payment_methods
       WHERE user_id = $1
-        AND stripe_payment_method_id = $2
+        AND (stripe_payment_method_id = $2 OR stripe_payment_method_id = $3)
       LIMIT 1
     `,
-    [input.userId, pmId],
+    [input.userId, pmHash, pmId],
   );
 
   if (!result.rows[0]) return null;
@@ -188,7 +313,11 @@ export async function getDefaultSavedPaymentMethodForUser(userId: string): Promi
         id,
         user_id,
         stripe_customer_id,
+        stripe_customer_id_encrypted,
+        stripe_customer_id_key_version,
         stripe_payment_method_id,
+        stripe_payment_method_id_encrypted,
+        stripe_payment_method_id_key_version,
         brand,
         last4,
         exp_month,
@@ -230,6 +359,11 @@ export async function upsertSavedPaymentMethodForUser(input: {
   if (!stripeCustomerId) throw new Error('stripeCustomerId is required');
   if (!stripePaymentMethodId) throw new Error('stripePaymentMethodId is required');
 
+  const hashedCustomerId = hashStripeCustomerId(stripeCustomerId);
+  const hashedPaymentMethodId = hashStripePaymentMethodId(stripePaymentMethodId);
+  const encryptedCustomerId = encryptData(stripeCustomerId);
+  const encryptedPaymentMethodId = encryptData(stripePaymentMethodId);
+
   await ensureWalletUserRow(input.userId);
 
   const shouldSetDefault = input.setAsDefault !== false;
@@ -247,13 +381,44 @@ export async function upsertSavedPaymentMethodForUser(input: {
 
   const consentMetadata = normalizeConsentMetadata(input.consentMetadata);
 
+  // Migrate legacy plaintext key rows before relying on hash-based uniqueness.
+  await query(
+    `
+      UPDATE wallet_payment_methods
+      SET
+        stripe_customer_id = $3,
+        stripe_customer_id_encrypted = $4,
+        stripe_customer_id_key_version = $5,
+        stripe_payment_method_id = $6,
+        stripe_payment_method_id_encrypted = $7,
+        stripe_payment_method_id_key_version = $8,
+        updated_at = NOW()
+      WHERE user_id = $1
+        AND stripe_payment_method_id = $2
+    `,
+    [
+      input.userId,
+      stripePaymentMethodId,
+      hashedCustomerId,
+      encryptedCustomerId.encrypted,
+      encryptedCustomerId.keyVersion,
+      hashedPaymentMethodId,
+      encryptedPaymentMethodId.encrypted,
+      encryptedPaymentMethodId.keyVersion,
+    ],
+  );
+
   const result = await query<PaymentMethodRow>(
     `
       INSERT INTO wallet_payment_methods (
         id,
         user_id,
         stripe_customer_id,
+        stripe_customer_id_encrypted,
+        stripe_customer_id_key_version,
         stripe_payment_method_id,
+        stripe_payment_method_id_encrypted,
+        stripe_payment_method_id_key_version,
         brand,
         last4,
         exp_month,
@@ -266,10 +431,14 @@ export async function upsertSavedPaymentMethodForUser(input: {
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', NOW(), $11::jsonb, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'active', NOW(), $15::jsonb, NOW(), NOW())
       ON CONFLICT (user_id, stripe_payment_method_id)
       DO UPDATE SET
         stripe_customer_id = EXCLUDED.stripe_customer_id,
+        stripe_customer_id_encrypted = EXCLUDED.stripe_customer_id_encrypted,
+        stripe_customer_id_key_version = EXCLUDED.stripe_customer_id_key_version,
+        stripe_payment_method_id_encrypted = EXCLUDED.stripe_payment_method_id_encrypted,
+        stripe_payment_method_id_key_version = EXCLUDED.stripe_payment_method_id_key_version,
         brand = COALESCE(EXCLUDED.brand, wallet_payment_methods.brand),
         last4 = COALESCE(EXCLUDED.last4, wallet_payment_methods.last4),
         exp_month = COALESCE(EXCLUDED.exp_month, wallet_payment_methods.exp_month),
@@ -284,7 +453,11 @@ export async function upsertSavedPaymentMethodForUser(input: {
         id,
         user_id,
         stripe_customer_id,
+        stripe_customer_id_encrypted,
+        stripe_customer_id_key_version,
         stripe_payment_method_id,
+        stripe_payment_method_id_encrypted,
+        stripe_payment_method_id_key_version,
         brand,
         last4,
         exp_month,
@@ -300,8 +473,12 @@ export async function upsertSavedPaymentMethodForUser(input: {
     [
       randomUUID(),
       input.userId,
-      stripeCustomerId,
-      stripePaymentMethodId,
+      hashedCustomerId,
+      encryptedCustomerId.encrypted,
+      encryptedCustomerId.keyVersion,
+      hashedPaymentMethodId,
+      encryptedPaymentMethodId.encrypted,
+      encryptedPaymentMethodId.keyVersion,
       input.brand || null,
       input.last4 || null,
       input.expMonth || null,
@@ -312,12 +489,13 @@ export async function upsertSavedPaymentMethodForUser(input: {
     ],
   );
 
-  if (!result.rows[0]) {
+  const saved = result.rows[0] ? toSavedPaymentMethod(result.rows[0]) : null;
+  if (!saved) {
     throw new Error('Failed to save payment method');
   }
 
   await setStripeCustomerIdForUser(input.userId, stripeCustomerId);
-  return toSavedPaymentMethod(result.rows[0]);
+  return saved;
 }
 
 export async function markPaymentMethodRemovedForUser(input: {
@@ -326,6 +504,7 @@ export async function markPaymentMethodRemovedForUser(input: {
 }): Promise<boolean> {
   const paymentMethodId = input.stripePaymentMethodId.trim();
   if (!paymentMethodId) return false;
+  const paymentMethodHash = hashStripePaymentMethodId(paymentMethodId);
 
   const result = await query(
     `
@@ -335,11 +514,11 @@ export async function markPaymentMethodRemovedForUser(input: {
         is_default = FALSE,
         updated_at = NOW()
       WHERE user_id = $1
-        AND stripe_payment_method_id = $2
+        AND (stripe_payment_method_id = $2 OR stripe_payment_method_id = $3)
         AND status = 'active'
       RETURNING id
     `,
-    [input.userId, paymentMethodId],
+    [input.userId, paymentMethodHash, paymentMethodId],
   );
 
   return (result.rowCount || 0) > 0;
@@ -348,6 +527,7 @@ export async function markPaymentMethodRemovedForUser(input: {
 export async function markPaymentMethodRemovedByStripeId(stripePaymentMethodId: string): Promise<void> {
   const paymentMethodId = stripePaymentMethodId.trim();
   if (!paymentMethodId) return;
+  const paymentMethodHash = hashStripePaymentMethodId(paymentMethodId);
 
   await query(
     `
@@ -356,10 +536,10 @@ export async function markPaymentMethodRemovedByStripeId(stripePaymentMethodId: 
         status = 'removed',
         is_default = FALSE,
         updated_at = NOW()
-      WHERE stripe_payment_method_id = $1
+      WHERE (stripe_payment_method_id = $1 OR stripe_payment_method_id = $2)
         AND status = 'active'
     `,
-    [paymentMethodId],
+    [paymentMethodHash, paymentMethodId],
   );
 }
 
@@ -381,6 +561,7 @@ export async function listUsersWithActivePaymentMethods(userId: string): Promise
 export async function markPaymentMethodRemovedByStripeIdWithUsers(stripePaymentMethodId: string): Promise<string[]> {
   const paymentMethodId = stripePaymentMethodId.trim();
   if (!paymentMethodId) return [];
+  const paymentMethodHash = hashStripePaymentMethodId(paymentMethodId);
 
   const updated = await query<{ user_id: string }>(
     `
@@ -389,11 +570,11 @@ export async function markPaymentMethodRemovedByStripeIdWithUsers(stripePaymentM
         status = 'removed',
         is_default = FALSE,
         updated_at = NOW()
-      WHERE stripe_payment_method_id = $1
+      WHERE (stripe_payment_method_id = $1 OR stripe_payment_method_id = $2)
         AND status = 'active'
       RETURNING user_id
     `,
-    [paymentMethodId],
+    [paymentMethodHash, paymentMethodId],
   );
 
   return Array.from(new Set(updated.rows.map((row) => row.user_id)));

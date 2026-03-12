@@ -2,12 +2,20 @@ CREATE TABLE IF NOT EXISTS app_users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   wallet_user_id TEXT NOT NULL UNIQUE,
+  oauth_provider TEXT,
+  oauth_provider_id TEXT,
+  profile_picture TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_app_users_email
 ON app_users (email);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_oauth_identity
+ON app_users (oauth_provider, oauth_provider_id)
+WHERE oauth_provider IS NOT NULL
+  AND oauth_provider_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS app_user_passwords (
   user_id TEXT PRIMARY KEY,

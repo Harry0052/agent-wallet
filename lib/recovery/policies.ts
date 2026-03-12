@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { RecoveryState } from '@/lib/recovery/stateMachine';
+import { getOptionalSecret } from '@/security/secretsManager';
 
 export type RecoveryAction =
   | 'restore_wallet_balance'
@@ -116,7 +117,7 @@ function secureEqual(left: string, right: string): boolean {
 }
 
 export function isAdminOverrideAuthorized(headers: Headers): boolean {
-  const configured = (process.env.RECOVERY_ADMIN_TOKEN || '').trim();
+  const configured = getOptionalSecret('RECOVERY_ADMIN_TOKEN') || '';
   if (!configured) return false;
 
   const presented = (headers.get('x-agent-wallet-admin-token') || '').trim();

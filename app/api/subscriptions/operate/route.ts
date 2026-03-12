@@ -1,12 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getWalletUserId, recordWebAction } from '@/lib/server/ledger';
+import { isAuthError } from '@/lib/server/auth';
+import { recordWebAction } from '@/lib/server/ledger';
 import { getProcurementTask } from '@/lib/server/procurement';
 import { parseProcurementRecommendation } from '@/lib/server/procurementRecommendation';
 import { createSubscriptionAction, listSubscriptionActions } from '@/lib/server/subscriptions';
 import { runSubscriptionOperation } from '@/lib/server/subscriptionOperationRunner';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
+import { enforceApiAuth } from '@/security/authGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
 
 export const runtime = 'nodejs';
 
@@ -16,9 +20,15 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'subscriptions' });
+  if (rateLimited) return rateLimited;
+
+  const auth = await enforceApiAuth(req);
+  if (!auth.ok) return auth.response;
+
   try {
-    const body = BodySchema.parse(await req.json());
-    const userId = await getWalletUserId();
+    const body = await validateJsonBody(req, BodySchema);
+    const userId = auth.auth.walletUserId;
     logServerEvent('info', 'subscriptions.operate.requested', {
       userId,
       taskId: body.taskId,
@@ -110,6 +120,14 @@ export async function POST(req: NextRequest) {
       taskId: task.id,
     });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
+
+    if (error instanceof RequestValidationError) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
+
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof Error

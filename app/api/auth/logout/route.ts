@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
       action: 'logout',
       ip: meta.ip,
       userAgent: meta.userAgent,
-      metadata: { email: currentUser.email },
     });
   }
 

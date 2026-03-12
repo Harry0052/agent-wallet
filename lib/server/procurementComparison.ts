@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import type { ProcurementFinding, ProcurementTaskRecord } from '@/lib/types';
 import { callClaudeMessagesApi } from '@/lib/server/claude';
+import { getSecretFromAny } from '@/security/secretsManager';
+import { sanitizeAiPayload, sanitizeAiText } from '@/security/aiSanitizer';
+import { assertPromptSafe } from '@/security/promptGuard';
 
 const EvaluationSchema = z.object({
   winnerFindingId: z.string().trim().min(1).nullable(),
@@ -62,7 +65,9 @@ function normalizedFindingPayload(findings: ProcurementFinding[]): Array<Record<
 }
 
 function evaluationPrompt(task: ProcurementTaskRecord, findings: ProcurementFinding[]): string {
-  const payload = normalizedFindingPayload(findings);
+  const payload = sanitizeAiPayload(normalizedFindingPayload(findings));
+  const safeTaskGoal = sanitizeAiText(task.goal);
+  const safeCategory = sanitizeAiText(task.category || task.planningOutput.category || 'unknown');
 
   return [
     'You are the procurement comparison engine for Agent Wallet.',
@@ -75,8 +80,8 @@ function evaluationPrompt(task: ProcurementTaskRecord, findings: ProcurementFind
     '- winnerReasons must be concise and tied to provided finding data.',
     '- confidence must reflect evidence quality and completeness of findings.',
     '- exceptions should list caveats (missing availability, missing monthly price, blocked/failed vendors).',
-    `Task goal: ${task.goal}`,
-    `Category: ${task.category || task.planningOutput.category || 'unknown'}`,
+    `Task goal: ${safeTaskGoal}`,
+    `Category: ${safeCategory}`,
     `Budget amount: ${task.budgetLimit === null ? 'not specified' : task.budgetLimit}`,
     `Must-have features: ${JSON.stringify(task.mustHaveFeatures)}`,
     `Comparison criteria: ${JSON.stringify(task.comparisonCriteria)}`,
@@ -109,10 +114,9 @@ export async function evaluateProcurementFindings(params: {
   task: ProcurementTaskRecord;
   findings: ProcurementFinding[];
 }): Promise<ProcurementEvaluation> {
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-  if (!apiKey) {
-    throw new Error('CLAUDE_API_KEY is not configured (set ANTHROPIC_API_KEY or CLAUDE_API_KEY)');
-  }
+  assertPromptSafe(params.task.goal, 'lib.server.procurementComparison.task_goal');
+
+  const apiKey = getSecretFromAny(['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY']);
 
   if (params.findings.length === 0) {
     throw new Error('No findings available for comparison');

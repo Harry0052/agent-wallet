@@ -1,11 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { isProtectedApi, isProtectedPage } from '@/lib/auth/protection';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 const AUTH_COOKIE = 'aw_session';
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const hasSession = Boolean(request.cookies.get(AUTH_COOKIE)?.value);
+
+  if (pathname.startsWith('/api/')) {
+    const rateLimited = enforceRateLimit(request);
+    if (rateLimited) {
+      return rateLimited;
+    }
+  }
 
   if (!hasSession && isProtectedPage(pathname)) {
     const loginUrl = new URL('/login', request.url);

@@ -652,8 +652,8 @@ export function createTwoPhasePaymentEngine(params: {
       requiresActivationVerification: input.requiresActivationVerification !== false,
       idempotencyAuthorizeKey: idempotencyKey,
       metadata: enrichMetadata(input.metadata || null, {
-        authorize_idempotency_key: idempotencyKey,
         selected_funding_mode: selectedFundingMode,
+        authorize_event_recorded: true,
       }),
       authorizedAt,
     });
@@ -667,7 +667,7 @@ export function createTwoPhasePaymentEngine(params: {
       idempotencyKey,
       details: {
         fundingMode: selectedFundingMode,
-        stripePaymentIntentId: created.stripePaymentIntentId,
+        hasStripePaymentIntentId: Boolean(created.stripePaymentIntentId),
       },
     });
 
@@ -712,7 +712,7 @@ export function createTwoPhasePaymentEngine(params: {
           currency: payment.currency,
           idempotencyKey,
           details: {
-            stripePaymentIntentId: capture.paymentIntentId,
+            hasStripePaymentIntentId: Boolean(capture.paymentIntentId),
             gatewayStatus: capture.status,
             capturedAmount: capture.capturedAmount ?? payment.amount,
           },

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { callClaudeMessagesApi } from '@/lib/server/claude';
 import { deriveVendorCandidatesFromContext, sanitizeVendorTargets } from '@/lib/server/vendorTargeting';
+import { getSecretFromAny } from '@/security/secretsManager';
+import { sanitizeAiText } from '@/security/aiSanitizer';
+import { assertPromptSafe } from '@/security/promptGuard';
 
 const INTENT_VALUES = [
   'send_money',
@@ -660,10 +663,14 @@ export async function parseAgentIntent(
   message: string,
   options?: { context?: string },
 ): Promise<AgentIntent> {
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-  if (!apiKey) {
-    throw new Error('CLAUDE_API_KEY is not configured (set ANTHROPIC_API_KEY or CLAUDE_API_KEY)');
+  assertPromptSafe(message, 'lib.server.agentIntent.message');
+  if (options?.context) {
+    assertPromptSafe(options.context, 'lib.server.agentIntent.context');
   }
+
+  const safeMessage = sanitizeAiText(message);
+  const safeContext = options?.context ? sanitizeAiText(options.context) : undefined;
+  const apiKey = getSecretFromAny(['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY']);
 
   let parsedIntent: unknown = null;
 
@@ -676,7 +683,7 @@ export async function parseAgentIntent(
       messages: [
         {
           role: 'user',
-          content: parserPrompt(message, options?.context),
+          content: parserPrompt(safeMessage, safeContext),
         },
       ],
     });
@@ -695,5 +702,5 @@ export async function parseAgentIntent(
     parsedIntent = null;
   }
 
-  return normalizeIntentPayload(parsedIntent, message);
+  return normalizeIntentPayload(parsedIntent, safeMessage);
 }

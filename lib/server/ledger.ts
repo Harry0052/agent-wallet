@@ -3,6 +3,9 @@ import type { Recipient, Transaction, UserAutofillProfile, Wallet, WalletSetting
 import { query } from '@/lib/server/db';
 import { logServerEvent } from '@/lib/server/observability';
 import { getWalletUserIdFromSession } from '@/lib/server/auth';
+import { decryptData, encryptData, hashSensitiveValue } from '@/security/encryption';
+import { minimizeTransactionMetadata } from '@/security/dataMinimization';
+import { enforceTransactionGuardrails } from '@/security/transactionGuard';
 
 const DEFAULT_SETTINGS: WalletSettings = {
   maxTransaction: 50,
@@ -47,6 +50,8 @@ type RecipientRow = {
   stripe_account_id: string | null;
   cash_app_cashtag: string | null;
   bank_reference: string | null;
+  bank_reference_encrypted: string | null;
+  bank_reference_key_version: string | null;
   aliases: unknown;
   default_currency: string | null;
   notes: string | null;
@@ -94,6 +99,9 @@ type AgentTaskRow = {
   updated_at: string;
 };
 
+const HASH_PREFIX = 'h1:';
+const BANK_REFERENCE_HASH_SCOPE = 'recipients.bank_reference';
+
 function normalizeSettings(input: unknown): WalletSettings {
   const raw = (input && typeof input === 'object') ? (input as Partial<WalletSettings>) : {};
   const merged = { ...DEFAULT_SETTINGS, ...raw };
@@ -133,6 +141,23 @@ function rowToTransaction(row: LedgerRow): Transaction {
   };
 }
 
+function decryptBankReference(row: Pick<RecipientRow, 'bank_reference' | 'bank_reference_encrypted' | 'bank_reference_key_version'>): string | null {
+  if (row.bank_reference_encrypted && row.bank_reference_key_version) {
+    try {
+      const decrypted = decryptData<unknown>(row.bank_reference_encrypted, row.bank_reference_key_version);
+      if (typeof decrypted === 'string' && decrypted.trim()) {
+        return decrypted;
+      }
+    } catch {
+      // Fall back for legacy plaintext rows.
+    }
+  }
+
+  if (!row.bank_reference) return null;
+  if (row.bank_reference.startsWith(HASH_PREFIX)) return null;
+  return row.bank_reference;
+}
+
 function rowToRecipient(row: RecipientRow): Recipient {
   const status = row.status === 'blocked' || row.status === 'pending' || row.status === 'approved'
     ? row.status
@@ -151,7 +176,7 @@ function rowToRecipient(row: RecipientRow): Recipient {
     sendMethod,
     stripeAccountId: row.stripe_account_id || null,
     cashAppCashtag: row.cash_app_cashtag || null,
-    bankReference: row.bank_reference || null,
+    bankReference: decryptBankReference(row),
     aliases,
     defaultCurrency: (row.default_currency || 'usd').toUpperCase(),
     notes: row.notes || undefined,
@@ -186,10 +211,6 @@ function computeBalance(transactions: Transaction[]): number {
   }, 0);
 
   return Math.round(value * 100) / 100;
-}
-
-function startOfDayMs(now = new Date()): number {
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
 
 function startOfMonthMs(now = new Date()): number {
@@ -316,6 +337,8 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
           r.stripe_account_id,
           r.cash_app_cashtag,
           r.bank_reference,
+          r.bank_reference_encrypted,
+          r.bank_reference_key_version,
           r.aliases,
           r.default_currency,
           r.notes,
@@ -337,6 +360,8 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
           wr.stripe_account_id,
           NULL::text AS cash_app_cashtag,
           NULL::text AS bank_reference,
+          NULL::text AS bank_reference_encrypted,
+          NULL::text AS bank_reference_key_version,
           '[]'::jsonb AS aliases,
           'usd'::text AS default_currency,
           NULL::text AS notes,
@@ -351,7 +376,7 @@ async function listRecipientsForUser(userId: string): Promise<Recipient[]> {
               AND r.user_id = wr.user_id
           )
       )
-      SELECT id, user_id, name, send_method, stripe_account_id, cash_app_cashtag, bank_reference, aliases, default_currency, notes, status, created_at
+      SELECT id, user_id, name, send_method, stripe_account_id, cash_app_cashtag, bank_reference, bank_reference_encrypted, bank_reference_key_version, aliases, default_currency, notes, status, created_at
       FROM normalized
       ORDER BY created_at DESC
     `,
@@ -449,6 +474,8 @@ async function fetchRecipientById(userId: string, recipientId: string): Promise<
         r.stripe_account_id,
         r.cash_app_cashtag,
         r.bank_reference,
+        r.bank_reference_encrypted,
+        r.bank_reference_key_version,
         r.aliases,
         r.default_currency,
         r.notes,
@@ -510,6 +537,11 @@ export async function upsertRecipientDelivery(params: {
   );
 
   const recipientId = existing.rows[0]?.id || randomUUID();
+  const normalizedBankReference = params.bankReference?.trim() || null;
+  const encryptedBankReference = normalizedBankReference ? encryptData(normalizedBankReference) : null;
+  const bankReferenceHash = normalizedBankReference
+    ? hashSensitiveValue(normalizedBankReference, BANK_REFERENCE_HASH_SCOPE)
+    : null;
 
   if (existing.rows[0]) {
     await query(
@@ -520,15 +552,17 @@ export async function upsertRecipientDelivery(params: {
           stripe_account_id = COALESCE($4, stripe_account_id),
           cash_app_cashtag = COALESCE($5, cash_app_cashtag),
           bank_reference = COALESCE($6, bank_reference),
+          bank_reference_encrypted = COALESCE($7, bank_reference_encrypted),
+          bank_reference_key_version = COALESCE($8, bank_reference_key_version),
           aliases = (
             SELECT COALESCE(jsonb_agg(DISTINCT alias), '[]'::jsonb)
             FROM (
               SELECT jsonb_array_elements_text(COALESCE(aliases, '[]'::jsonb)) AS alias
               UNION ALL
-              SELECT jsonb_array_elements_text($7::jsonb) AS alias
+              SELECT jsonb_array_elements_text($9::jsonb) AS alias
             ) merged
           ),
-          notes = COALESCE($8, notes),
+          notes = COALESCE($10, notes),
           updated_at = NOW()
         WHERE id = $1
           AND user_id = $2
@@ -539,7 +573,9 @@ export async function upsertRecipientDelivery(params: {
         params.sendMethod,
         params.stripeAccountId?.trim() || null,
         params.cashAppCashtag?.trim() || null,
-        params.bankReference?.trim() || null,
+        bankReferenceHash,
+        encryptedBankReference?.encrypted || null,
+        encryptedBankReference?.keyVersion || null,
         JSON.stringify(normalizedAliases),
         params.notes?.trim() || null,
       ],
@@ -555,11 +591,13 @@ export async function upsertRecipientDelivery(params: {
           stripe_account_id,
           cash_app_cashtag,
           bank_reference,
+          bank_reference_encrypted,
+          bank_reference_key_version,
           aliases,
           default_currency,
           notes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'usd', $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, 'usd', $11)
       `,
       [
         recipientId,
@@ -568,7 +606,9 @@ export async function upsertRecipientDelivery(params: {
         params.sendMethod,
         params.stripeAccountId?.trim() || null,
         params.cashAppCashtag?.trim() || null,
-        params.bankReference?.trim() || null,
+        bankReferenceHash,
+        encryptedBankReference?.encrypted || null,
+        encryptedBankReference?.keyVersion || null,
         JSON.stringify(normalizedAliases),
         params.notes?.trim() || null,
       ],
@@ -623,6 +663,8 @@ export async function setRecipientStatus(
         stripe_account_id,
         NULL::text AS cash_app_cashtag,
         NULL::text AS bank_reference,
+        NULL::text AS bank_reference_encrypted,
+        NULL::text AS bank_reference_key_version,
         '[]'::jsonb AS aliases,
         'usd'::text AS default_currency,
         NULL::text AS notes,
@@ -647,6 +689,8 @@ export async function setRecipientStatus(
           stripe_account_id,
           NULL::text AS cash_app_cashtag,
           NULL::text AS bank_reference,
+          NULL::text AS bank_reference_encrypted,
+          NULL::text AS bank_reference_key_version,
           '[]'::jsonb AS aliases,
           'usd'::text AS default_currency,
           NULL::text AS notes,
@@ -873,6 +917,7 @@ export async function recordTopupCredit(params: {
 
 export async function recordLedgerEntry(entry: Omit<Transaction, 'id' | 'createdAt'> & { sourceUrl?: string }): Promise<Transaction> {
   const id = randomUUID();
+  const minimizedMetadata = minimizeTransactionMetadata(entry.metadata);
 
   const result = await query<LedgerRow>(
     `
@@ -901,7 +946,7 @@ export async function recordLedgerEntry(entry: Omit<Transaction, 'id' | 'created
       entry.sourceUrl || null,
       entry.merchant || null,
       entry.recipientId || null,
-      entry.metadata ? JSON.stringify(entry.metadata) : null,
+      minimizedMetadata ? JSON.stringify(minimizedMetadata) : null,
     ],
   );
 
@@ -943,6 +988,8 @@ export async function updateLedgerEntryStatus(params: {
   descriptionSuffix?: string;
   metadataPatch?: Record<string, string>;
 }): Promise<Transaction | null> {
+  const minimizedMetadataPatch = minimizeTransactionMetadata(params.metadataPatch);
+
   const result = await query<LedgerRow>(
     `
       UPDATE ledger_entries
@@ -966,7 +1013,7 @@ export async function updateLedgerEntryStatus(params: {
       params.status,
       params.stripeObjectId || null,
       params.descriptionSuffix || null,
-      params.metadataPatch ? JSON.stringify(params.metadataPatch) : null,
+      minimizedMetadataPatch ? JSON.stringify(minimizedMetadataPatch) : null,
     ],
   );
 
@@ -980,6 +1027,9 @@ export async function checkGuardrails(params: {
   merchant?: string;
   recipientId?: string;
   recipientName?: string;
+  category?: string;
+  approved?: boolean;
+  enforceConfirmation?: boolean;
 }): Promise<{ allowed: boolean; reason?: string; recipient?: Recipient }> {
   const wallet = await getWallet(params.userId);
 
@@ -991,13 +1041,21 @@ export async function checkGuardrails(params: {
     return { allowed: false, reason: 'Insufficient balance' };
   }
 
-  if (params.amount > wallet.settings.maxTransaction) {
-    return { allowed: false, reason: `Exceeds max transaction of $${wallet.settings.maxTransaction.toFixed(2)}` };
-  }
-
-  const dailySpent = sumSucceededDebitsSince(wallet.transactions, startOfDayMs());
-  if (dailySpent + params.amount > wallet.settings.dailyLimit) {
-    return { allowed: false, reason: `Would exceed daily limit of $${wallet.settings.dailyLimit.toFixed(2)}` };
+  const transactionGuard = enforceTransactionGuardrails({
+    userId: params.userId,
+    context: 'ledger.checkGuardrails',
+    amount: params.amount,
+    wallet,
+    merchant: params.merchant || params.recipientName || null,
+    category: params.category || null,
+    approved: params.approved,
+    enforceConfirmation: params.enforceConfirmation ?? false,
+  });
+  if (!transactionGuard.allowed) {
+    return {
+      allowed: false,
+      reason: transactionGuard.reason || 'Transfer blocked by transaction guardrails',
+    };
   }
 
   const monthlySpent = sumSucceededDebitsSince(wallet.transactions, startOfMonthMs());
@@ -1033,6 +1091,9 @@ export async function checkSubscriptionGuardrails(params: {
   userId: string;
   amount: number;
   merchant?: string;
+  category?: string;
+  approved?: boolean;
+  enforceConfirmation?: boolean;
 }): Promise<{ allowed: boolean; reason?: string }> {
   const wallet = await getWallet(params.userId);
 
@@ -1044,13 +1105,21 @@ export async function checkSubscriptionGuardrails(params: {
     return { allowed: false, reason: 'Insufficient balance' };
   }
 
-  if (params.amount > wallet.settings.maxTransaction) {
-    return { allowed: false, reason: `Exceeds max transaction of $${wallet.settings.maxTransaction.toFixed(2)}` };
-  }
-
-  const dailySpent = sumSucceededDebitsSince(wallet.transactions, startOfDayMs());
-  if (dailySpent + params.amount > wallet.settings.dailyLimit) {
-    return { allowed: false, reason: `Would exceed daily limit of $${wallet.settings.dailyLimit.toFixed(2)}` };
+  const transactionGuard = enforceTransactionGuardrails({
+    userId: params.userId,
+    context: 'ledger.checkSubscriptionGuardrails',
+    amount: params.amount,
+    wallet,
+    merchant: params.merchant || null,
+    category: params.category || null,
+    approved: params.approved,
+    enforceConfirmation: params.enforceConfirmation ?? false,
+  });
+  if (!transactionGuard.allowed) {
+    return {
+      allowed: false,
+      reason: transactionGuard.reason || 'Subscription debit blocked by transaction guardrails',
+    };
   }
 
   const monthlySpent = sumSucceededDebitsSince(wallet.transactions, startOfMonthMs());
@@ -1123,9 +1192,9 @@ export async function listWebActionsForTask(params: {
           AND task_id = $2
           AND created_at > $3::timestamptz
         ORDER BY created_at ASC
-        LIMIT ${limit}
+        LIMIT $4
       `,
-      [params.userId, params.taskId, params.since],
+      [params.userId, params.taskId, params.since, limit],
     )
     : await query<WebActionLogRow>(
       `
@@ -1134,9 +1203,9 @@ export async function listWebActionsForTask(params: {
         WHERE user_id = $1
           AND task_id = $2
         ORDER BY created_at ASC
-        LIMIT ${limit}
+        LIMIT $3
       `,
-      [params.userId, params.taskId],
+      [params.userId, params.taskId, limit],
     );
 
   return result.rows.map((row) => ({

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { parseAgentIntent } from '@/lib/server/agentIntent';
 import { requireAuthenticatedUser } from '@/lib/server/auth';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
+import { sanitizeAiText } from '@/security/aiSanitizer';
+import { PromptInjectionError, assertPromptSafe } from '@/security/promptGuard';
 
 export const runtime = 'nodejs';
 
@@ -14,12 +16,20 @@ export async function POST(req: NextRequest) {
   try {
     await requireAuthenticatedUser();
     const body = BodySchema.parse(await req.json());
-    const intent = await parseAgentIntent(body.message);
+    assertPromptSafe(body.message, 'api.agent.intent.message');
+    const intent = await parseAgentIntent(sanitizeAiText(body.message));
     return NextResponse.json({
       ok: true,
       intent,
     });
   } catch (error) {
+    if (error instanceof PromptInjectionError) {
+      return NextResponse.json(
+        apiError('POLICY_FAILURE', error.message, true),
+        { status: error.status },
+      );
+    }
+
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof Error

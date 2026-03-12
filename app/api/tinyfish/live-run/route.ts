@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthenticatedUser } from '@/lib/server/auth';
+import { getRequiredSecret } from '@/security/secretsManager';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -354,13 +355,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.TINYFISH_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { ok: false, error: "TINYFISH_API_KEY is not configured." },
-        { status: 500 },
-      );
-    }
+    const apiKey = getRequiredSecret('TINYFISH_API_KEY');
 
     const endpoint =
       process.env.TINYFISH_AUTOMATION_RUN_SSE_URL ||

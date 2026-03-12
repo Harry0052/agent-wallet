@@ -1,5 +1,10 @@
 import 'server-only';
 
+import {
+  getRequiredSecret,
+  validateRequiredSecretsAtStartup,
+} from '@/security/secretsManager';
+
 const REQUIRED_SERVER_ENV_KEYS = [
   'DATABASE_URL',
   'STRIPE_SECRET_KEY',
@@ -9,11 +14,7 @@ const REQUIRED_SERVER_ENV_KEYS = [
 type RequiredServerEnvKey = (typeof REQUIRED_SERVER_ENV_KEYS)[number];
 
 function readRequiredServerEnv(key: RequiredServerEnvKey): string {
-  const value = process.env[key];
-  if (!value || !value.trim()) {
-    throw new Error(`Missing required server env var: ${key}`);
-  }
-  return value;
+  return getRequiredSecret(key);
 }
 
 export function getDatabaseUrl(): string {
@@ -29,10 +30,10 @@ export function getStripeWebhookSecret(): string {
 }
 
 export function validateCriticalServerEnv(): Record<RequiredServerEnvKey, string> {
+  validateRequiredSecretsAtStartup();
   return {
     DATABASE_URL: getDatabaseUrl(),
     STRIPE_SECRET_KEY: getStripeSecretKey(),
     STRIPE_WEBHOOK_SECRET: getStripeWebhookSecret(),
   };
 }
-

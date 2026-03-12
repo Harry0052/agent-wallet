@@ -1,5 +1,6 @@
 import 'server-only';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { getOptionalSecret } from '@/security/secretsManager';
 
 interface VaultCipherPayloadV1 {
   v: 1;
@@ -47,7 +48,7 @@ function decodeKeyMaterial(raw: string): Buffer {
 function parseKeyringFromEnv(): VaultKeyring {
   const keyring = new Map<string, Buffer>();
 
-  const keyringRaw = process.env.TOOLS_VAULT_KEYRING?.trim();
+  const keyringRaw = getOptionalSecret('TOOLS_VAULT_KEYRING');
   if (keyringRaw) {
     const parts = keyringRaw.split(/[;,\n]/).map((item) => item.trim()).filter(Boolean);
     for (const part of parts) {
@@ -64,7 +65,7 @@ function parseKeyringFromEnv(): VaultKeyring {
   }
 
   if (keyring.size === 0) {
-    const single = process.env.TOOLS_VAULT_MASTER_KEY?.trim();
+    const single = getOptionalSecret('TOOLS_VAULT_MASTER_KEY');
     if (!single) {
       throw new Error('Tools vault key is not configured. Set TOOLS_VAULT_KEYRING or TOOLS_VAULT_MASTER_KEY.');
     }

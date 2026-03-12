@@ -4,6 +4,7 @@ import {
   buildRefundUserExplanation,
   type RefundEvidencePack,
 } from './evidencePack.ts';
+import { decryptData } from '@/security/encryption';
 
 type QueryFn = <T>(text: string, params?: unknown[]) => Promise<{
   rows: T[];
@@ -267,12 +268,16 @@ type PaymentSnapshotRow = {
   currency: string;
   status: string;
   stripe_payment_intent_id: string | null;
+  stripe_payment_intent_id_encrypted: string | null;
+  stripe_payment_intent_id_key_version: string | null;
   metadata: Record<string, unknown> | null;
   captured_at: string | null;
   activation_failure_detected: boolean;
   activation_failure_reason: string | null;
   activation_failure_evidence: Record<string, unknown> | null;
 };
+
+const HASH_PREFIX = 'h1:';
 
 function toRefundCase(row: RefundCaseRow): RefundCase {
   return {
@@ -316,6 +321,24 @@ function toRefundAudit(row: RefundAuditRow): RefundAuditLog {
 }
 
 function toPaymentSnapshot(row: PaymentSnapshotRow): RefundPaymentSnapshot {
+  let stripePaymentIntentId: string | null = null;
+  if (row.stripe_payment_intent_id_encrypted && row.stripe_payment_intent_id_key_version) {
+    try {
+      const decrypted = decryptData<unknown>(
+        row.stripe_payment_intent_id_encrypted,
+        row.stripe_payment_intent_id_key_version,
+      );
+      if (typeof decrypted === 'string' && decrypted.trim()) {
+        stripePaymentIntentId = decrypted;
+      }
+    } catch {
+      stripePaymentIntentId = null;
+    }
+  }
+  if (!stripePaymentIntentId && row.stripe_payment_intent_id && !row.stripe_payment_intent_id.startsWith(HASH_PREFIX)) {
+    stripePaymentIntentId = row.stripe_payment_intent_id;
+  }
+
   return {
     paymentFlowId: row.payment_flow_id,
     userId: row.user_id,
@@ -323,7 +346,7 @@ function toPaymentSnapshot(row: PaymentSnapshotRow): RefundPaymentSnapshot {
     amount: Number(row.amount),
     currency: row.currency,
     status: row.status,
-    stripePaymentIntentId: row.stripe_payment_intent_id,
+    stripePaymentIntentId,
     metadata: row.metadata || null,
     capturedAt: row.captured_at,
     activationFailureDetected: row.activation_failure_detected,
@@ -391,6 +414,7 @@ export function createPostgresRefundStore(): RefundStore {
     params: unknown[],
     limit = 1,
   ): Promise<RefundPaymentSnapshot[]> {
+    const limitPlaceholder = `$${params.length + 1}`;
     const result = await runQuery<PaymentSnapshotRow>(
       `
         SELECT
@@ -401,6 +425,8 @@ export function createPostgresRefundStore(): RefundStore {
           pf.currency,
           pf.status,
           pf.stripe_payment_intent_id,
+          pf.stripe_payment_intent_id_encrypted,
+          pf.stripe_payment_intent_id_key_version,
           pf.metadata,
           pf.captured_at::text,
           (af.created_at IS NOT NULL) AS activation_failure_detected,
@@ -417,9 +443,9 @@ export function createPostgresRefundStore(): RefundStore {
         ) af ON true
         WHERE ${where}
         ORDER BY COALESCE(af.created_at, pf.updated_at) DESC
-        LIMIT ${limit}
+        LIMIT ${limitPlaceholder}
       `,
-      params,
+      [...params, limit],
     );
 
     return result.rows.map(toPaymentSnapshot);

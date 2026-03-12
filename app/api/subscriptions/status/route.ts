@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getWalletUserId, listWebActionsForTask } from '@/lib/server/ledger';
+import { isAuthError } from '@/lib/server/auth';
+import { listWebActionsForTask } from '@/lib/server/ledger';
 import { listActiveSubscriptions, listSubscriptionActions } from '@/lib/server/subscriptions';
 import type { ProcurementLifecycleState, ProcurementResearchLog } from '@/lib/types';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
+import { enforceApiAuth } from '@/security/authGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import { RequestValidationError, validateSearchParams } from '@/security/requestValidator';
 
 export const runtime = 'nodejs';
 
@@ -60,12 +64,16 @@ function subscriptionLifecycle(input: {
 }
 
 export async function GET(req: NextRequest) {
-  try {
-    const params = QuerySchema.parse({
-      taskId: req.nextUrl.searchParams.get('taskId') || undefined,
-    });
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'subscriptions' });
+  if (rateLimited) return rateLimited;
 
-    const userId = await getWalletUserId();
+  const auth = await enforceApiAuth(req);
+  if (!auth.ok) return auth.response;
+
+  try {
+    const params = validateSearchParams(req.nextUrl.searchParams, QuerySchema);
+
+    const userId = auth.auth.walletUserId;
     const [activeSubscriptions, actions] = await Promise.all([
       listActiveSubscriptions(userId),
       listSubscriptionActions({
@@ -97,6 +105,14 @@ export async function GET(req: NextRequest) {
       serverTime: new Date().toISOString(),
     });
   } catch (error) {
+    if (isAuthError(error)) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
+
+    if (error instanceof RequestValidationError) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
+
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof Error

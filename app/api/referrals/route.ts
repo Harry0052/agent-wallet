@@ -1,13 +1,15 @@
 import { createHmac } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthError, requireAuthenticatedUser } from '@/lib/server/auth';
+import { getSecretFromAny } from '@/security/secretsManager';
 
 export const runtime = 'nodejs';
 
 function referralCodeForUser(appUserId: string): string {
-  const secret = process.env.REFERRAL_CODE_SECRET
-    || process.env.AUTH_SESSION_SECRET
-    || 'agent-wallet-referral-default';
+  const secret = getSecretFromAny(
+    ['REFERRAL_CODE_SECRET', 'AUTH_SESSION_SECRET'],
+    { required: false },
+  ) || 'agent-wallet-referral-default';
 
   const digest = createHmac('sha256', secret)
     .update(appUserId)

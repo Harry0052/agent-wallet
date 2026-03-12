@@ -4,6 +4,8 @@ import { AuthError, resetPasswordWithToken } from '@/lib/server/auth';
 import { clearSessionCookie } from '@/lib/server/authCookies';
 import { recordAccountAuditEvent } from '@/lib/server/accountAudit';
 import { extractRequestMeta } from '@/lib/server/requestMeta';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
 
 export const runtime = 'nodejs';
 
@@ -17,10 +19,13 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'auth', scope: 'auth' });
+  if (rateLimited) return rateLimited;
+
   const meta = extractRequestMeta(req);
 
   try {
-    const body = BodySchema.parse(await req.json());
+    const body = await validateJsonBody(req, BodySchema);
     const result = await resetPasswordWithToken({
       token: body.token,
       newPassword: body.password,
@@ -42,6 +47,8 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
+      : error instanceof RequestValidationError
+        ? error.message
       : error instanceof AuthError
         ? error.message
         : error instanceof Error
@@ -50,6 +57,8 @@ export async function POST(req: NextRequest) {
 
     const status = error instanceof z.ZodError
       ? 400
+      : error instanceof RequestValidationError
+        ? error.status
       : error instanceof AuthError
         ? error.status
         : 500;

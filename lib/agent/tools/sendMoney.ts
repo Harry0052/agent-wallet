@@ -108,6 +108,8 @@ async function executeSendMoney(params: {
     recipientId,
     recipientName,
     merchant: recipientName,
+    approved: false,
+    enforceConfirmation: true,
   });
 
   if (!guardrail.allowed || !guardrail.recipient) {

@@ -11,6 +11,8 @@ import { clearSessionCookie } from '@/lib/server/authCookies';
 import { recordAccountAuditEvent } from '@/lib/server/accountAudit';
 import { extractRequestMeta } from '@/lib/server/requestMeta';
 import { deleteUserAccountData } from '@/lib/server/accountLifecycle';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
 
 export const runtime = 'nodejs';
 
@@ -22,6 +24,9 @@ const DeleteSchema = z.object({
 });
 
 function toErrorMessage(error: unknown): string {
+  if (error instanceof RequestValidationError) {
+    return error.message;
+  }
   if (error instanceof z.ZodError) {
     return error.issues.map((issue) => issue.message).join('; ');
   }
@@ -31,17 +36,21 @@ function toErrorMessage(error: unknown): string {
 }
 
 function toStatus(error: unknown): number {
+  if (error instanceof RequestValidationError) return error.status;
   if (error instanceof z.ZodError) return 400;
   if (isAuthError(error)) return error.status;
   return 500;
 }
 
 export async function DELETE(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'auth', scope: 'auth' });
+  if (rateLimited) return rateLimited;
+
   const meta = extractRequestMeta(req);
 
   try {
     const user = await requireAuthenticatedUser();
-    const body = DeleteSchema.parse(await req.json());
+    const body = await validateJsonBody(req, DeleteSchema);
 
     await verifyPasswordForUser({
       appUserId: user.appUserId,
@@ -54,7 +63,7 @@ export async function DELETE(req: NextRequest) {
       ip: meta.ip,
       userAgent: meta.userAgent,
       metadata: {
-        email: user.email,
+        request_source: 'api_auth_account_delete',
       },
     });
 

@@ -2,6 +2,7 @@ import 'server-only';
 import { createSign } from 'node:crypto';
 import type { NormalizedSourcingRequest, StructuredCandidate } from './schemas.ts';
 import { formatShortlistRows } from './sheetsRows.ts';
+import { getRequiredSecret } from '@/security/secretsManager';
 
 interface CachedToken {
   token: string;
@@ -25,13 +26,9 @@ function base64UrlEncode(input: Buffer | string): string {
 }
 
 function loadConfig(): GoogleServiceAccountConfig {
-  const clientEmail = (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '').trim();
-  const privateKeyRaw = (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '').trim();
+  const clientEmail = getRequiredSecret('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+  const privateKeyRaw = getRequiredSecret('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY');
   const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
-
-  if (!clientEmail || !privateKey) {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY must be configured');
-  }
 
   return { clientEmail, privateKey };
 }

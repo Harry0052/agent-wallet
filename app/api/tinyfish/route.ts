@@ -3,6 +3,7 @@ import type { AgentStep, VendorOption } from '@/lib/types';
 import { getWalletUserId, recordWebAction } from '@/lib/server/ledger';
 import { mapErrorToFailure } from '@/lib/failures/mapError';
 import { FailureSource } from '@/lib/failures/codes';
+import { getRequiredSecret } from '@/security/secretsManager';
 
 export const runtime = 'nodejs';
 
@@ -332,11 +333,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Missing TinyFish action' }, { status: 400 });
     }
 
-    const apiKey = process.env.TINYFISH_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json({ ok: false, error: 'TINYFISH_API_KEY is not configured' }, { status: 500 });
-    }
+    const apiKey = getRequiredSecret('TINYFISH_API_KEY');
 
     // -------------------------------------------------------------------
     // Signup actions use SSE automation (no dedicated v1 endpoints)

@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { query } from '@/lib/server/db';
 import { assertPasswordStrength, hashPassword as hashPasswordRaw, verifyPassword } from '@/lib/auth/password';
 import { ensureUserSettingsRow } from '@/lib/server/userSettings';
+import { getOptionalSecret, getRequiredSecret } from '@/security/secretsManager';
 
 export const AUTH_SESSION_COOKIE = 'aw_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -67,15 +68,11 @@ export function isAuthError(error: unknown): error is AuthError {
 }
 
 function getAuthSessionSecret(): string {
-  const secret = process.env.AUTH_SESSION_SECRET;
-  if (!secret || secret.trim().length < 32) {
-    throw new Error('Missing required server env var: AUTH_SESSION_SECRET (min length 32)');
-  }
-  return secret;
+  return getRequiredSecret('AUTH_SESSION_SECRET', { minLength: 32 });
 }
 
 function getPasswordResetSecret(): string {
-  const explicit = process.env.AUTH_PASSWORD_RESET_SECRET?.trim();
+  const explicit = getOptionalSecret('AUTH_PASSWORD_RESET_SECRET');
   if (explicit) {
     if (explicit.length < 32) {
       throw new Error('AUTH_PASSWORD_RESET_SECRET must be at least 32 characters when set');
@@ -86,7 +83,7 @@ function getPasswordResetSecret(): string {
 }
 
 function getEmailVerificationSecret(): string {
-  const explicit = process.env.AUTH_EMAIL_VERIFICATION_SECRET?.trim();
+  const explicit = getOptionalSecret('AUTH_EMAIL_VERIFICATION_SECRET');
   if (explicit) {
     if (explicit.length < 32) {
       throw new Error('AUTH_EMAIL_VERIFICATION_SECRET must be at least 32 characters when set');

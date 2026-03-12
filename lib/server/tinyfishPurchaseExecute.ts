@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentStep } from '@/lib/types';
+import { getRequiredSecret } from '@/security/secretsManager';
 
 interface TinyFishPurchaseConfirmResponse {
   steps?: unknown;
@@ -50,10 +51,7 @@ export async function runTinyFishPurchaseExecution(params: {
   steps: AgentStep[];
   providerReferenceId: string | null;
 }> {
-  const apiKey = process.env.TINYFISH_API_KEY;
-  if (!apiKey) {
-    throw new Error('TINYFISH_API_KEY is not configured');
-  }
+  const apiKey = getRequiredSecret('TINYFISH_API_KEY');
 
   const base = process.env.TINYFISH_API_BASE_URL || 'https://api.tinyfish.ai/v1';
   const path = process.env.TINYFISH_PURCHASE_CONFIRM_PATH || '/purchase/confirm';

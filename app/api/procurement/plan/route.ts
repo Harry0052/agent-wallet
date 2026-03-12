@@ -11,6 +11,9 @@ import {
   sanitizeVendorTargets,
   validateVendorTarget,
 } from '@/lib/server/vendorTargeting';
+import { getSecretFromAny } from '@/security/secretsManager';
+import { sanitizeAiText } from '@/security/aiSanitizer';
+import { PromptInjectionError, assertPromptSafe } from '@/security/promptGuard';
 
 export const runtime = 'nodejs';
 
@@ -313,7 +316,8 @@ export async function POST(req: NextRequest) {
   try {
     const input = RequestSchema.parse(await req.json());
     const userId = await getWalletUserId();
-    const userMessage = input.userMessage;
+    assertPromptSafe(input.userMessage, 'api.procurement.plan.userMessage');
+    const userMessage = sanitizeAiText(input.userMessage);
     requestedGoal = userMessage;
 
     logServerEvent('info', 'procurement.plan.started', {
@@ -331,10 +335,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-    if (!apiKey) {
-      throw new Error('CLAUDE_API_KEY is not configured (set ANTHROPIC_API_KEY or CLAUDE_API_KEY)');
-    }
+    const apiKey = getSecretFromAny(['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY']);
 
     const { raw: completionText } = await callClaudeMessagesApi({
       apiKey,
@@ -402,6 +403,20 @@ export async function POST(req: NextRequest) {
       planning: task.planningOutput,
     });
   } catch (error) {
+    if (error instanceof PromptInjectionError) {
+      const message = error.message;
+      const status = error.status;
+      const errorCode: TaskErrorCode = 'POLICY_FAILURE';
+
+      logServerEvent('warn', 'procurement.plan.blocked', {
+        status,
+        errorCode,
+        message,
+      });
+
+      return NextResponse.json(apiError(errorCode, message, true), { status });
+    }
+
     let errorCode: TaskErrorCode = 'UNKNOWN_FAILURE';
     if (taskId) {
       try {

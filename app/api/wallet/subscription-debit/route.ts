@@ -1,15 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { isAuthError } from '@/lib/server/auth';
 import {
   checkSubscriptionGuardrails,
   getWallet,
-  getWalletUserId,
   recordLedgerEntryUnique,
 } from '@/lib/server/ledger';
 import { runRecoveryReconciliationCycle } from '@/lib/reconciliation/reconcileFailedPurchases';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
+import { enforceApiAuth } from '@/security/authGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
+import {
+  enforceSecurityIpBlock,
+  monitorApiAbuse,
+  monitorGuardrailViolation,
+  monitorTransactionBehavior,
+  resolveClientIp,
+} from '@/security/securityMonitor';
 
 export const runtime = 'nodejs';
+
+const SubscriptionDebitBodySchema = z.object({
+  amount: z.union([z.number(), z.string()]),
+  merchant: z.string().trim().optional(),
+  category: z.string().trim().optional(),
+  description: z.string().trim().optional(),
+  approved: z.boolean().optional(),
+  idempotencyKey: z.string().trim().optional(),
+});
+
+const SubscriptionRefundBodySchema = z.object({
+  amount: z.union([z.number(), z.string()]),
+  merchant: z.string().trim().optional(),
+  reason: z.string().trim().optional(),
+  idempotencyKey: z.string().trim().optional(),
+});
 
 /**
  * POST /api/wallet/subscription-debit
@@ -19,16 +45,27 @@ export const runtime = 'nodejs';
  * the subscription service itself handles the actual charge.
  */
 export async function POST(req: NextRequest) {
-  const userId = await getWalletUserId();
+  const ipBlockResponse = enforceSecurityIpBlock(req);
+  if (ipBlockResponse) return ipBlockResponse;
+
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'wallet' });
+  if (rateLimited) {
+    monitorApiAbuse({
+      ip: resolveClientIp(req),
+      path: req.nextUrl.pathname,
+      reason: 'subscription_debit_rate_limited',
+    });
+    return rateLimited;
+  }
+
+  const auth = await enforceApiAuth(req);
+  if (!auth.ok) return auth.response;
+
+  const userId = auth.auth.walletUserId;
 
   try {
-    const body = (await req.json()) as {
-      amount?: number;
-      merchant?: string;
-      description?: string;
-      approved?: boolean;
-      idempotencyKey?: string;
-    };
+    const body = await validateJsonBody(req, SubscriptionDebitBodySchema);
+    const ip = resolveClientIp(req);
 
     const amount = Number(body.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -55,25 +92,45 @@ export async function POST(req: NextRequest) {
     const idempotencyKey = typeof body.idempotencyKey === 'string' && body.idempotencyKey.trim()
       ? body.idempotencyKey.trim()
       : undefined;
-
-    if (amount >= wallet.settings.approvalThreshold && body.approved !== true) {
-      return NextResponse.json(
-        apiError(
-          'POLICY_FAILURE',
-          `Approval required for amounts at/above $${wallet.settings.approvalThreshold.toFixed(2)}`,
-          true,
-        ),
-        { status: 409 },
-      );
-    }
+    monitorTransactionBehavior({
+      userId,
+      ip,
+      amount,
+      merchant: body.merchant || null,
+      category: body.category || null,
+      wallet: {
+        balance: wallet.balance,
+        settings: {
+          maxTransaction: wallet.settings.maxTransaction,
+          dailyLimit: wallet.settings.dailyLimit,
+        },
+        transactions: wallet.transactions.map((tx) => ({
+          amount: tx.amount,
+          status: tx.status,
+          direction: tx.direction,
+          createdAt: tx.createdAt,
+        })),
+      },
+    });
 
     const check = await checkSubscriptionGuardrails({
       userId,
       amount,
       merchant: body.merchant,
+      category: body.category,
+      approved: body.approved,
+      enforceConfirmation: true,
     });
 
     if (!check.allowed) {
+      monitorGuardrailViolation({
+        userId,
+        ip,
+        context: 'wallet.subscription_debit',
+        reason: check.reason || 'subscription_debit_blocked',
+        amount,
+        merchant: body.merchant || null,
+      });
       return NextResponse.json(
         apiError('POLICY_FAILURE', check.reason || 'Subscription debit blocked by guardrails', true),
         { status: 409 },
@@ -99,6 +156,7 @@ export async function POST(req: NextRequest) {
       stripeObjectId: idempotencyKey ? `subscription:${idempotencyKey}` : undefined,
       metadata: {
         subscription_merchant: body.merchant || '',
+        subscription_category: body.category || '',
         ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
       },
     });
@@ -126,6 +184,9 @@ export async function POST(req: NextRequest) {
     if (isAuthError(error)) {
       return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
     }
+    if (error instanceof RequestValidationError) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
     const message = error instanceof Error ? error.message : 'Failed to record subscription debit';
     const errorCode = classifyTaskError({ message });
     logServerEvent('error', 'wallet.subscription_debit.failed', {
@@ -144,15 +205,26 @@ export async function POST(req: NextRequest) {
  * Used when signup finalization fails after the wallet was already debited.
  */
 export async function DELETE(req: NextRequest) {
-  const userId = await getWalletUserId();
+  const ipBlockResponse = enforceSecurityIpBlock(req);
+  if (ipBlockResponse) return ipBlockResponse;
+
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'wallet' });
+  if (rateLimited) {
+    monitorApiAbuse({
+      ip: resolveClientIp(req),
+      path: req.nextUrl.pathname,
+      reason: 'subscription_refund_rate_limited',
+    });
+    return rateLimited;
+  }
+
+  const auth = await enforceApiAuth(req);
+  if (!auth.ok) return auth.response;
+
+  const userId = auth.auth.walletUserId;
 
   try {
-    const body = (await req.json()) as {
-      amount?: number;
-      merchant?: string;
-      reason?: string;
-      idempotencyKey?: string;
-    };
+    const body = await validateJsonBody(req, SubscriptionRefundBodySchema);
 
     const amount = Number(body.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -211,6 +283,9 @@ export async function DELETE(req: NextRequest) {
     });
   } catch (error) {
     if (isAuthError(error)) {
+      return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
+    }
+    if (error instanceof RequestValidationError) {
       return NextResponse.json(apiError('VALIDATION_ERROR', error.message, true), { status: error.status });
     }
     const message = error instanceof Error ? error.message : 'Failed to process subscription refund';

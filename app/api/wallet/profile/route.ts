@@ -3,9 +3,11 @@ import { z } from 'zod';
 import { isAuthError } from '@/lib/server/auth';
 import {
   getUserAutofillProfile,
-  getWalletUserId,
   upsertUserAutofillProfile,
 } from '@/lib/server/ledger';
+import { enforceApiAuth } from '@/security/authGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
 
 export const runtime = 'nodejs';
 
@@ -25,9 +27,15 @@ const PatchSchema = z.object({
   message: 'At least one profile field is required',
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'wallet' });
+  if (rateLimited) return rateLimited;
+
+  const auth = await enforceApiAuth(req);
+  if (!auth.ok) return auth.response;
+
   try {
-    const profile = await getUserAutofillProfile(await getWalletUserId());
+    const profile = await getUserAutofillProfile(auth.auth.walletUserId);
     return NextResponse.json({ profile });
   } catch (error) {
     if (isAuthError(error)) {
@@ -41,11 +49,20 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'wallet' });
+  if (rateLimited) return rateLimited;
+
+  const auth = await enforceApiAuth(req);
+  if (!auth.ok) return auth.response;
+
   try {
-    const patch = PatchSchema.parse(await req.json());
-    const profile = await upsertUserAutofillProfile(await getWalletUserId(), patch);
+    const patch = await validateJsonBody(req, PatchSchema);
+    const profile = await upsertUserAutofillProfile(auth.auth.walletUserId, patch);
     return NextResponse.json({ profile });
   } catch (error) {
+    if (error instanceof RequestValidationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues.map((issue) => issue.message).join('; ') }, { status: 400 });
     }

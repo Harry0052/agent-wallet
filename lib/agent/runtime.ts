@@ -3,6 +3,7 @@ import { startLifecycle, transitionState } from '@/lib/agent/stateMachine';
 import type { AgentRuntimeInput, AgentRuntimeResult, AgentTaskState } from '@/lib/agent/types';
 import { orchestrateAgentMessage } from '@/lib/server/agentOrchestrator';
 import { executeAgentTask } from '@/lib/agent/executor';
+import { getSecretFromAny } from '@/security/secretsManager';
 
 function appendLifecycleForTarget(
   lifecycle: AgentRuntimeResult['lifecycle'],
@@ -33,7 +34,10 @@ function appendLifecycleForTarget(
 }
 
 async function ensureClaudeAvailable() {
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_API_KEY) {
+  const apiKey = getSecretFromAny(['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'], {
+    required: false,
+  });
+  if (!apiKey) {
     throw new Error(
       'CLAUDE_REASONING_FAILURE: CLAUDE_API_KEY is not configured (set ANTHROPIC_API_KEY or CLAUDE_API_KEY)',
     );

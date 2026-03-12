@@ -8,8 +8,16 @@ import {
 import { getStripeClient } from '@/lib/server/stripe';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 import { createPostgresTwoPhaseStore } from '@/lib/payments/ledger';
+import { sanitizePaymentForClient } from '@/lib/payments/publicPayment';
 import { createStripeFirstGateway, createTwoPhasePaymentEngine } from '@/lib/payments/twoPhasePayment';
 import { runRecoveryReconciliationCycle } from '@/lib/reconciliation/reconcileFailedPurchases';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import { enforceTransactionGuardrails } from '@/security/transactionGuard';
+import {
+  enforceSecurityIpBlock,
+  monitorApiAbuse,
+  resolveClientIp,
+} from '@/security/securityMonitor';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,6 +55,22 @@ function buildEngine() {
       };
     },
     async captureReservedBalance(input) {
+      const wallet = await getWallet(input.userId);
+      const guardDecision = enforceTransactionGuardrails({
+        userId: input.userId,
+        context: 'payments.capture.prepaid',
+        amount: input.amount,
+        wallet,
+        merchant: input.merchant,
+        approved: true,
+        enforceConfirmation: true,
+        // Category policy is enforced at authorization time where category is available.
+        policyOverrides: { allowedCategories: [] },
+      });
+      if (!guardDecision.allowed) {
+        throw new Error(`POLICY_FAILURE: ${guardDecision.reason || 'Prepaid capture blocked by guardrails'}`);
+      }
+
       await recordLedgerEntryUnique({
         userId: input.userId,
         type: 'subscription_debit',
@@ -81,6 +105,19 @@ function buildEngine() {
 }
 
 export async function POST(req: NextRequest) {
+  const ipBlockResponse = enforceSecurityIpBlock(req);
+  if (ipBlockResponse) return ipBlockResponse;
+
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'payments' });
+  if (rateLimited) {
+    monitorApiAbuse({
+      ip: resolveClientIp(req),
+      path: req.nextUrl.pathname,
+      reason: 'payments_capture_rate_limited',
+    });
+    return rateLimited;
+  }
+
   const userId = await getWalletUserId();
 
   try {
@@ -115,7 +152,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      payment: result.payment,
+      payment: sanitizePaymentForClient(result.payment),
       idempotentReplay: result.idempotentReplay,
       retryScheduled: result.retryScheduled || false,
       nextRetryAt: result.nextRetryAt || null,

@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { issuePasswordResetToken } from '@/lib/server/auth';
 import { recordAccountAuditEvent } from '@/lib/server/accountAudit';
 import { extractRequestMeta } from '@/lib/server/requestMeta';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
 
 export const runtime = 'nodejs';
 
@@ -17,10 +19,13 @@ function buildResetUrl(token: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'auth', scope: 'auth' });
+  if (rateLimited) return rateLimited;
+
   const meta = extractRequestMeta(req);
 
   try {
-    const body = BodySchema.parse(await req.json());
+    const body = await validateJsonBody(req, BodySchema);
     const issued = await issuePasswordResetToken(body.email);
 
     if (issued.appUserId) {
@@ -48,9 +53,11 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
+      : error instanceof RequestValidationError
+        ? error.message
       : 'If an account exists for that email, reset instructions have been sent.';
 
-    const status = error instanceof z.ZodError ? 400 : 200;
+    const status = error instanceof z.ZodError || error instanceof RequestValidationError ? 400 : 200;
     return NextResponse.json({
       ok: status === 200,
       message,

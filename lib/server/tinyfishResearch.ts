@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentStep } from '@/lib/types';
+import { getRequiredSecret } from '@/security/secretsManager';
 
 export interface TinyFishProcurementFinding {
   vendorName: string;
@@ -310,10 +311,7 @@ export async function discoverTinyFishVendorCandidates(input: {
   existingTargets?: string[];
   maxCandidates?: number;
 }): Promise<string[]> {
-  const apiKey = process.env.TINYFISH_API_KEY;
-  if (!apiKey) {
-    throw new Error('TINYFISH_API_KEY is not configured');
-  }
+  const apiKey = getRequiredSecret('TINYFISH_API_KEY');
 
   const base = process.env.TINYFISH_API_BASE_URL || 'https://api.tinyfish.ai/v1';
   const path = process.env.TINYFISH_VENDOR_DISCOVERY_PATH || '/vendor-discovery';
@@ -416,10 +414,7 @@ export async function runTinyFishVendorPricingResearch(input: {
   comparisonCriteria: string[];
   taskId: string;
 }): Promise<{ findings: TinyFishProcurementFinding[]; steps: AgentStep[] }> {
-  const apiKey = process.env.TINYFISH_API_KEY;
-  if (!apiKey) {
-    throw new Error('TINYFISH_API_KEY is not configured');
-  }
+  const apiKey = getRequiredSecret('TINYFISH_API_KEY');
 
   const base = process.env.TINYFISH_API_BASE_URL || 'https://api.tinyfish.ai/v1';
   const path = process.env.TINYFISH_VENDOR_RESEARCH_PATH || '/vendor-research';

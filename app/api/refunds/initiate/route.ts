@@ -6,6 +6,8 @@ import { getStripeClient } from '@/lib/server/stripe';
 import {
   createPostgresRefundStore,
   createRefundEngine,
+  type RefundAuditLog,
+  type RefundCase,
   type MerchantRefundAdapter,
   type ProcessorFallbackAdapter,
 } from '@/lib/refunds/refundEngine.ts';
@@ -146,6 +148,24 @@ function buildEngine() {
   });
 }
 
+function sanitizeRefundCaseForClient(
+  refundCase: RefundCase,
+): Omit<RefundCase, 'initiateIdempotencyKey'> & { initiateIdempotencyKey: null } {
+  return {
+    ...refundCase,
+    initiateIdempotencyKey: null,
+  };
+}
+
+function sanitizeAuditLogsForClient(
+  logs: RefundAuditLog[],
+): Array<Omit<RefundAuditLog, 'idempotencyKey'> & { idempotencyKey: null }> {
+  return logs.map((entry) => ({
+    ...entry,
+    idempotencyKey: null,
+  }));
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getWalletUserId();
 
@@ -170,8 +190,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      refundCase: result.refundCase,
-      auditLogs: result.auditLogs,
+      refundCase: sanitizeRefundCaseForClient(result.refundCase),
+      auditLogs: sanitizeAuditLogsForClient(result.auditLogs),
       userExplanation: result.userExplanation,
     });
   } catch (error) {

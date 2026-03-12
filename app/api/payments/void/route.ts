@@ -8,8 +8,15 @@ import {
 import { getStripeClient } from '@/lib/server/stripe';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 import { createPostgresTwoPhaseStore } from '@/lib/payments/ledger';
+import { sanitizePaymentForClient } from '@/lib/payments/publicPayment';
 import { createStripeFirstGateway, createTwoPhasePaymentEngine } from '@/lib/payments/twoPhasePayment';
 import { runRecoveryReconciliationCycle } from '@/lib/reconciliation/reconcileFailedPurchases';
+import { enforceRateLimit } from '@/security/rateLimiter';
+import {
+  enforceSecurityIpBlock,
+  monitorApiAbuse,
+  resolveClientIp,
+} from '@/security/securityMonitor';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -78,6 +85,19 @@ function buildEngine() {
 }
 
 export async function POST(req: NextRequest) {
+  const ipBlockResponse = enforceSecurityIpBlock(req);
+  if (ipBlockResponse) return ipBlockResponse;
+
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'payments' });
+  if (rateLimited) {
+    monitorApiAbuse({
+      ip: resolveClientIp(req),
+      path: req.nextUrl.pathname,
+      reason: 'payments_void_rate_limited',
+    });
+    return rateLimited;
+  }
+
   const userId = await getWalletUserId();
 
   try {
@@ -105,7 +125,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      payment: result.payment,
+      payment: sanitizePaymentForClient(result.payment),
       idempotentReplay: result.idempotentReplay,
     });
   } catch (error) {

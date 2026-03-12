@@ -1,18 +1,76 @@
 "use client";
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { login, signup } from '@/services/auth';
 
 export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isSignup = mode === 'signup';
+  const oauthError = searchParams.get('oauth_error');
+  const nextPath = searchParams.get('next');
+
+  const googleOauthHref = useMemo(() => {
+    if (!nextPath) return '/api/auth/google/login';
+    return `/api/auth/google/login?next=${encodeURIComponent(nextPath)}`;
+  }, [nextPath]);
+  const appleOauthHref = useMemo(() => {
+    if (!nextPath) return '/api/auth/apple/login';
+    return `/api/auth/apple/login?next=${encodeURIComponent(nextPath)}`;
+  }, [nextPath]);
+
+  useEffect(() => {
+    if (!oauthError) return;
+
+    if (oauthError === 'google_denied') {
+      setError('Google login was canceled. Please try again.');
+      return;
+    }
+
+    if (oauthError === 'google_state_invalid') {
+      setError('Google login session expired. Please try again.');
+      return;
+    }
+
+    if (oauthError === 'google_auth_failed') {
+      setError('Google authentication failed. Please try again.');
+      return;
+    }
+
+    if (oauthError === 'google_auth_unavailable') {
+      setError('Google login is not configured right now.');
+      return;
+    }
+
+    if (oauthError === 'apple_denied') {
+      setError('Apple login was canceled. Please try again.');
+      return;
+    }
+
+    if (oauthError === 'apple_state_invalid') {
+      setError('Apple login session expired. Please try again.');
+      return;
+    }
+
+    if (oauthError === 'apple_auth_failed') {
+      setError('Apple authentication failed. Please try again.');
+      return;
+    }
+
+    if (oauthError === 'apple_auth_unavailable') {
+      setError('Apple login is not configured right now.');
+      return;
+    }
+
+    setError('OAuth authentication failed.');
+  }, [oauthError]);
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -59,7 +117,28 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
             : 'Sign in to your private Agent Wallet workspace.'}
         </p>
 
-        <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+        <div className="mt-5">
+          <a
+            href={googleOauthHref}
+            className="aw-button-secondary flex h-10 w-full items-center justify-center text-sm"
+          >
+            Continue with Google
+          </a>
+          <a
+            href={appleOauthHref}
+            className="aw-button-secondary mt-2 flex h-10 w-full items-center justify-center text-sm"
+          >
+            Continue with Apple
+          </a>
+        </div>
+
+        <div className="my-4 flex items-center gap-3">
+          <div className="h-px flex-1 bg-[var(--aw-border)]" />
+          <span className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">or</span>
+          <div className="h-px flex-1 bg-[var(--aw-border)]" />
+        </div>
+
+        <form className="space-y-4" onSubmit={onSubmit}>
           <label className="space-y-1">
             <span className="text-xs text-[var(--aw-text-muted)]">Email</span>
             <input

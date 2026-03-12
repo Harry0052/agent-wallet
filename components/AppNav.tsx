@@ -7,6 +7,7 @@ import {
   Activity,
   Command,
   Layers3,
+  Receipt,
   Settings,
   WalletCards,
   Wrench,
@@ -20,6 +21,7 @@ const navLinks = [
   { href: "/execution", label: "Tasks", icon: Activity },
   { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/wallet", label: "Wallet", icon: WalletCards },
+  { href: "/statements", label: "Statements", icon: Receipt },
   { href: "/subscriptions", label: "Subscriptions", icon: Layers3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;

@@ -16,6 +16,7 @@ import {
   sanitizeVendorTargets,
 } from '@/lib/server/vendorTargeting';
 import { getRuntimeCredential } from '@/lib/server/toolsVault';
+import { getOptionalSecret } from '@/security/secretsManager';
 
 function fallbackDiscoveryCandidates(orchestration: AgentOrchestrationResult): string[] {
   const goal = orchestration.procurement?.goal || orchestration.message || '';
@@ -230,7 +231,7 @@ export async function runTinyFishTask(params: {
   userId: string;
   orchestration: AgentOrchestrationResult;
 }): Promise<AgentExecutionResult> {
-  if (!process.env.TINYFISH_API_KEY) {
+  if (!getOptionalSecret('TINYFISH_API_KEY')) {
     return {
       status: 'failed',
       message: 'TINYFISH_API_KEY is not configured.',

@@ -2,6 +2,7 @@ import 'server-only';
 import type { SourcingPassResult } from '@/lib/sourcing/workflow';
 import { RawSourcedCandidateSchema } from '@/lib/sourcing/schemas';
 import type { NormalizedSourcingRequest, RawSourcedCandidate, SourcingExecutionPlan } from '@/lib/sourcing/schemas';
+import { getRequiredSecret } from '@/security/secretsManager';
 
 function compact(input: string): string {
   return input.replace(/\s+/g, ' ').trim();
@@ -295,10 +296,7 @@ export async function runIndeedCandidateSourcingPass(input: {
   seenProfileUrls: string[];
   knownCandidateCount: number;
 }): Promise<SourcingPassResult> {
-  const apiKey = process.env.TINYFISH_API_KEY;
-  if (!apiKey) {
-    throw new Error('TINYFISH_API_KEY is not configured');
-  }
+  const apiKey = getRequiredSecret('TINYFISH_API_KEY');
 
   const endpoint = process.env.TINYFISH_AUTOMATION_RUN_SSE_URL || 'https://agent.tinyfish.ai/v1/automation/run-sse';
   const startUrl = process.env.TINYFISH_INDEED_START_URL || 'https://www.indeed.com/';

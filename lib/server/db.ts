@@ -1,11 +1,15 @@
 import {
   Pool,
-  type PoolClient,
   type PoolConfig,
   type QueryResult,
   type QueryResultRow,
 } from 'pg';
-import { getDatabaseUrl } from '@/lib/server/env';
+import {
+  createSecureDbClient,
+  executeDbQuery,
+  getDatabaseConnectionString,
+  type SecureDbClient,
+} from '@/database/dbService';
 
 declare global {
   var __agentWalletPgPool: Pool | undefined;
@@ -65,7 +69,7 @@ function getPool(): Pool {
     return pool;
   }
 
-  const connectionString = getDatabaseUrl();
+  const connectionString = getDatabaseConnectionString();
   pool = new Pool(resolvePoolConfig(connectionString));
   globalThis.__agentWalletPgPool = pool;
   return pool;
@@ -77,7 +81,9 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
 ): Promise<QueryResult<T>> {
   await ensureSchema();
   try {
-    return await getPool().query<T>(text, params);
+    return await executeDbQuery<T>(getPool(), text, params, {
+      context: 'lib/server/db.query',
+    });
   } catch (error) {
     if (!isRetryableMaxClientsError(error)) {
       throw error;
@@ -85,23 +91,31 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
 
     // Brief backoff helps when Supabase session mode is saturated momentarily.
     await wait(150);
-    return getPool().query<T>(text, params);
+    return executeDbQuery<T>(getPool(), text, params, {
+      context: 'lib/server/db.query.retry',
+    });
   }
 }
 
-export async function withTransaction<T>(fn: (client: Pool) => Promise<T>): Promise<T> {
+export async function withTransaction<T>(fn: (client: SecureDbClient) => Promise<T>): Promise<T> {
   await ensureSchema();
-  return fn(getPool());
+  const client = createSecureDbClient(getPool(), {
+    context: 'lib/server/db.withTransaction',
+  });
+  return fn(client);
 }
 
 export async function withDbTransaction<T>(
-  fn: (client: PoolClient) => Promise<T>,
+  fn: (client: SecureDbClient) => Promise<T>,
 ): Promise<T> {
   await ensureSchema();
   const client = await getPool().connect();
+  const secureClient = createSecureDbClient(client, {
+    context: 'lib/server/db.withDbTransaction',
+  });
   try {
     await client.query('BEGIN');
-    const result = await fn(client);
+    const result = await fn(secureClient);
     await client.query('COMMIT');
     return result;
   } catch (error) {
@@ -123,8 +137,16 @@ export async function ensureSchema(): Promise<void> {
 
   schemaInitPromise = (async () => {
     const p = getPool();
+    const safePoolQuery = <T extends QueryResultRow = QueryResultRow>(
+      text: string,
+      params?: unknown[],
+    ) => executeDbQuery<T>(p, text, params, {
+      context: 'lib/server/db.ensureSchema',
+      allowRawSql: true,
+      allowDangerousQuery: true,
+    });
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS app_users (
         id TEXT PRIMARY KEY,
         email TEXT NOT NULL UNIQUE,
@@ -134,12 +156,34 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_users_email
       ON app_users (email);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
+      ALTER TABLE app_users
+      ADD COLUMN IF NOT EXISTS oauth_provider TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE app_users
+      ADD COLUMN IF NOT EXISTS oauth_provider_id TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE app_users
+      ADD COLUMN IF NOT EXISTS profile_picture TEXT;
+    `);
+
+    await safePoolQuery(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_app_users_oauth_identity
+      ON app_users (oauth_provider, oauth_provider_id)
+      WHERE oauth_provider IS NOT NULL
+        AND oauth_provider_id IS NOT NULL;
+    `);
+
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS app_user_passwords (
         user_id TEXT PRIMARY KEY,
         password_hash TEXT NOT NULL,
@@ -148,7 +192,7 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS app_user_sessions (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -162,17 +206,17 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_user_sessions_user_id
       ON app_user_sessions (user_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_user_sessions_token_hash
       ON app_user_sessions (token_hash);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS app_password_reset_tokens (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -183,19 +227,19 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_password_reset_tokens_user_expires
       ON app_password_reset_tokens (user_id, expires_at DESC)
       WHERE consumed_at IS NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_password_reset_tokens_expires
       ON app_password_reset_tokens (expires_at)
       WHERE consumed_at IS NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS app_email_verification_tokens (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -206,13 +250,13 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_email_verification_tokens_user_expires
       ON app_email_verification_tokens (user_id, expires_at DESC)
       WHERE consumed_at IS NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS app_account_audit_events (
         id TEXT PRIMARY KEY,
         user_id TEXT,
@@ -224,12 +268,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_account_audit_events_user_created
       ON app_account_audit_events (user_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS app_user_onboarding_states (
         user_id TEXT PRIMARY KEY,
         onboarding_step TEXT NOT NULL DEFAULT 'welcome',
@@ -241,12 +285,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_user_onboarding_states_step
       ON app_user_onboarding_states (onboarding_step, updated_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS app_user_settings (
         user_id TEXT PRIMARY KEY,
         locale TEXT NOT NULL DEFAULT 'en-US',
@@ -260,12 +304,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_app_user_settings_updated
       ON app_user_settings (updated_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS wallet_users (
         user_id TEXT PRIMARY KEY,
         currency TEXT NOT NULL DEFAULT 'usd',
@@ -276,12 +320,22 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE wallet_users
       ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
+      ALTER TABLE wallet_users
+      ADD COLUMN IF NOT EXISTS stripe_customer_id_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE wallet_users
+      ADD COLUMN IF NOT EXISTS stripe_customer_id_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS wallet_recipients (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -293,7 +347,7 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS recipients (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -309,47 +363,57 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE recipients
       ADD COLUMN IF NOT EXISTS notes TEXT;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE recipients
       ADD COLUMN IF NOT EXISTS send_method TEXT NOT NULL DEFAULT 'stripe_connected';
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE recipients
       ADD COLUMN IF NOT EXISTS cash_app_cashtag TEXT;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE recipients
       ADD COLUMN IF NOT EXISTS bank_reference TEXT;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS bank_reference_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE recipients
+      ADD COLUMN IF NOT EXISTS bank_reference_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
       ALTER TABLE recipients
       ADD COLUMN IF NOT EXISTS aliases JSONB NOT NULL DEFAULT '[]'::jsonb;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE recipients
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE recipients
       ALTER COLUMN stripe_account_id DROP NOT NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_recipients_user_name
       ON recipients (user_id, lower(name));
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS user_autofill_profiles (
         user_id TEXT PRIMARY KEY,
         full_name TEXT,
@@ -368,7 +432,7 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS ledger_entries (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -388,29 +452,29 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_ledger_entries_user_created_at
       ON ledger_entries (user_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_ledger_entries_provider_reference
       ON ledger_entries (provider_reference_id);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE ledger_entries
       ADD COLUMN IF NOT EXISTS stripe_event_id TEXT;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS stripe_webhook_events (
         id TEXT PRIMARY KEY,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS payment_flows (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -436,35 +500,75 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
+      ALTER TABLE payment_flows
+      ADD COLUMN IF NOT EXISTS stripe_payment_intent_id_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_flows
+      ADD COLUMN IF NOT EXISTS stripe_payment_intent_id_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_flows
+      ADD COLUMN IF NOT EXISTS idempotency_authorize_key_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_flows
+      ADD COLUMN IF NOT EXISTS idempotency_authorize_key_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_flows
+      ADD COLUMN IF NOT EXISTS idempotency_capture_key_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_flows
+      ADD COLUMN IF NOT EXISTS idempotency_capture_key_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_flows
+      ADD COLUMN IF NOT EXISTS idempotency_void_key_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_flows
+      ADD COLUMN IF NOT EXISTS idempotency_void_key_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_payment_flows_user_created
       ON payment_flows (user_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_payment_flows_status
       ON payment_flows (status, updated_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_flows_capture_key
       ON payment_flows (user_id, idempotency_capture_key)
       WHERE idempotency_capture_key IS NOT NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_flows_void_key
       ON payment_flows (user_id, idempotency_void_key)
       WHERE idempotency_void_key IS NOT NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_flows_stripe_pi
       ON payment_flows (stripe_payment_intent_id)
       WHERE stripe_payment_intent_id IS NOT NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS payment_flow_events (
         id TEXT PRIMARY KEY,
         payment_flow_id TEXT NOT NULL,
@@ -479,23 +583,33 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
+      ALTER TABLE payment_flow_events
+      ADD COLUMN IF NOT EXISTS idempotency_key_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_flow_events
+      ADD COLUMN IF NOT EXISTS idempotency_key_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_payment_flow_events_flow_created
       ON payment_flow_events (payment_flow_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_payment_flow_events_user_created
       ON payment_flow_events (user_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_flow_events_idempotent
       ON payment_flow_events (payment_flow_id, event_type, idempotency_key)
       WHERE idempotency_key IS NOT NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS payment_retry_jobs (
         id TEXT PRIMARY KEY,
         payment_flow_id TEXT NOT NULL,
@@ -512,12 +626,22 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
+      ALTER TABLE payment_retry_jobs
+      ADD COLUMN IF NOT EXISTS idempotency_key_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE payment_retry_jobs
+      ADD COLUMN IF NOT EXISTS idempotency_key_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_payment_retry_jobs_due
       ON payment_retry_jobs (status, next_retry_at ASC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS refund_cases (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -543,23 +667,23 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_cases_initiate_key
       ON refund_cases (user_id, initiate_idempotency_key)
       WHERE initiate_idempotency_key IS NOT NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_refund_cases_status_due
       ON refund_cases (user_id, status, next_retry_at ASC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_refund_cases_payment
       ON refund_cases (payment_flow_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS refund_audit_logs (
         id TEXT PRIMARY KEY,
         refund_case_id TEXT NOT NULL,
@@ -575,23 +699,23 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_refund_audit_case_created
       ON refund_audit_logs (refund_case_id, created_at ASC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_refund_audit_user_created
       ON refund_audit_logs (user_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_audit_idempotent
       ON refund_audit_logs (refund_case_id, action, idempotency_key)
       WHERE idempotency_key IS NOT NULL;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS wallet_payment_methods (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -612,31 +736,51 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
+      ALTER TABLE wallet_payment_methods
+      ADD COLUMN IF NOT EXISTS stripe_customer_id_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE wallet_payment_methods
+      ADD COLUMN IF NOT EXISTS stripe_customer_id_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE wallet_payment_methods
+      ADD COLUMN IF NOT EXISTS stripe_payment_method_id_encrypted TEXT;
+    `);
+
+    await safePoolQuery(`
+      ALTER TABLE wallet_payment_methods
+      ADD COLUMN IF NOT EXISTS stripe_payment_method_id_key_version TEXT;
+    `);
+
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_wallet_payment_methods_user_updated
       ON wallet_payment_methods (user_id, updated_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_wallet_payment_methods_customer
       ON wallet_payment_methods (stripe_customer_id, stripe_payment_method_id);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       INSERT INTO recipients (id, user_id, name, stripe_account_id, default_currency, created_at)
       SELECT id, user_id, name, stripe_account_id, 'usd', created_at
       FROM wallet_recipients
       ON CONFLICT (id) DO NOTHING;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       INSERT INTO app_user_onboarding_states (user_id, onboarding_step, skipped_tool_setup, preferences)
       SELECT id, 'welcome', FALSE, '{}'::jsonb
       FROM app_users
       ON CONFLICT (user_id) DO NOTHING;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       INSERT INTO app_user_settings (
         user_id,
         locale,
@@ -658,7 +802,7 @@ export async function ensureSchema(): Promise<void> {
       ON CONFLICT (user_id) DO NOTHING;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS agent_tasks (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -673,7 +817,7 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS web_action_logs (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -686,12 +830,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_web_action_logs_task_created_at
       ON web_action_logs (task_id, created_at ASC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS approval_decisions (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -704,7 +848,7 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS procurement_tasks (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -725,12 +869,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_procurement_tasks_user_created_at
       ON procurement_tasks (user_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS procurement_findings (
         id TEXT PRIMARY KEY,
         task_id TEXT NOT NULL,
@@ -750,22 +894,22 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE procurement_findings
       ADD COLUMN IF NOT EXISTS content_availability TEXT;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       ALTER TABLE procurement_findings
       ADD COLUMN IF NOT EXISTS notes TEXT;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_procurement_findings_task_created_at
       ON procurement_findings (task_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS subscription_actions (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -785,18 +929,18 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_subscription_actions_user_task_created_at
       ON subscription_actions (user_id, task_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_subscription_actions_running_operation
       ON subscription_actions (user_id, task_id, operation)
       WHERE status = 'running';
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS tools_catalog (
         id TEXT PRIMARY KEY,
         key TEXT NOT NULL UNIQUE,
@@ -815,12 +959,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_tools_catalog_key
       ON tools_catalog (key);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS user_tools (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -839,12 +983,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_user_tools_user_updated
       ON user_tools (user_id, updated_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS vault_entries (
         id TEXT PRIMARY KEY,
         user_tool_id TEXT NOT NULL,
@@ -858,12 +1002,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_vault_entries_user_tool_updated
       ON vault_entries (user_tool_id, updated_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS user_tool_events (
         id TEXT PRIMARY KEY,
         user_tool_id TEXT NOT NULL,
@@ -873,12 +1017,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_user_tool_events_user_tool_created
       ON user_tool_events (user_tool_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS tool_run_links (
         id TEXT PRIMARY KEY,
         run_id TEXT NOT NULL,
@@ -888,12 +1032,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_tool_run_links_run
       ON tool_run_links (run_id, created_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS user_tool_configs (
         id TEXT PRIMARY KEY,
         user_tool_id TEXT NOT NULL UNIQUE,
@@ -904,12 +1048,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_user_tool_configs_user_tool
       ON user_tool_configs (user_tool_id, updated_at DESC);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS agent_memory (
         user_id TEXT NOT NULL,
         key TEXT NOT NULL,
@@ -920,12 +1064,12 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       CREATE INDEX IF NOT EXISTS idx_agent_memory_user_prefix
       ON agent_memory (user_id, key text_pattern_ops);
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_app_user_passwords_user_id') THEN
@@ -1068,7 +1212,7 @@ export async function ensureSchema(): Promise<void> {
       END $$;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_recipients_send_method') THEN
@@ -1097,7 +1241,7 @@ export async function ensureSchema(): Promise<void> {
       END $$;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_subscription_actions_status') THEN
@@ -1108,7 +1252,7 @@ export async function ensureSchema(): Promise<void> {
       END $$;
     `);
 
-    await p.query(`
+    await safePoolQuery(`
       DO $$
       BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_subscription_actions_operation') THEN

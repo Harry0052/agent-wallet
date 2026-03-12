@@ -1,3 +1,9 @@
+import 'server-only';
+
+import { installSecretRedaction, redactSecrets } from '@/security/redactSecrets';
+
+installSecretRedaction();
+
 export type TaskErrorCode =
   | 'VALIDATION_ERROR'
   | 'CLAUDE_REASONING_FAILURE'
@@ -59,12 +65,12 @@ export function classifyTaskError(input: {
 }
 
 export function logServerEvent(level: 'info' | 'warn' | 'error', event: string, data: Record<string, unknown>): void {
-  const payload = JSON.stringify({
+  const payload = JSON.stringify(redactSecrets({
     ts: new Date().toISOString(),
     level,
     event,
     ...data,
-  });
+  }));
 
   if (level === 'error') {
     console.error(payload);

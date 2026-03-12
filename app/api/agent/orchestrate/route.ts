@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { runAgentRuntime } from '@/lib/agent/runtime';
 import { getWalletUserId } from '@/lib/server/ledger';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
+import { sanitizeAiText } from '@/security/aiSanitizer';
+import { PromptInjectionError, assertPromptSafe } from '@/security/promptGuard';
 
 export const runtime = 'nodejs';
 
@@ -13,10 +15,11 @@ const BodySchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = BodySchema.parse(await req.json());
+    assertPromptSafe(body.message, 'api.agent.orchestrate.message');
     const userId = await getWalletUserId();
     const orchestration = await runAgentRuntime({
       userId,
-      prompt: body.message,
+      prompt: sanitizeAiText(body.message),
     });
 
     return NextResponse.json({
@@ -24,6 +27,13 @@ export async function POST(req: NextRequest) {
       orchestration,
     });
   } catch (error) {
+    if (error instanceof PromptInjectionError) {
+      return NextResponse.json(
+        apiError('POLICY_FAILURE', error.message, true),
+        { status: error.status },
+      );
+    }
+
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof Error

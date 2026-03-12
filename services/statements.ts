@@ -1,0 +1,270 @@
+export interface StatementTransaction {
+  id: string;
+  user_id: string;
+  linked_account_id: string;
+  merchant_name: string;
+  normalized_merchant: string;
+  amount: number;
+  currency: string;
+  category: string;
+  pending: boolean;
+  occurred_at: string;
+}
+
+export interface StatementPagination {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_next: boolean;
+}
+
+export interface UnifiedStatement {
+  user_id: string;
+  total_spend_month: number;
+  transactions: StatementTransaction[];
+  pagination: StatementPagination;
+}
+
+export interface AccountStatement {
+  account_id: string;
+  account_name: string;
+  transactions: StatementTransaction[];
+  pagination: StatementPagination;
+}
+
+export interface ConnectedAccount {
+  id: string;
+  user_id: string;
+  institution_name: string;
+  account_type: "credit" | "checking" | "savings";
+  mask: string;
+  nickname: string;
+}
+
+export interface DetectedSubscription {
+  id: string;
+  user_id: string;
+  merchant: string;
+  estimated_monthly_cost: number;
+  recurrence_interval: string;
+  confidence: number;
+  last_seen: string;
+  status: string;
+}
+
+export interface AiSpendingAnalysisResponse {
+  analysis: {
+    spending: {
+      total_spend: number;
+      total_transactions: number;
+      currency: string;
+      category_summary: Array<{
+        category: string;
+        total_spend: number;
+        transaction_count: number;
+        average_transaction: number;
+      }>;
+      top_merchants: Array<{
+        merchant: string;
+        merchant_group: string;
+        total_spend: number;
+        transaction_count: number;
+        last_seen: string;
+      }>;
+    };
+    subscription_advice: {
+      unused_subscriptions: Array<{
+        unused_subscription: string;
+        monthly_cost: number;
+        last_used: string;
+        recommendation: "consider canceling";
+        confidence: number;
+        reason: string;
+      }>;
+      cancellation_suggestions: Array<{
+        subscription: string;
+        monthly_cost: number;
+        recommendation: "consider canceling" | "review usage";
+        confidence: number;
+        reason: string;
+        last_seen: string;
+      }>;
+    };
+    anomalies: {
+      unusual_charges: Array<{
+        merchant: string;
+        amount: number;
+        occurred_at: string;
+        reason: string;
+        confidence: number;
+      }>;
+      unknown_merchants: Array<{
+        merchant: string;
+        normalized_merchant: string;
+        first_seen: string;
+        amount: number;
+        reason: string;
+      }>;
+    };
+  };
+  transaction_summary: {
+    transaction_count: number;
+    date_from: string | null;
+    date_to: string | null;
+    include_pending: boolean;
+  };
+  generated_at: string;
+}
+
+export interface StatementFilters {
+  date_from?: string;
+  date_to?: string;
+  merchant?: string;
+  category?: string;
+  pending?: "true" | "false";
+  page?: number;
+  page_size?: number;
+}
+
+function toError(body: { error?: string; errorCode?: string }): Error {
+  if (body.errorCode && body.error) return new Error(`${body.errorCode}: ${body.error}`);
+  return new Error(body.error || "Request failed");
+}
+
+function addFilters(url: URL, filters?: StatementFilters): URL {
+  if (!filters) return url;
+  const entries = Object.entries(filters).filter(([, value]) => {
+    if (value === undefined || value === null) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    return true;
+  });
+  for (const [key, value] of entries) {
+    url.searchParams.set(key, String(value));
+  }
+  return url;
+}
+
+export async function fetchUnifiedStatement(
+  filters?: StatementFilters,
+): Promise<UnifiedStatement> {
+  const url = addFilters(new URL("/api/statements/unified", window.location.origin), filters);
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    statement?: UnifiedStatement;
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !body.statement) {
+    throw toError(body);
+  }
+
+  return body.statement;
+}
+
+export async function fetchAccountStatement(input: {
+  accountId: string;
+  filters?: StatementFilters;
+}): Promise<AccountStatement> {
+  const url = addFilters(
+    new URL(`/api/statements/account/${encodeURIComponent(input.accountId)}`, window.location.origin),
+    input.filters,
+  );
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    statement?: AccountStatement;
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !body.statement) {
+    throw toError(body);
+  }
+
+  return body.statement;
+}
+
+export async function fetchConnectedAccounts(): Promise<ConnectedAccount[]> {
+  const response = await fetch("/api/connect/accounts", {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    accounts?: ConnectedAccount[];
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !Array.isArray(body.accounts)) {
+    throw toError(body);
+  }
+
+  return body.accounts;
+}
+
+export async function fetchSuspectedSubscriptions(): Promise<DetectedSubscription[]> {
+  const response = await fetch("/api/subscriptions/suspected", {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    subscriptions?: DetectedSubscription[];
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !Array.isArray(body.subscriptions)) {
+    throw toError(body);
+  }
+
+  return body.subscriptions;
+}
+
+export async function fetchAiSpendingAnalysis(): Promise<AiSpendingAnalysisResponse> {
+  const response = await fetch("/api/ai/spending-analysis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+    cache: "no-store",
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    analysis?: AiSpendingAnalysisResponse["analysis"];
+    transaction_summary?: AiSpendingAnalysisResponse["transaction_summary"];
+    generated_at?: string;
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (
+    !response.ok
+    || !body.ok
+    || !body.analysis
+    || !body.transaction_summary
+    || !body.generated_at
+  ) {
+    throw toError(body);
+  }
+
+  return {
+    analysis: body.analysis,
+    transaction_summary: body.transaction_summary,
+    generated_at: body.generated_at,
+  };
+}

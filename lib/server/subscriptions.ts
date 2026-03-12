@@ -250,9 +250,9 @@ export async function listSubscriptionActions(params: {
         WHERE user_id = $1
           AND task_id = $2
         ORDER BY created_at DESC
-        LIMIT ${limit}
+        LIMIT $3
       `,
-      [params.userId, params.taskId],
+      [params.userId, params.taskId, limit],
     )
     : await query<SubscriptionActionRow>(
       `
@@ -263,9 +263,9 @@ export async function listSubscriptionActions(params: {
         FROM subscription_actions
         WHERE user_id = $1
         ORDER BY created_at DESC
-        LIMIT ${limit}
+        LIMIT $2
       `,
-      [params.userId],
+      [params.userId, limit],
     );
 
   return result.rows.map(rowToAction);
