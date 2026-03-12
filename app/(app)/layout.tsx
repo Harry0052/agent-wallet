@@ -1,8 +1,12 @@
 import { AppLayoutShell } from '@/components/AppLayoutShell';
-import { requireOnboardingCompleted, requirePageAuth } from '@/lib/server/authGuards';
+import { requireAuthenticatedAppAccess } from '@/lib/server/authGuards';
+
+export const runtime = 'nodejs';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  await requirePageAuth('/login');
-  await requireOnboardingCompleted('/onboarding');
+  await requireAuthenticatedAppAccess({
+    loginRedirect: '/login',
+    onboardingRedirect: '/onboarding',
+  });
   return <AppLayoutShell>{children}</AppLayoutShell>;
 }

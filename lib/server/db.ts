@@ -26,6 +26,30 @@ function parsePositiveInt(value: string | undefined): number | null {
   return parsed;
 }
 
+function parseBoolean(value: string | undefined): boolean | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+  return null;
+}
+
+function shouldAutoEnsureSchema(): boolean {
+  const explicit = parseBoolean(process.env.DATABASE_AUTO_ENSURE_SCHEMA);
+  if (explicit !== null) return explicit;
+  return process.env.NODE_ENV !== 'production';
+}
+
+function isMissingSchemaError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  const code = (error as { code?: string }).code;
+  if (code === '42P01' || code === '3F000') return true;
+
+  const message = error.message.toLowerCase();
+  return message.includes('relation') && message.includes('does not exist');
+}
+
 function resolvePoolConfig(connectionString: string): PoolConfig {
   const configuredMax = parsePositiveInt(process.env.DATABASE_POOL_MAX);
   const max = configuredMax
@@ -75,11 +99,10 @@ function getPool(): Pool {
   return pool;
 }
 
-export async function query<T extends QueryResultRow = QueryResultRow>(
+async function executeQueryWithRetry<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[],
 ): Promise<QueryResult<T>> {
-  await ensureSchema();
   try {
     return await executeDbQuery<T>(getPool(), text, params, {
       context: 'lib/server/db.query',
@@ -97,8 +120,31 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   }
 }
 
+export async function query<T extends QueryResultRow = QueryResultRow>(
+  text: string,
+  params?: unknown[],
+): Promise<QueryResult<T>> {
+  const autoEnsure = shouldAutoEnsureSchema();
+  if (autoEnsure) {
+    await ensureSchema();
+  }
+
+  try {
+    return await executeQueryWithRetry(text, params);
+  } catch (error) {
+    if (!autoEnsure && isMissingSchemaError(error)) {
+      await ensureSchema();
+      return executeQueryWithRetry(text, params);
+    }
+
+    throw error;
+  }
+}
+
 export async function withTransaction<T>(fn: (client: SecureDbClient) => Promise<T>): Promise<T> {
-  await ensureSchema();
+  if (shouldAutoEnsureSchema()) {
+    await ensureSchema();
+  }
   const client = createSecureDbClient(getPool(), {
     context: 'lib/server/db.withTransaction',
   });
@@ -108,7 +154,9 @@ export async function withTransaction<T>(fn: (client: SecureDbClient) => Promise
 export async function withDbTransaction<T>(
   fn: (client: SecureDbClient) => Promise<T>,
 ): Promise<T> {
-  await ensureSchema();
+  if (shouldAutoEnsureSchema()) {
+    await ensureSchema();
+  }
   const client = await getPool().connect();
   const secureClient = createSecureDbClient(client, {
     context: 'lib/server/db.withDbTransaction',
