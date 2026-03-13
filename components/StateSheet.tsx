@@ -130,7 +130,7 @@ export function StateSheet() {
             "Record resulting settlement status in ledger.",
           ]
         : [
-            "Prepare checkout flow via TinyFish browser execution.",
+            "Prepare checkout flow via live browser execution.",
             "Confirm purchase action and run payment step.",
             "Debit wallet and post ledger record only if transfer settles.",
           ];
@@ -277,7 +277,7 @@ export function StateSheet() {
       <section className="aw-surface animate-sheet-rise flex items-center gap-3 px-4 py-3">
         <Loader2 size={16} className="animate-spin text-[var(--aw-primary)]" />
         <div>
-          <p className="aw-kicker !text-[0.58rem]">TinyFish</p>
+          <p className="aw-kicker !text-[0.58rem]">Automation</p>
           <p className="text-sm text-[var(--aw-text-soft)]">
             Preparing real execution flow
           </p>

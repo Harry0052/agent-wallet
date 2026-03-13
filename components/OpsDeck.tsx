@@ -221,7 +221,7 @@ export function OpsDeck({ demoMode = false }: { demoMode?: boolean }) {
       );
     } else if (findings.length > 0) {
       reasons.push(
-        `Compared against ${findings.length} evidence records from current TinyFish run.`,
+        `Compared against ${findings.length} evidence records from the current live run.`,
       );
     }
 
@@ -355,7 +355,7 @@ export function OpsDeck({ demoMode = false }: { demoMode?: boolean }) {
                   </p>
                   {recommendationTrust.sourceEvidence.length === 0 ? (
                     <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
-                      Evidence links will appear once TinyFish captures source
+                      Evidence links will appear once automation captures source
                       pages.
                     </p>
                   ) : (
@@ -451,7 +451,7 @@ export function OpsDeck({ demoMode = false }: { demoMode?: boolean }) {
             {findings.length === 0 ? (
               <div className="aw-empty-state mt-2.5">
                 <p className="text-sm text-[var(--aw-text-soft)]">
-                  Waiting for TinyFish evidence from live runs.
+                  Waiting for evidence from live runs.
                 </p>
               </div>
             ) : (

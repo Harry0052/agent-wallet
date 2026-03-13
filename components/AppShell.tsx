@@ -189,7 +189,7 @@ function TinyFishLiveAccessCard(props: {
           <div>
             <p className="aw-kicker">Live Execution</p>
             <h3 className="mt-1 text-base font-semibold text-[var(--aw-text)]">
-              TinyFish Live Agent Session
+              Live Agent Session
             </h3>
             <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
               A real-time operator window showing where the agent is working on
@@ -285,7 +285,7 @@ function TinyFishLiveAccessCard(props: {
             <div className="h-[18rem] bg-[var(--aw-surface-subtle)] md:h-[21rem]">
               <iframe
                 src={primaryUrl}
-                title="TinyFish Live Inline Session"
+                title="Live Inline Session"
                 className="h-full w-full border-0"
                 loading="lazy"
               />
@@ -356,7 +356,7 @@ function TinyFishLiveAccessCard(props: {
             <div className="min-h-0 flex-1 bg-[var(--aw-surface-subtle)]">
               <iframe
                 src={primaryUrl}
-                title="TinyFish Live Operator View"
+                title="Live Operator View"
                 className="h-full w-full border-0"
                 loading="lazy"
               />
@@ -467,7 +467,7 @@ export function AppShell() {
     }
 
     if (workspaceTab === "live") {
-      return "Observe real browser automation in TinyFish session and execution rail.";
+      return "Observe real browser automation in the live session and execution rail.";
     }
 
     return showSettings || showHistory

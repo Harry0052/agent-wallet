@@ -441,7 +441,7 @@ export function ProcurementPlanningPanel() {
             </p>
             {logs.length === 0 ? (
               <p className="mt-2 text-xs text-[var(--aw-text-muted)]">
-                No live logs yet. Start research to stream TinyFish actions in
+                No live logs yet. Start research to stream automation actions in
                 real time.
               </p>
             ) : (
@@ -724,9 +724,9 @@ export function ProcurementPlanningPanel() {
               </p>
               <p className="mt-1 text-xs text-[var(--aw-text-soft)]">
                 {recommendation.purchasePrep.status === "running" &&
-                  "TinyFish is preparing the live checkout flow."}
+                  "Automation is preparing the live checkout flow."}
                 {recommendation.purchasePrep.status === "prepared" &&
-                  "TinyFish prepared the flow and paused before payment."}
+                  "Automation prepared the flow and paused before payment."}
                 {recommendation.purchasePrep.status === "failed" &&
                   `Preparation failed: ${recommendation.purchasePrep.error || "unknown error"}`}
               </p>

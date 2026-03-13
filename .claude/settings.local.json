@@ -13,7 +13,8 @@
       "Bash(kill 18968)",
       "Bash(npm test)",
       "Bash(xargs kill -9)",
-      "Bash(kill 43110)"
+      "Bash(kill 43110)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
     ]
   }
 }

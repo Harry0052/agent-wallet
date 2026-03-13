@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { TinyFishLiveAccessCard } from "@/components/TinyFishLiveAccessCard";
 import { AgentRail } from "@/components/AgentRail";
+import { TasksTabPanel } from "@/components/TasksTabPanel";
 
 function ExecutionContent() {
   const searchParams = useSearchParams();
@@ -23,6 +24,8 @@ function ExecutionContent() {
         <TinyFishLiveAccessCard />
         <AgentRail demoMode={isDemoMode} />
       </div>
+
+      <TasksTabPanel />
     </div>
   );
 }

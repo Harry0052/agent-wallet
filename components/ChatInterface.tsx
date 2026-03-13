@@ -1,16 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Clock, Plus, Sparkles, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Clock, Plus, Sparkles, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { ChatMessage } from "@/lib/types";
-import { cn, fmtTime, uid } from "@/lib/utils";
+import { cn, fmtTime } from "@/lib/utils";
+import { GeneralChat } from "@/components/home/GeneralChat";
+import { ResearchChat } from "@/components/home/ResearchChat";
+import { TaskChat } from "@/components/home/TaskChat";
 import { ChatMessageBubble } from "./ChatMessage";
 import { ChatHistoryPanel } from "./ChatHistoryPanel";
 
 const MAX_TASK_WORKSPACES = 4;
 
 type PanelVisualState = "running" | "queued" | "attention" | "done";
+type DashboardMode = "research" | "general" | "task";
 
 interface TaskWorkspacePanel {
   id: string;
@@ -23,6 +28,43 @@ interface TaskWorkspacePanelView extends TaskWorkspacePanel {
   messages: ChatMessage[];
   state: PanelVisualState;
   isActive: boolean;
+}
+
+type DashboardModeButton = {
+  id: DashboardMode;
+  title: string;
+  description: string;
+  palette: string;
+};
+
+const DASHBOARD_MODE_BUTTONS: DashboardModeButton[] = [
+  {
+    id: "research",
+    title: "Research",
+    description: "Deep analysis",
+    palette:
+      "border-emerald-200/85 bg-emerald-200/45 text-emerald-950 shadow-[0_12px_24px_rgba(16,185,129,0.16)] hover:bg-emerald-200/60",
+  },
+  {
+    id: "general",
+    title: "General",
+    description: "Wallet and product help",
+    palette:
+      "border-sky-200/85 bg-sky-200/45 text-sky-950 shadow-[0_12px_24px_rgba(56,189,248,0.16)] hover:bg-sky-200/60",
+  },
+  {
+    id: "task",
+    title: "Tasks",
+    description: "Action automation",
+    palette:
+      "border-orange-200/85 bg-orange-200/50 text-orange-950 shadow-[0_12px_24px_rgba(251,146,60,0.16)] hover:bg-orange-200/65",
+  },
+];
+
+function panelForMode(mode: DashboardMode, onClose: () => void) {
+  if (mode === "research") return <ResearchChat onClose={onClose} />;
+  if (mode === "general") return <GeneralChat onClose={onClose} />;
+  return <TaskChat onClose={onClose} />;
 }
 
 function panelStateLabel(state: PanelVisualState): string {
@@ -51,7 +93,6 @@ function panelStateChipClass(state: PanelVisualState): string {
 export function ChatInterface() {
   const {
     messages,
-    sendMessage,
     isProcessing,
     queuedTaskCount,
     activeTask,
@@ -61,24 +102,15 @@ export function ChatInterface() {
     toggleChatHistory,
   } = useApp();
 
-  const [input, setInput] = useState("");
   const [taskPanels, setTaskPanels] = useState<TaskWorkspacePanel[]>([]);
   const [activePanelId, setActivePanelId] = useState<string | null>(null);
-  const [limitReached, setLimitReached] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [openModePanel, setOpenModePanel] = useState<DashboardMode | null>(null);
   const seededConversationRef = useRef<string | null>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (taskPanels.length < MAX_TASK_WORKSPACES) {
-      setLimitReached(false);
-    }
-  }, [taskPanels.length]);
-
-  useEffect(() => {
+    // Only sync panels when the conversation actively changes (new messages sent
+    // this session). Do NOT seed from restored/loaded history to prevent stale
+    // panels appearing on app load or after sign-in.
     const userEntries = messages
       .map((message, index) => (message.role === "user" ? { message, index } : null))
       .filter(Boolean) as Array<{ message: ChatMessage; index: number }>;
@@ -95,23 +127,19 @@ export function ChatInterface() {
     const conversationSignature =
       activeConversationId || `root:${userEntries[0].message.id}`;
 
-    const needsSync =
-      taskPanels.length === 0 ||
-      taskPanels.some((panel) => {
-        if (panel.startIndex === null) return false;
-        const mapped = messages[panel.startIndex];
-        return !mapped || mapped.role !== "user" || mapped.content !== panel.prompt;
-      });
-
-    if (!needsSync) {
-      seededConversationRef.current = conversationSignature;
+    // Skip auto-seeding if this is the same conversation and panels already exist.
+    if (
+      seededConversationRef.current === conversationSignature &&
+      taskPanels.length > 0
+    ) {
       return;
     }
 
+    // Only auto-seed if the conversation actually changed (new session or
+    // explicit loadChat). Guards against stale history seeding on mount.
     const hasConversationChanged =
       seededConversationRef.current !== conversationSignature;
 
-    // Keep user-closed panels closed unless the conversation context changed.
     if (!hasConversationChanged && taskPanels.length === 0) return;
 
     const seededPanels: TaskWorkspacePanel[] = userEntries
@@ -255,36 +283,7 @@ export function ChatInterface() {
     [activePanelId, panelViews],
   );
 
-  const canCreateTaskWorkspace = taskPanels.length < MAX_TASK_WORKSPACES;
   const hasQueuedWork = queuedTaskCount > 0;
-
-  const createWorkspace = (prompt: string): boolean => {
-    if (!canCreateTaskWorkspace) {
-      setLimitReached(true);
-      return false;
-    }
-
-    const panel: TaskWorkspacePanel = {
-      id: uid(),
-      prompt,
-      createdAt: new Date().toISOString(),
-      startIndex: isProcessing ? null : messages.length,
-    };
-
-    setTaskPanels((prev) => [...prev, panel]);
-    setActivePanelId(panel.id);
-    setLimitReached(false);
-    return true;
-  };
-
-  const handleSend = () => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
-    if (!createWorkspace(trimmed)) return;
-
-    sendMessage(trimmed);
-    setInput("");
-  };
 
   const closeWorkspace = (panelId: string) => {
     setTaskPanels((prev) => prev.filter((panel) => panel.id !== panelId));
@@ -398,8 +397,8 @@ export function ChatInterface() {
                         </p>
                       </div>
                     ) : (
-                      <div className="space-y-2.5">
-                        {panel.messages.slice(-8).map((message) => (
+                      <div className="flex flex-col-reverse gap-2.5">
+                        {panel.messages.slice(-8).reverse().map((message) => (
                           <ChatMessageBubble key={message.id} message={message} />
                         ))}
                       </div>
@@ -427,64 +426,83 @@ export function ChatInterface() {
                 : "Ready"}
             </div>
           </div>
-          {limitReached && (
-            <p className="mt-2 text-xs text-[var(--aw-warning)]">
-              Four task workspaces are already open. Close one workspace to start another.
-            </p>
-          )}
         </div>
       </div>
 
       {!showChatHistory && (
         <div className="pointer-events-none fixed bottom-4 left-1/2 z-30 w-full max-w-3xl -translate-x-1/2 px-3 md:bottom-6 md:px-4">
-          <div className="pointer-events-auto rounded-[1.35rem] border border-[var(--aw-border-strong)] bg-[linear-gradient(170deg,rgba(255,255,255,0.96),rgba(245,249,255,0.96))] p-3 shadow-[0_22px_44px_rgba(15,23,42,0.18)] backdrop-blur">
-            <div className="flex items-center gap-2 md:gap-3">
-              <button
-                onClick={startNewChat}
-                className="aw-button-ghost h-9 w-9 shrink-0 p-0"
-                aria-label="New chat"
-                title="New chat"
-              >
-                <Plus size={16} />
-              </button>
-              <button
-                onClick={toggleChatHistory}
-                className="aw-button-ghost h-9 w-9 shrink-0 p-0"
-                aria-label="Chat history"
-                title="Chat history"
-              >
-                <Clock size={16} />
-              </button>
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && handleSend()}
-                placeholder={
-                  isProcessing
-                    ? "Task running. Enter another task to queue it."
-                    : "Describe what you want done next."
-                }
-                className="aw-input h-11 text-sm"
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || !canCreateTaskWorkspace}
-                className="aw-button-primary h-11 shrink-0 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  {isProcessing ? "Queue Task" : "Run Task"}
-                  <ArrowUpRight size={14} />
-                </span>
-              </button>
+          <div className="pointer-events-auto rounded-[1.45rem] border border-[var(--aw-border-strong)] bg-[linear-gradient(170deg,rgba(255,255,255,0.94),rgba(245,249,255,0.9))] p-3.5 shadow-[0_24px_46px_rgba(15,23,42,0.18)] backdrop-blur-2xl">
+            <div className="mb-2.5 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={startNewChat}
+                  className="aw-button-ghost h-9 w-9 shrink-0 p-0"
+                  aria-label="New chat"
+                  title="New chat"
+                >
+                  <Plus size={16} />
+                </button>
+                <button
+                  onClick={toggleChatHistory}
+                  className="aw-button-ghost h-9 w-9 shrink-0 p-0"
+                  aria-label="Chat history"
+                  title="Chat history"
+                >
+                  <Clock size={16} />
+                </button>
+              </div>
+              <span className="text-[11px] text-[var(--aw-text-muted)]">
+                {isProcessing ? "Task running" : "Mode selector"}
+              </span>
             </div>
 
-            <p className="mt-2.5 text-[11px] text-[var(--aw-text-muted)]">
-              {canCreateTaskWorkspace
-                ? "Press Enter to create a task workspace."
-                : "Workspace limit reached. Close one panel to continue."}
-            </p>
+            <div className="relative">
+              <AnimatePresence initial={false}>
+                {openModePanel ? (
+                  <motion.div
+                    key={`${openModePanel}-panel`}
+                    initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.985 }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 320,
+                      damping: 28,
+                      mass: 0.75,
+                    }}
+                    className="absolute inset-x-0 bottom-full mb-3 origin-bottom rounded-3xl border border-white/55 bg-white/40 p-4 shadow-[0_18px_36px_rgba(15,23,42,0.2)] backdrop-blur-2xl"
+                  >
+                    <div className="aw-scroll max-h-[58vh] overflow-y-auto pr-1">
+                      {panelForMode(openModePanel, () => setOpenModePanel(null))}
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+              <div className="grid grid-cols-3 gap-2">
+                {DASHBOARD_MODE_BUTTONS.map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    aria-expanded={openModePanel === mode.id}
+                    onClick={() =>
+                      setOpenModePanel((current) => (current === mode.id ? null : mode.id))
+                    }
+                    className={cn(
+                      "rounded-2xl border px-3 py-2.5 text-center backdrop-blur-xl",
+                      "transition-all duration-250 ease-out",
+                      "hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(15,23,42,0.14)]",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50",
+                      mode.palette,
+                    )}
+                  >
+                    <span className="block text-sm font-semibold leading-tight">
+                      {mode.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

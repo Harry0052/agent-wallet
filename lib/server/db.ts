@@ -866,6 +866,29 @@ export async function ensureSchema(): Promise<void> {
     `);
 
     await safePoolQuery(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        tinyfish_run_id TEXT,
+        tinyfish_run_url TEXT,
+        status TEXT NOT NULL DEFAULT 'running',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await safePoolQuery(`
+      CREATE INDEX IF NOT EXISTS idx_tasks_user_created_at
+      ON tasks (user_id, created_at DESC);
+    `);
+
+    await safePoolQuery(`
+      CREATE INDEX IF NOT EXISTS idx_tasks_user_run_id
+      ON tasks (user_id, tinyfish_run_id);
+    `);
+
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS web_action_logs (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,

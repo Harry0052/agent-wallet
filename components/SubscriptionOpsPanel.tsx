@@ -301,7 +301,7 @@ export function SubscriptionOpsPanel({ alwaysShow: _alwaysShow }: { alwaysShow?:
                         <p className="mt-0.5 text-[11px] text-[var(--aw-text-soft)]">
                           {action.summary ||
                             action.error ||
-                            "No summary provided by TinyFish."}
+                            "No summary provided by the automation engine."}
                         </p>
                         {action.projectedSavings !== null &&
                           action.projectedSavings > 0 && (

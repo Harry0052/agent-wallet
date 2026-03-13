@@ -1448,6 +1448,89 @@ export async function getRuntimeCredential(input: {
   };
 }
 
+export async function getRuntimeCredentialById(input: {
+  userId: string;
+  userToolId: string;
+  actionType?: string;
+  runId?: string;
+}): Promise<{
+  userToolId: string;
+  toolKey: string;
+  toolDisplayName: string;
+  loginIdentifier: string | null;
+  connectionType: ToolConnectionType;
+  secretType: ToolSecretType;
+  credential: unknown;
+  credentialText: string | null;
+  metadata: Record<string, unknown> | null;
+} | null> {
+  const tool = await loadUserToolJoinedById(input.userId, input.userToolId);
+  if (!tool) return null;
+  if (!tool.enabled || tool.status !== 'connected') return null;
+
+  const vault = await loadVaultEntry(tool.id);
+  if (!vault) return null;
+
+  let credential: unknown;
+  let metadata: Record<string, unknown> | null = null;
+
+  try {
+    credential = decryptVaultValue(vault.encrypted_secret, vault.key_version);
+    if (vault.encrypted_metadata) {
+      const parsedMeta = decryptVaultValue(vault.encrypted_metadata, vault.key_version);
+      if (parsedMeta && typeof parsedMeta === 'object' && !Array.isArray(parsedMeta)) {
+        metadata = parsedMeta as Record<string, unknown>;
+      }
+    }
+  } catch {
+    await markToolLoginFailure({
+      userId: input.userId,
+      toolKey: tool.tool_key,
+      message: 'Stored credential could not be decrypted. Reconnect this tool.',
+    });
+    throw new Error('Stored credential could not be decrypted');
+  }
+
+  await query(
+    `
+      UPDATE user_tools
+      SET last_used_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND user_id = $2
+    `,
+    [tool.id, input.userId],
+  );
+
+  await recordToolEvent({
+    userToolId: tool.id,
+    eventType: 'login_used',
+    message: `Credential used for ${input.actionType || 'automation action'}`,
+  });
+
+  if (input.runId && input.actionType) {
+    await linkRunToTool({ runId: input.runId, userToolId: tool.id, actionType: input.actionType });
+  }
+
+  // Resolve the plaintext login identifier: prefer metadata.loginIdentifier,
+  // then metadata.email, then metadata.username.
+  const loginIdentifier: string | null =
+    (typeof metadata?.loginIdentifier === 'string' ? metadata.loginIdentifier : null)
+    ?? (typeof metadata?.email === 'string' ? metadata.email : null)
+    ?? (typeof metadata?.username === 'string' ? metadata.username : null)
+    ?? null;
+
+  return {
+    userToolId: tool.id,
+    toolKey: tool.tool_key,
+    toolDisplayName: tool.tool_display_name,
+    loginIdentifier,
+    connectionType: tool.connection_type,
+    secretType: vault.secret_type,
+    credential,
+    credentialText: typeof credential === 'string' ? credential : null,
+    metadata,
+  };
+}
+
 export async function resolveRuntimeCredentialReference(input: {
   userId: string;
   toolKey: string;

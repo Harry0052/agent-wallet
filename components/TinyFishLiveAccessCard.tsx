@@ -371,7 +371,7 @@ export function TinyFishLiveAccessCard() {
       const message =
         (typeof payload.error === "string" && payload.error) ||
         (typeof payload.message === "string" && payload.message) ||
-        "TinyFish stream failed.";
+        "Live stream failed.";
       setLiveRunState({
         status: "failed",
         error: message,
@@ -444,7 +444,7 @@ export function TinyFishLiveAccessCard() {
       });
 
       if (!response.ok) {
-        const fallback = "Failed to start TinyFish run.";
+        const fallback = "Failed to start live run.";
         let message = fallback;
         try {
           const body = (await response.json()) as { error?: string };
@@ -456,7 +456,7 @@ export function TinyFishLiveAccessCard() {
       }
 
       if (!response.body) {
-        throw new Error("TinyFish stream returned no body.");
+        throw new Error("Live stream returned no body.");
       }
 
       const reader = response.body.getReader();
@@ -536,7 +536,7 @@ export function TinyFishLiveAccessCard() {
         });
       } else {
         const message =
-          error instanceof Error ? error.message : "TinyFish stream failed.";
+          error instanceof Error ? error.message : "Live stream failed.";
         setLiveRunState({
           error: message,
           result: {
@@ -595,7 +595,7 @@ export function TinyFishLiveAccessCard() {
               Live Run
             </h3>
             <p className="mt-1 text-sm text-[var(--aw-text-soft)]">
-              Real-time TinyFish activity
+              Real-time automation activity
             </p>
           </div>
           <span className="aw-status-chip" data-state={statusState(runStatus)}>
@@ -746,7 +746,7 @@ export function TinyFishLiveAccessCard() {
                     <div className="h-[19rem] border-t border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] md:h-[23rem]">
                       <iframe
                         src={previewUrl}
-                        title="TinyFish Live Run Preview"
+                        title="Live Run Preview"
                         className="h-full w-full border-0"
                         loading="lazy"
                       />
@@ -755,7 +755,7 @@ export function TinyFishLiveAccessCard() {
                 ) : (
                   <div className="space-y-1 px-3 py-4 text-sm text-[var(--aw-text-muted)]">
                     <p>No live browser preview yet.</p>
-                    <p className="text-xs">Waiting for a live preview URL from TinyFish.</p>
+                    <p className="text-xs">Waiting for a live preview URL from the automation engine.</p>
                   </div>
                 )}
               </section>
@@ -887,7 +887,7 @@ export function TinyFishLiveAccessCard() {
             <div className="min-h-0 flex-1 bg-[var(--aw-surface-subtle)]">
               <iframe
                 src={previewUrl}
-                title="TinyFish Live Operator View"
+                title="Live Operator View"
                 className="h-full w-full border-0"
                 loading="lazy"
               />
@@ -941,7 +941,7 @@ export function TinyFishLiveAccessCard() {
           <div className="h-[18rem] bg-[var(--aw-surface-subtle)] md:h-[21rem]">
             <iframe
               src={previewUrl}
-              title="TinyFish Live Inline Session"
+              title="Live Inline Session"
               className="h-full w-full border-0"
               loading="lazy"
             />

@@ -63,10 +63,10 @@ export function ProcurementApprovalSheet(props: {
           </p>
           <ul className="mt-2 space-y-1.5">
             <li className="text-xs text-[var(--aw-text-soft)]">
-              • TinyFish will navigate to the vendor signup or checkout path.
+              • Automation will navigate to the vendor signup or checkout path.
             </li>
             <li className="text-xs text-[var(--aw-text-soft)]">
-              • TinyFish will fill preparation fields where possible.
+              • Automation will fill preparation fields where possible.
             </li>
             <li className="text-xs text-[var(--aw-text-soft)]">
               • Flow will stop before irreversible payment confirmation.

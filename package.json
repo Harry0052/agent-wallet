@@ -16,6 +16,7 @@
     "@stripe/stripe-js": "^4.9.0",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
+    "framer-motion": "^12.35.2",
     "google-auth-library": "^9.15.1",
     "jose": "^5.10.0",
     "lucide-react": "^0.294.0",

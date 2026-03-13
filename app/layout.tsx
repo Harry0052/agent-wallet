@@ -12,7 +12,7 @@ const bodyFont = Inter({
 export const metadata: Metadata = {
   title: 'Agent Wallet',
   description:
-    'Financial OS for tasks, wallet controls, and live web execution powered by TinyFish.',
+    'Financial OS for tasks, wallet controls, and live web execution.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

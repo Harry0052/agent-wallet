@@ -40,7 +40,7 @@ export function ChatHistoryPanel() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="flex min-h-full flex-col-reverse gap-2">
             {chatHistory.map((conv) => (
               <article
                 key={conv.id}

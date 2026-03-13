@@ -337,38 +337,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function restoreSession() {
       await refreshWallet();
 
+      // Do NOT auto-restore old chat messages — every session starts clean.
+      // History is available on demand via the Chat History panel.
+      if (!cancelled) {
+        setMessages([{
+          id: 'welcome',
+          role: 'assistant',
+          content: 'Agent Wallet is ready. Tell me what you need — I\'ll handle the work and only pause for approvals or clarifications.',
+          type: 'text',
+          timestamp: new Date().toISOString(),
+        }]);
+      }
+
       try {
         const snapshot = await memoryService.loadSession();
-
         if (cancelled) return;
-
-        if (snapshot.messages && snapshot.messages.length > 0) {
-          setMessages(snapshot.messages);
-        } else {
-          setMessages([{
-            id: 'welcome',
-            role: 'assistant',
-            content: 'Agent Wallet is ready. Tell me what you need — I\'ll handle the work and only pause for approvals or clarifications.',
-            type: 'text',
-            timestamp: new Date().toISOString(),
-          }]);
-        }
-
+        // Only restore non-message state (live run, active task) — not messages.
         if (snapshot.activeTask) setActiveTask(snapshot.activeTask);
         if (snapshot.liveRun) setLiveRun(snapshot.liveRun);
       } catch {
-        if (cancelled) return;
-        // Fall back to welcome message on error
-        setMessages((prev) => {
-          if (prev.length > 0) return prev;
-          return [{
-            id: 'welcome',
-            role: 'assistant',
-            content: 'Agent Wallet is ready. Tell me what you need — I\'ll handle the work and only pause for approvals or clarifications.',
-            type: 'text',
-            timestamp: new Date().toISOString(),
-          }];
-        });
+        // Non-fatal; session state is optional.
       }
 
       if (!cancelled) setSessionRestored(true);
@@ -379,16 +367,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [refreshWallet]);
 
-  // Debounced save: persist session state 1.5s after changes
+  // Debounced save: persist session state 1.5s after changes.
+  // Only save activeTask and liveRun — messages are NOT persisted to memory
+  // (they're managed by chatHistory in localStorage instead). This prevents
+  // stale messages from being accidentally restored on session resume.
   useEffect(() => {
     if (!sessionRestored) return;
 
     const timer = setTimeout(() => {
-      void memoryService.saveSession({ messages, activeTask, liveRun });
+      void memoryService.saveSession({ activeTask, liveRun });
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [messages, activeTask, liveRun, sessionRestored]);
+  }, [activeTask, liveRun, sessionRestored]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
