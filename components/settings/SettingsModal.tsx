@@ -36,7 +36,7 @@ export function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-[2px]"
+      className="aw-overlay-soft fixed inset-0 z-[90] flex items-center justify-center p-4"
       onClick={onClose}
       role="presentation"
     >

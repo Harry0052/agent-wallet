@@ -1,15 +1,15 @@
 "use client";
 
-import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-type OnboardingStep = 'welcome' | 'wallet' | 'profile' | 'tools' | 'complete';
+type OnboardingStep = "welcome" | "profile" | "connect";
 
 interface OnboardingPayload {
   ok: boolean;
   onboarding?: {
-    step: OnboardingStep;
+    step: string;
     completedAt: string | null;
     skippedToolSetup: boolean;
     preferences?: Record<string, unknown>;
@@ -38,39 +38,35 @@ export function OnboardingFlow() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [walletReady, setWalletReady] = useState(false);
-  const [profileReady, setProfileReady] = useState(false);
-  const [step, setStep] = useState<OnboardingStep>('welcome');
-
-  const canFinish = walletReady && profileReady;
-  const title = useMemo(() => {
-    if (step === 'wallet') return 'Initialize your wallet';
-    if (step === 'profile') return 'Set your profile';
-    if (step === 'tools') return 'Connect tools';
-    return 'Welcome to Agent Wallet';
-  }, [step]);
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [step, setStep] = useState<OnboardingStep>("welcome");
 
   const loadState = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/onboarding', { cache: 'no-store' });
+      const response = await fetch("/api/onboarding", { cache: "no-store" });
       const body = await readJson<OnboardingPayload>(response);
       if (!response.ok || !body.ok || !body.onboarding) {
-        throw new Error(body.error || 'Failed to load onboarding');
+        throw new Error(body.error || "Failed to load onboarding");
       }
 
-      setStep(body.onboarding.step);
-      setEmail(body.user?.email || '');
-      setWalletReady(Boolean(body.setup?.walletInitialized));
-      setProfileReady(Boolean(body.setup?.profileReady));
-      setFullName(body.profile?.fullName || '');
-      setCompanyName(body.profile?.companyName || '');
+      const serverStep = body.onboarding.step;
+      if (serverStep === "profile" || serverStep === "wallet") {
+        setStep("profile");
+      } else if (serverStep === "tools" || serverStep === "complete") {
+        setStep("connect");
+      } else {
+        setStep("welcome");
+      }
+
+      setEmail(body.user?.email || body.profile?.email || "");
+      setFullName(body.profile?.fullName || "");
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load onboarding');
+      setError(
+        loadError instanceof Error ? loadError.message : "Failed to load onboarding",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -81,32 +77,35 @@ export function OnboardingFlow() {
   }, []);
 
   const patchOnboarding = async (payload: Record<string, unknown>) => {
-    const response = await fetch('/api/onboarding', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+    const response = await fetch("/api/onboarding", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const body = await readJson<{ ok?: boolean; error?: string }>(response);
     if (!response.ok || !body.ok) {
-      throw new Error(body.error || 'Failed to update onboarding');
+      throw new Error(body.error || "Failed to update onboarding");
     }
   };
 
-  const onInitWallet = async () => {
+  const onGetStarted = async () => {
     setIsSaving(true);
     setError(null);
     try {
-      const walletRes = await fetch('/api/wallet/init', { method: 'POST' });
+      const walletRes = await fetch("/api/wallet/init", { method: "POST" });
       const walletBody = await readJson<{ ok?: boolean; error?: string }>(walletRes);
       if (!walletRes.ok || !walletBody.ok) {
-        throw new Error(walletBody.error || 'Failed to initialize wallet');
+        throw new Error(walletBody.error || "Failed to initialize wallet");
       }
 
-      await patchOnboarding({ step: 'wallet' });
-      setWalletReady(true);
-      setStep('profile');
+      await patchOnboarding({ step: "wallet" });
+      setStep("profile");
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to initialize wallet');
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -116,25 +115,25 @@ export function OnboardingFlow() {
     setIsSaving(true);
     setError(null);
     try {
-      const profileRes = await fetch('/api/wallet/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const profileRes = await fetch("/api/wallet/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...(fullName.trim() ? { fullName: fullName.trim() } : {}),
-          ...(companyName.trim() ? { companyName: companyName.trim() } : {}),
           ...(email.trim() ? { email: email.trim() } : {}),
         }),
       });
       const profileBody = await readJson<{ error?: string }>(profileRes);
       if (!profileRes.ok) {
-        throw new Error(profileBody.error || 'Failed to save profile');
+        throw new Error(profileBody.error || "Failed to save profile");
       }
 
-      await patchOnboarding({ step: 'profile' });
-      setProfileReady(true);
-      setStep('tools');
+      await patchOnboarding({ step: "profile" });
+      setStep("connect");
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to save profile');
+      setError(
+        saveError instanceof Error ? saveError.message : "Failed to save profile",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -148,13 +147,17 @@ export function OnboardingFlow() {
         complete: true,
         skippedToolSetup,
         preferencesPatch: {
-          onboardingCompletedFrom: 'onboarding_page',
+          onboardingCompletedFrom: "onboarding_page",
         },
       });
-      router.replace('/operator');
+      router.replace("/home");
       router.refresh();
     } catch (completeError) {
-      setError(completeError instanceof Error ? completeError.message : 'Failed to complete onboarding');
+      setError(
+        completeError instanceof Error
+          ? completeError.message
+          : "Failed to complete onboarding",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -162,136 +165,131 @@ export function OnboardingFlow() {
 
   if (isLoading) {
     return (
-      <div className="aw-page mx-auto max-w-3xl">
-        <div className="aw-surface p-6">
-          <p className="aw-page-subtitle">Loading onboarding...</p>
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-sm text-[var(--aw-text-muted)]">Loading...</p>
       </div>
     );
   }
 
+  const steps = ["welcome", "profile", "connect"] as const;
+
   return (
-    <div className="aw-page mx-auto max-w-3xl">
-      <div className="aw-page-header">
-        <p className="aw-page-kicker">Onboarding</p>
-        <h1 className="aw-page-title">{title}</h1>
-        <p className="aw-page-subtitle">
-          Set up your private Agent Wallet environment. You can skip tool setup and continue later.
-        </p>
+    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 py-12">
+      <div className="mb-8 flex items-center gap-2">
+        {steps.map((s, i) => (
+          <div key={s} className="flex items-center gap-2">
+            <div
+              className={`h-2 w-2 rounded-full transition-colors ${
+                s === step
+                  ? "bg-[var(--aw-primary)]"
+                  : steps.indexOf(step) > i
+                    ? "bg-[var(--aw-primary)]/40"
+                    : "bg-[var(--aw-border)]"
+              }`}
+            />
+            {i < 2 ? <div className="h-px w-6 bg-[var(--aw-border)]" /> : null}
+          </div>
+        ))}
       </div>
 
-      <div className="aw-surface space-y-5 p-5 md:p-6">
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className={`rounded-xl border p-3 text-xs ${walletReady ? 'border-[var(--aw-success)] bg-[var(--aw-success)]/10' : 'border-[var(--aw-border)]'}`}>
-            <p className="font-semibold">Wallet</p>
-            <p className="mt-1 text-[var(--aw-text-muted)]">{walletReady ? 'Initialized' : 'Pending'}</p>
+      {step === "welcome" ? (
+        <div className="w-full text-center">
+          <h1 className="text-2xl font-semibold text-[var(--aw-text)]">Welcome to Calico</h1>
+          <p className="mt-3 text-sm leading-relaxed text-[var(--aw-text-muted)]">
+            Your finances, simplified. Track spending, spot savings, and stay on top of every subscription, all in one place.
+          </p>
+          <button
+            type="button"
+            className="aw-button-primary mt-8 w-full px-6 py-3 text-sm font-medium"
+            disabled={isSaving}
+            onClick={() => {
+              void onGetStarted();
+            }}
+          >
+            {isSaving ? "Setting up..." : "Get started"}
+          </button>
+        </div>
+      ) : null}
+
+      {step === "profile" ? (
+        <div className="w-full">
+          <h1 className="text-center text-2xl font-semibold text-[var(--aw-text)]">
+            Tell us about you
+          </h1>
+          <p className="mt-2 text-center text-sm text-[var(--aw-text-muted)]">
+            We will use this to personalize your experience.
+          </p>
+
+          <div className="mt-8 space-y-4">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-[var(--aw-text)]">Full name</span>
+              <input
+                className="aw-input h-11 w-full text-sm"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Jane Doe"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-[var(--aw-text)]">Email</span>
+              <input
+                className="aw-input h-11 w-full text-sm"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="jane@example.com"
+              />
+            </label>
           </div>
-          <div className={`rounded-xl border p-3 text-xs ${profileReady ? 'border-[var(--aw-success)] bg-[var(--aw-success)]/10' : 'border-[var(--aw-border)]'}`}>
-            <p className="font-semibold">Profile</p>
-            <p className="mt-1 text-[var(--aw-text-muted)]">{profileReady ? 'Saved' : 'Pending'}</p>
-          </div>
-          <div className={`rounded-xl border p-3 text-xs ${step === 'complete' ? 'border-[var(--aw-success)] bg-[var(--aw-success)]/10' : 'border-[var(--aw-border)]'}`}>
-            <p className="font-semibold">Tools</p>
-            <p className="mt-1 text-[var(--aw-text-muted)]">Optional</p>
+
+          <button
+            type="button"
+            className="aw-button-primary mt-8 w-full px-6 py-3 text-sm font-medium"
+            disabled={isSaving}
+            onClick={() => {
+              void onSaveProfile();
+            }}
+          >
+            {isSaving ? "Saving..." : "Save profile"}
+          </button>
+        </div>
+      ) : null}
+
+      {step === "connect" ? (
+        <div className="w-full text-center">
+          <h1 className="text-2xl font-semibold text-[var(--aw-text)]">
+            Connect your first account
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-[var(--aw-text-muted)]">
+            Link a bank or credit card to unlock your financial picture.
+          </p>
+
+          <div className="mt-8 space-y-3">
+            <Link
+              href="/connect"
+              className="aw-button-primary block w-full px-6 py-3 text-center text-sm font-medium"
+            >
+              Connect account
+            </Link>
+            <button
+              type="button"
+              className="aw-button-secondary w-full px-6 py-3 text-sm font-medium"
+              disabled={isSaving}
+              onClick={() => {
+                void onComplete(true);
+              }}
+            >
+              {isSaving ? "Finishing..." : "Skip for now"}
+            </button>
           </div>
         </div>
+      ) : null}
 
-        {!walletReady && (
-          <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
-            <p className="text-sm text-[var(--aw-text-soft)]">
-              Initialize your private wallet ledger and defaults.
-            </p>
-            <button
-              type="button"
-              className="aw-button-primary mt-3 px-4 py-2 text-sm"
-              disabled={isSaving}
-              onClick={() => { void onInitWallet(); }}
-            >
-              {isSaving ? 'Initializing...' : 'Initialize wallet'}
-            </button>
-          </div>
-        )}
-
-        {walletReady && (
-          <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
-            <p className="text-sm text-[var(--aw-text-soft)]">
-              Save basic profile defaults used for autonomous form-fill tasks.
-            </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs text-[var(--aw-text-muted)]">Full name</span>
-                <input
-                  className="aw-input h-10 text-sm"
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  placeholder="Jane Doe"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-[var(--aw-text-muted)]">Work email</span>
-                <input
-                  className="aw-input h-10 text-sm"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@company.com"
-                />
-              </label>
-              <label className="space-y-1 md:col-span-2">
-                <span className="text-xs text-[var(--aw-text-muted)]">Company (optional)</span>
-                <input
-                  className="aw-input h-10 text-sm"
-                  value={companyName}
-                  onChange={(event) => setCompanyName(event.target.value)}
-                  placeholder="Acme Inc."
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              className="aw-button-secondary mt-3 px-4 py-2 text-sm"
-              disabled={isSaving}
-              onClick={() => { void onSaveProfile(); }}
-            >
-              {isSaving ? 'Saving...' : profileReady ? 'Update profile' : 'Save profile'}
-            </button>
-          </div>
-        )}
-
-        {walletReady && profileReady && (
-          <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
-            <p className="text-sm text-[var(--aw-text-soft)]">
-              Connect tools now, or skip and configure integrations later in Settings.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link href="/tools" className="aw-button-secondary px-4 py-2 text-sm">
-                Connect tools now
-              </Link>
-              <button
-                type="button"
-                className="aw-button-primary px-4 py-2 text-sm"
-                disabled={isSaving || !canFinish}
-                onClick={() => { void onComplete(true); }}
-              >
-                {isSaving ? 'Finishing...' : 'Skip for now'}
-              </button>
-              <button
-                type="button"
-                className="aw-button-primary px-4 py-2 text-sm"
-                disabled={isSaving || !canFinish}
-                onClick={() => { void onComplete(false); }}
-              >
-                {isSaving ? 'Finishing...' : 'Continue to dashboard'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <p className="rounded-lg border border-[var(--aw-danger)]/25 bg-[var(--aw-danger)]/10 px-3 py-2 text-xs text-[var(--aw-danger)]">
-            {error}
-          </p>
-        )}
-      </div>
+      {error ? (
+        <p className="mt-6 w-full rounded-lg border border-[var(--aw-danger)]/25 bg-[var(--aw-danger)]/10 px-4 py-2.5 text-center text-xs text-[var(--aw-danger)]">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -21,7 +21,6 @@ const SECRET_NAME_PATTERN = /(API_KEY|SECRET|TOKEN|PASSWORD|DATABASE_URL|PRIVATE
 const FORBIDDEN_SECRET_ACCESS_DIRS = ['ai', 'ai_spend_intelligence', 'agent', 'agents', 'frontend'] as const;
 const FORBIDDEN_CALLER_PATH_MARKERS = [
   '/app/',
-  '/agents/',
   '/ai/',
   '/ai_spend_intelligence/',
   '/frontend/',
@@ -32,14 +31,10 @@ const TRUSTED_CALLER_PATH_MARKERS = [
   '/app/api/',
   '/lib/server/',
   '/financial_connectors/',
-  '/integrations/',
   '/transactions/',
   '/security/',
+  '/subscription_intelligence/',
   '/instrumentation.ts',
-  '/proxy.ts',
-  '/lib/recovery/',
-  '/lib/agent/',
-  '/lib/sourcing/',
 ];
 
 const REQUIRED_STARTUP_SECRETS = [
@@ -49,12 +44,10 @@ const REQUIRED_STARTUP_SECRETS = [
   'STRIPE_WEBHOOK_SECRET',
   'PLAID_CLIENT_ID',
   'PLAID_SECRET',
-  'TINYFISH_API_KEY',
 ] as const;
 
 const REQUIRED_STARTUP_ONE_OF: ReadonlyArray<ReadonlyArray<string>> = [
   ['DATA_ENCRYPTION_KEYRING', 'DATA_ENCRYPTION_MASTER_KEY'],
-  ['TOOLS_VAULT_KEYRING', 'TOOLS_VAULT_MASTER_KEY'],
   ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
 ];
 

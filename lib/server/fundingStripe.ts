@@ -63,23 +63,23 @@ async function assertStripeToolReadyForFunding(userId: string): Promise<void> {
   await ensureStripeToolForUser(userId);
   const stripeTool = await resolveToolForAction({ userId, toolKey: 'stripe' });
   if (!stripeTool) {
-    throw new Error('Stripe is not connected. Set up Stripe in Tools first.');
+    throw new Error('Stripe is not connected. Set up Stripe in Connect first.');
   }
 
   if (stripeTool.status === 'failed') {
-    throw new Error('Stripe needs reconnect. Reconnect Stripe in Tools before funding.');
+    throw new Error('Stripe needs reconnect. Reconnect Stripe in Connect before funding.');
   }
 
   if (!stripeTool.enabled && stripeTool.status === 'disconnected' && !stripeTool.hasSecret) {
-    throw new Error('Stripe is not connected. Set up Stripe in Tools first.');
+    throw new Error('Stripe is not connected. Set up Stripe in Connect first.');
   }
 
   if (!stripeTool.enabled) {
-    throw new Error('Stripe is disabled. Enable Stripe in Tools before funding.');
+    throw new Error('Stripe is disabled. Enable Stripe in Connect before funding.');
   }
 
   if (stripeTool.status === 'disconnected') {
-    throw new Error('Stripe needs reconnect. Reconnect Stripe in Tools before funding.');
+    throw new Error('Stripe needs reconnect. Reconnect Stripe in Connect before funding.');
   }
 }
 
@@ -130,7 +130,7 @@ export async function createTopupCheckoutSession(params: {
           currency: 'usd',
           unit_amount: cents,
           product_data: {
-            name: 'Agent Wallet top-up',
+            name: 'Calico top-up',
           },
         },
       },

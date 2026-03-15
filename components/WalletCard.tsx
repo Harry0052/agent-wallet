@@ -1,14 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { CreditCard, History, Settings2, Trash2 } from "lucide-react";
 import { useApp } from "@/lib/store";
-import type { SavedPaymentMethod, UserToolRecord } from "@/lib/types";
+import type { SavedPaymentMethod } from "@/lib/types";
 import { fmt } from "@/lib/utils";
 import { getDailySpent, getMonthlySpent } from "@/services/wallet";
 import * as fundingService from "@/services/funding";
-import { fetchUserTools } from "@/services/tools";
+
 import { StripeSetupForm } from "@/components/StripeSetupForm";
 
 function methodLabel(method: SavedPaymentMethod): string {
@@ -20,28 +19,6 @@ function methodLabel(method: SavedPaymentMethod): string {
 function methodExpiry(method: SavedPaymentMethod): string {
   if (!method.expMonth || !method.expYear) return "Expiry not available";
   return `Exp ${String(method.expMonth).padStart(2, "0")}/${String(method.expYear).slice(-2)}`;
-}
-
-type StripeStatus = "Connected" | "Not connected" | "Disabled" | "Needs reconnect";
-
-function hasConnectionSignal(tool: UserToolRecord): boolean {
-  return (
-    tool.hasSecret
-    || Boolean(tool.loginIdentifierMasked)
-    || tool.status === "connected"
-    || tool.status === "failed"
-  );
-}
-
-function stripeStatus(tool: UserToolRecord | null): StripeStatus {
-  if (!tool) return "Not connected";
-  if (tool.status === "failed") return "Needs reconnect";
-  if (tool.status === "connected") return tool.enabled ? "Connected" : "Disabled";
-  if (!tool.enabled) return hasConnectionSignal(tool) ? "Disabled" : "Not connected";
-  if (tool.status === "disconnected" || tool.status === "pending") {
-    return hasConnectionSignal(tool) ? "Needs reconnect" : "Not connected";
-  }
-  return "Not connected";
 }
 
 export function WalletCard() {
@@ -58,7 +35,6 @@ export function WalletCard() {
   const [setupPublishableKey, setSetupPublishableKey] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [methodMessage, setMethodMessage] = useState<string | null>(null);
-  const [stripeTool, setStripeTool] = useState<UserToolRecord | null>(null);
 
   const dailySpent = getDailySpent(wallet);
   const monthlySpent = getMonthlySpent(wallet);
@@ -80,23 +56,9 @@ export function WalletCard() {
     }
   }, []);
 
-  const loadStripeTool = useCallback(async () => {
-    try {
-      const tools = await fetchUserTools();
-      const stripe = tools.find((tool) => tool.tool.key === "stripe") || null;
-      setStripeTool(stripe);
-    } catch {
-      setStripeTool(null);
-    }
-  }, []);
-
   useEffect(() => {
     void loadSavedMethods();
   }, [loadSavedMethods]);
-
-  useEffect(() => {
-    void loadStripeTool();
-  }, [loadStripeTool]);
 
   const openSetupFlow = useCallback(async (consentSource: string) => {
     setSetupLoading(true);
@@ -132,7 +94,6 @@ export function WalletCard() {
           await fundingService.confirmFundingSetupIntent(setupIntentId);
           setMethodMessage("Payment method saved. You can now approve top-ups in chat.");
           await loadSavedMethods();
-          await loadStripeTool();
         } catch (error) {
           setMethodMessage(error instanceof Error ? error.message : "Payment setup was not completed.");
         }
@@ -141,7 +102,6 @@ export function WalletCard() {
       shouldCleanUrl = true;
       setMethodMessage("Payment method saved. You can now approve top-ups without entering card details again.");
       void loadSavedMethods();
-      void loadStripeTool();
     } else if (setupStatus === "cancelled") {
       shouldCleanUrl = true;
       setMethodMessage("Payment method setup was cancelled.");
@@ -155,7 +115,7 @@ export function WalletCard() {
     if (shouldCleanUrl) {
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, [loadSavedMethods, loadStripeTool, openSetupFlow]);
+  }, [loadSavedMethods, openSetupFlow]);
 
   const handleAdd = async () => {
     const value = parseFloat(amount);
@@ -181,8 +141,6 @@ export function WalletCard() {
     await openSetupFlow("wallet_page");
   };
 
-  const currentStripeStatus = stripeStatus(stripeTool);
-
   const handleRemovePaymentMethod = async (paymentMethodId: string) => {
     setRemovingId(paymentMethodId);
     setMethodMessage(null);
@@ -190,7 +148,6 @@ export function WalletCard() {
       await fundingService.removeSavedPaymentMethod(paymentMethodId);
       setMethodMessage("Saved payment method removed.");
       await loadSavedMethods();
-      await loadStripeTool();
     } catch (error) {
       setMethodMessage(error instanceof Error ? error.message : "Could not remove this payment method.");
     } finally {
@@ -246,7 +203,7 @@ export function WalletCard() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-medium text-[var(--aw-text)]">Saved payment methods</p>
-            <p className="text-[11px] text-[var(--aw-text-muted)]">Only Stripe references are stored in Agent Wallet.</p>
+            <p className="text-[11px] text-[var(--aw-text-muted)]">Only Stripe references are stored in Calico.</p>
           </div>
           <button
             onClick={() => void handleSetupPaymentMethod()}
@@ -273,7 +230,6 @@ export function WalletCard() {
                   setSetupPublishableKey(null);
                   setMethodMessage(`Saved payment method: ${methodLabel(method)}.`);
                   void loadSavedMethods();
-                  void loadStripeTool();
                 }}
                 onCancel={() => {
                   setShowSetupForm(false);
@@ -285,34 +241,6 @@ export function WalletCard() {
           </div>
         ) : null}
 
-        {currentStripeStatus !== "Connected" ? (
-          <div className="rounded-lg border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-xs font-medium text-[var(--aw-text)]">
-              {currentStripeStatus === "Needs reconnect" ? "Reconnect Stripe" : "Set up Stripe"}
-            </p>
-            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
-              Connect Stripe to fund your wallet and manage payments.
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {currentStripeStatus === "Disabled" ? (
-                <Link href="/tools" className="aw-button-primary h-8 px-3 text-[11px]">
-                  Enable in Tools
-                </Link>
-              ) : (
-                <button
-                  onClick={() => void handleSetupPaymentMethod()}
-                  disabled={setupLoading}
-                  className="aw-button-primary h-8 px-3 text-[11px]"
-                >
-                  {setupLoading ? "Loading..." : currentStripeStatus === "Needs reconnect" ? "Reconnect" : "Connect"}
-                </button>
-              )}
-              <Link href="/tools" className="aw-button-secondary h-8 px-3 text-[11px]">
-                Open Tools
-              </Link>
-            </div>
-          </div>
-        ) : null}
 
         {methodsLoading ? (
           <p className="text-xs text-[var(--aw-text-muted)]">Loading saved methods...</p>

@@ -54,6 +54,12 @@ export async function POST(req: NextRequest) {
       success: true,
       phase: 'create_link_token',
     });
+    logServerEvent("info", "smart.telemetry.source.reconnect_attempt", {
+      userId,
+      sourceType: "connected_account",
+      phase: "create_link_token",
+      outcome: "success",
+    });
 
     logServerEvent("info", "connect.create_link_token.success", {
       userId,
@@ -73,6 +79,12 @@ export async function POST(req: NextRequest) {
         success: false,
         phase: 'create_link_token',
       });
+      logServerEvent("info", "smart.telemetry.source.reconnect_attempt", {
+        userId: auth.auth.walletUserId,
+        sourceType: "connected_account",
+        phase: "create_link_token",
+        outcome: "failure",
+      });
     }
 
     if (error instanceof RequestValidationError) {
@@ -86,13 +98,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const message =
-      error instanceof z.ZodError
-        ? error.issues.map((issue) => issue.message).join("; ")
-        : error instanceof Error
-          ? error.message
-          : "Failed to create Plaid link token.";
-    const status = error instanceof z.ZodError ? 400 : 500;
+    const rawMessage = error instanceof z.ZodError
+      ? error.issues.map((issue) => issue.message).join("; ")
+      : error instanceof Error
+        ? error.message
+        : "Failed to create Plaid link token.";
+
+    // Do not leak secret/config details to the client
+    const isConfigError = /missing required secret|plaid_client_id|plaid_secret/i.test(rawMessage);
+    const message = isConfigError
+      ? "Account linking is not available. Please contact support."
+      : rawMessage;
+    const status = error instanceof z.ZodError ? 400 : isConfigError ? 503 : 500;
     const errorCode = classifyTaskError({
       message,
       validation: error instanceof z.ZodError,

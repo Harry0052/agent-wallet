@@ -4,6 +4,7 @@ import { assertNoAiFinancialConnectorAccess } from "@/security/secretsGuard";
 import {
   listStoredConnectedAccounts,
   listStoredConnectedInstitutions,
+  removeStoredConnectedAccount,
   type ConnectedAccount,
   type ConnectedInstitution,
 } from "@/financial_connectors/tokenVault";
@@ -22,4 +23,15 @@ export async function listConnectedAccounts(
 ): Promise<ConnectedAccount[]> {
   assertNoAiFinancialConnectorAccess("/financial_connectors/institutionService.ts");
   return listStoredConnectedAccounts(userId);
+}
+
+export async function removeConnectedAccount(input: {
+  userId: string;
+  accountId: string;
+}): Promise<{
+  removed: boolean;
+  removedItem: boolean;
+}> {
+  assertNoAiFinancialConnectorAccess("/financial_connectors/institutionService.ts");
+  return removeStoredConnectedAccount(input);
 }

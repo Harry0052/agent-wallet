@@ -51,10 +51,28 @@ function extractCandidateText(raw: string): string {
       content?: {
         parts?: Array<{ text?: string }>;
       };
+      finishReason?: string;
     }>;
+    promptFeedback?: {
+      blockReason?: string;
+    };
   };
 
-  const text = parsed.candidates?.[0]?.content?.parts
+  // Check for prompt-level safety block before inspecting candidates.
+  const blockReason = parsed.promptFeedback?.blockReason;
+  if (blockReason) {
+    throw new Error(`Gemini blocked prompt: ${blockReason}`);
+  }
+
+  const candidate = parsed.candidates?.[0];
+
+  // Check candidate-level finish reason for non-STOP termination.
+  const finishReason = candidate?.finishReason;
+  if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
+    throw new Error(`Gemini stopped with finishReason=${finishReason}`);
+  }
+
+  const text = candidate?.content?.parts
     ?.map((part) => (typeof part.text === 'string' ? part.text : ''))
     .join('\n')
     .trim();

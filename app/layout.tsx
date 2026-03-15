@@ -1,18 +1,18 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { Inter } from 'next/font/google';
+import { DM_Sans } from 'next/font/google';
 import './globals.css';
 
-const bodyFont = Inter({
+const bodyFont = DM_Sans({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-calico',
   weight: ['400', '500', '600', '700'],
 });
 
 export const metadata: Metadata = {
-  title: 'Agent Wallet',
+  title: 'Calico',
   description:
-    'Financial OS for tasks, wallet controls, and live web execution.',
+    'Calico — the friendly money app that helps you understand your spending, spot recurring bills, and feel more in control.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

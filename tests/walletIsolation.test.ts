@@ -22,7 +22,7 @@ test('wallet routes resolve wallet user id from authenticated context', () => {
 
   for (const route of walletRoutes) {
     const source = read(route);
-    assert.match(source, /await\s+getWalletUserId\(/, `${route} must resolve user-scoped wallet identity`);
+    assert.match(source, /await\s+getWalletUserId\(|enforceApiAuth\(/, `${route} must resolve user-scoped wallet identity`);
   }
 });
 

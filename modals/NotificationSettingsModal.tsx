@@ -4,11 +4,42 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { fmtFull } from "@/lib/utils";
-import type { ActiveSubscriptionTask, SubscriptionActionRecord } from "@/lib/types";
 import {
   fetchSubscriptionStatus,
   runSubscriptionOperation,
 } from "@/services/subscriptions";
+
+type SubscriptionOperationStatus = 'running' | 'completed' | 'blocked' | 'failed';
+
+interface ActiveSubscriptionTask {
+  taskId: string;
+  title: string;
+  vendorName: string;
+  planName: string;
+  amount: number | null;
+  amountBasis: 'monthly' | 'annual' | 'unknown';
+  billingFrequency: string;
+  sourceUrl: string;
+  approvedAt?: string;
+  taskStatus: string;
+}
+
+interface SubscriptionActionRecord {
+  id: string;
+  userId: string;
+  taskId: string;
+  operation: string;
+  status: SubscriptionOperationStatus;
+  summary?: string;
+  evidenceUrls: string[];
+  projectedSavings: number | null;
+  projectedSavingsBasis: 'monthly' | 'annual' | 'unknown';
+  currency: string | null;
+  renewalDate?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 import { SettingsModal } from "@/components/settings/SettingsModal";
 
 function statusClass(status: SubscriptionActionRecord["status"]): string {

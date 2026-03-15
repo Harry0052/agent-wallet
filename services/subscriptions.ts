@@ -1,10 +1,62 @@
-import type {
-  ActiveSubscriptionTask,
-  ProcurementLifecycleState,
-  ProcurementResearchLog,
-  SubscriptionActionRecord,
-  SubscriptionOperationType,
-} from '@/lib/types';
+// --- Local type definitions (previously in @/lib/types) ---
+
+type SubscriptionOperationType =
+  | 'inspect_billing'
+  | 'renewal_check'
+  | 'downgrade'
+  | 'cancel'
+  | 'switch_billing';
+
+type SubscriptionOperationStatus = 'running' | 'completed' | 'blocked' | 'failed';
+
+interface ActiveSubscriptionTask {
+  taskId: string;
+  title: string;
+  vendorName: string;
+  planName: string;
+  amount: number | null;
+  amountBasis: 'monthly' | 'annual' | 'unknown';
+  billingFrequency: string;
+  sourceUrl: string;
+  approvedAt?: string;
+  taskStatus: string;
+}
+
+interface SubscriptionActionRecord {
+  id: string;
+  userId: string;
+  taskId: string;
+  operation: SubscriptionOperationType;
+  status: SubscriptionOperationStatus;
+  summary?: string;
+  evidenceUrls: string[];
+  projectedSavings: number | null;
+  projectedSavingsBasis: 'monthly' | 'annual' | 'unknown';
+  currency: string | null;
+  renewalDate?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ProcurementResearchLog {
+  id: string;
+  taskId: string;
+  actionType: string;
+  status: 'running' | 'done' | 'error';
+  message: string;
+  url?: string;
+  phase?: string;
+  event?: string;
+  code?: string;
+  createdAt: string;
+}
+
+interface ProcurementLifecycleState {
+  phase: 'planning' | 'researching' | 'comparing' | 'approval' | 'purchase_prep' | 'subscription_ops' | 'failed';
+  canRetry: boolean;
+  retryHint?: string;
+}
 
 export interface SubscriptionStatusResponse {
   activeSubscriptions: ActiveSubscriptionTask[];

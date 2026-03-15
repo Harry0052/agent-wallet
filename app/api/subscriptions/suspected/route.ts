@@ -5,7 +5,10 @@ import {
   classifyTaskError,
   logServerEvent,
 } from "@/lib/server/observability";
-import { detectAndPersistRecurringSubscriptions } from "@/subscription_intelligence/subscriptionService";
+import {
+  detectAndPersistRecurringSubscriptions,
+  listRecurringIntelligence,
+} from "@/subscription_intelligence/subscriptionService";
 import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
 
@@ -21,7 +24,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const userId = auth.auth.walletUserId;
-    const subscriptions = await detectAndPersistRecurringSubscriptions(userId);
+    await detectAndPersistRecurringSubscriptions(userId);
+    const subscriptions = await listRecurringIntelligence({ userId });
 
     return NextResponse.json({
       ok: true,

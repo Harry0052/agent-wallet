@@ -14,7 +14,27 @@
       "Bash(npm test)",
       "Bash(xargs kill -9)",
       "Bash(kill 43110)",
-      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/apiAuthCoverage.test.ts' 'tests/toolsIsolation.test.ts' 'tests/toolsConnectDisconnect.test.ts' 'tests/researchFallback.test.ts' 'tests/plaidWebhookReplay.test.ts' 2>&1 | tail -40)",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/apiAuthCoverage.test.ts' 'tests/toolsIsolation.test.ts' 'tests/toolsConnectDisconnect.test.ts' 'tests/researchFallback.test.ts' 'tests/plaidWebhookReplay.test.ts' 2>&1 | grep -E \"^\\(ok|not ok|✓|✗|▶|TAP|PASS|FAIL|Error:|  \\)\" | head -60)",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/apiAuthCoverage.test.ts' 'tests/toolsIsolation.test.ts' 'tests/toolsConnectDisconnect.test.ts' 'tests/researchFallback.test.ts' 'tests/plaidWebhookReplay.test.ts' 2>&1 | grep -E \"^\\(ok|not ok|# tests|# pass|# fail\\)\" | head -30)",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/apiAuthCoverage.test.ts' 'tests/toolsIsolation.test.ts' 'tests/toolsConnectDisconnect.test.ts' 'tests/researchFallback.test.ts' 'tests/plaidWebhookReplay.test.ts' 2>&1 | tail -20)",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/*.test.ts' 'security/tests/*.test.ts' 2>&1 | tail -20)",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/supportWorkflow.test.ts' 2>&1 | head -30)",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/*.test.ts' 'security/tests/*.test.ts' 2>&1 | grep -E \"^\\(ℹ|✗|✖\\)\" | tail -20)",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/refundEngine.test.ts' 2>&1 | head -15)",
+      "Bash(cd \"/Users/harry/agent wallet\" && node --experimental-strip-types --test 'tests/apiAuthCoverage.test.ts' 'tests/toolsIsolation.test.ts' 'tests/walletIsolation.test.ts' 'tests/toolsConnectDisconnect.test.ts' 'tests/researchFallback.test.ts' 'tests/plaidWebhookReplay.test.ts' 2>&1 | grep -E \"^\\(ℹ|✖|✔\\)\" | tail -15)",
+      "Bash(python3:*)",
+      "mcp__magic__21st_magic_component_builder",
+      "Bash(mkdir:*)",
+      "Bash(cd:*)",
+      "Bash(which ffmpeg:*)",
+      "Bash(ffprobe:*)",
+      "Bash(ls:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ]
 }

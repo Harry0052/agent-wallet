@@ -27,7 +27,7 @@ export async function signup(input: {
   return {
     redirectTo: typeof body.redirectTo === 'string' && body.redirectTo
       ? body.redirectTo
-      : '/operator',
+      : '/home',
   };
 }
 
@@ -50,7 +50,7 @@ export async function login(input: {
   return {
     redirectTo: typeof body.redirectTo === 'string' && body.redirectTo
       ? body.redirectTo
-      : '/operator',
+      : '/home',
   };
 }
 

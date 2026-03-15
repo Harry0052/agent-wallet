@@ -24,18 +24,18 @@ export function LandingRedirectGuard() {
       return `/wallet?${walletParams.toString()}`;
     }
 
-    // Workspace flag → redirect to operator
+    // Workspace flag → redirect to home
     if (params.get("workspace") === "1") {
-      const dest = params.get("demo") === "1" ? "/operator?demo=1" : "/operator";
+      const dest = params.get("demo") === "1" ? "/home?demo=1" : "/home";
       const surface = params.get("surface");
-      if (surface === "live") return params.get("demo") === "1" ? "/execution?demo=1" : "/execution";
+      if (surface === "live") return params.get("demo") === "1" ? "/home?demo=1&panel=insights" : "/home?panel=insights";
       if (surface === "controls") return "/wallet";
       return dest;
     }
 
-    // Demo flag alone → operator with demo
+    // Demo flag alone → home with demo
     if (params.get("demo") === "1") {
-      return "/operator?demo=1&entry=landing";
+      return "/home?demo=1&entry=landing";
     }
 
     return null;

@@ -1,5 +1,7 @@
 export const PROTECTED_PAGE_PREFIXES = [
   '/onboarding',
+  '/home',
+  '/connect',
   '/operator',
   '/execution',
   '/tools',

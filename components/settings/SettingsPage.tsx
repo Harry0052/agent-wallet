@@ -1,60 +1,58 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bell,
-  Briefcase,
+  Cable,
+  ChevronRight,
   KeyRound,
-  Shield,
+  LogOut,
   UserRound,
-  WalletCards,
-  Wrench,
 } from "lucide-react";
-import { Loader2, RefreshCw } from "lucide-react";
-import { SettingsButton } from "@/components/settings/SettingsButton";
-import { SettingsSection } from "@/components/settings/SettingsSection";
 import { EditProfileModal } from "@/modals/EditProfileModal";
-import { WalletPreferencesModal } from "@/modals/WalletPreferencesModal";
-import { SpendingGuardrailsModal } from "@/modals/SpendingGuardrailsModal";
 import { NotificationSettingsModal } from "@/modals/NotificationSettingsModal";
 import { SecuritySettingsModal } from "@/modals/SecuritySettingsModal";
-import { ConnectedToolsModal } from "@/modals/ConnectedToolsModal";
 import {
   fetchAuthenticatedAccount,
   type AuthenticatedAccount,
 } from "@/services/account";
+import { logout } from "@/services/auth";
 
-type OpenModal =
-  | null
-  | "edit-profile"
-  | "security-password"
-  | "security-2fa"
-  | "wallet-preferences"
-  | "spending-guardrails"
-  | "notifications"
-  | "integrations";
+type OpenModal = null | "edit-profile" | "security" | "notifications";
 
-function toErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
+interface SettingRowProps {
+  icon: typeof UserRound;
+  label: string;
+  onClick: () => void;
+}
+
+function SettingRow({ icon: Icon, label, onClick }: SettingRowProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between rounded-xl px-4 py-3.5 transition hover:bg-[var(--aw-surface-subtle)]"
+    >
+      <span className="inline-flex items-center gap-3 text-sm font-medium text-[var(--aw-text)]">
+        <Icon size={16} className="text-[var(--aw-text-muted)]" />
+        {label}
+      </span>
+      <ChevronRight size={14} className="text-[var(--aw-text-muted)]" />
+    </button>
+  );
 }
 
 export function SettingsPage() {
+  const router = useRouter();
   const [account, setAccount] = useState<AuthenticatedAccount | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [openModal, setOpenModal] = useState<OpenModal>(null);
 
   const refreshAccount = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const result = await fetchAuthenticatedAccount();
-      setAccount(result);
-    } catch (refreshError) {
-      setError(toErrorMessage(refreshError, "Failed to load account settings."));
-    } finally {
-      setLoading(false);
+      setAccount(await fetchAuthenticatedAccount());
+    } catch {
+      // silent
     }
   }, []);
 
@@ -62,97 +60,42 @@ export function SettingsPage() {
     void refreshAccount();
   }, [refreshAccount]);
 
+  const onLogout = async () => {
+    await logout();
+    router.replace("/login");
+    router.refresh();
+  };
+
   return (
     <div className="aw-page">
-      <div className="aw-page-header flex items-start justify-between gap-3">
-        <div>
-          <p className="aw-page-kicker">Settings</p>
-          <h1 className="aw-page-title">Account Settings</h1>
-          <p className="aw-page-subtitle">
-            Clean, app-style controls. Open a panel to edit each category.
-          </p>
+      <h1 className="text-2xl font-semibold tracking-tight text-[var(--aw-text)]">
+        Settings
+      </h1>
+
+      {account?.email ? (
+        <p className="mt-1 text-sm text-[var(--aw-text-muted)]">{account.email}</p>
+      ) : null}
+
+      <div className="aw-card mt-8 !p-2">
+        <div className="space-y-0.5">
+          <SettingRow icon={UserRound} label="Profile" onClick={() => setOpenModal("edit-profile")} />
+          <SettingRow icon={KeyRound} label="Password & 2FA" onClick={() => setOpenModal("security")} />
+          <SettingRow icon={Bell} label="Notifications" onClick={() => setOpenModal("notifications")} />
+          <SettingRow icon={Cable} label="Connected accounts" onClick={() => { window.location.href = "/connect"; }} />
         </div>
+      </div>
+
+      <div className="mt-8">
         <button
           type="button"
           onClick={() => {
-            void refreshAccount();
+            void onLogout();
           }}
-          className="aw-button-secondary h-9 px-3 text-xs"
-          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[var(--aw-danger)] transition hover:bg-[var(--aw-danger)]/10"
         >
-          <span className="inline-flex items-center gap-1">
-            {loading ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <RefreshCw size={12} />
-            )}
-            Refresh
-          </span>
+          <LogOut size={14} />
+          Log out
         </button>
-      </div>
-
-      {account?.email ? (
-        <p className="mb-4 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2 text-xs text-[var(--aw-text-soft)]">
-          Signed in as {account.email}
-        </p>
-      ) : null}
-
-      {error ? (
-        <p className="mb-4 rounded-xl border border-[var(--aw-danger)]/25 bg-[var(--aw-danger)]/10 px-3 py-2 text-xs text-[var(--aw-danger)]">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <SettingsSection title="Account">
-          <SettingsButton
-            label="Edit Profile"
-            icon={UserRound}
-            onClick={() => setOpenModal("edit-profile")}
-          />
-        </SettingsSection>
-
-        <SettingsSection title="Security">
-          <SettingsButton
-            label="Change Password"
-            icon={KeyRound}
-            onClick={() => setOpenModal("security-password")}
-          />
-          <SettingsButton
-            label="Two-Factor Authentication"
-            icon={Shield}
-            onClick={() => setOpenModal("security-2fa")}
-          />
-        </SettingsSection>
-
-        <SettingsSection title="Agent Wallet">
-          <SettingsButton
-            label="Wallet Preferences"
-            icon={WalletCards}
-            onClick={() => setOpenModal("wallet-preferences")}
-          />
-          <SettingsButton
-            label="Spending Guardrails"
-            icon={Briefcase}
-            onClick={() => setOpenModal("spending-guardrails")}
-          />
-        </SettingsSection>
-
-        <SettingsSection title="Notifications">
-          <SettingsButton
-            label="Notification Settings"
-            icon={Bell}
-            onClick={() => setOpenModal("notifications")}
-          />
-        </SettingsSection>
-
-        <SettingsSection title="Integrations">
-          <SettingsButton
-            label="Connected Tools"
-            icon={Wrench}
-            onClick={() => setOpenModal("integrations")}
-          />
-        </SettingsSection>
       </div>
 
       <EditProfileModal
@@ -165,29 +108,14 @@ export function SettingsPage() {
       />
 
       <SecuritySettingsModal
-        open={openModal === "security-password" || openModal === "security-2fa"}
+        open={openModal === "security"}
         accountEmail={account?.email || ""}
-        initialPanel={openModal === "security-2fa" ? "2fa" : "password"}
-        onClose={() => setOpenModal(null)}
-      />
-
-      <WalletPreferencesModal
-        open={openModal === "wallet-preferences"}
-        onClose={() => setOpenModal(null)}
-      />
-
-      <SpendingGuardrailsModal
-        open={openModal === "spending-guardrails"}
+        initialPanel="password"
         onClose={() => setOpenModal(null)}
       />
 
       <NotificationSettingsModal
         open={openModal === "notifications"}
-        onClose={() => setOpenModal(null)}
-      />
-
-      <ConnectedToolsModal
-        open={openModal === "integrations"}
         onClose={() => setOpenModal(null)}
       />
     </div>

@@ -1,0 +1,944 @@
+"use client";
+
+import { ChevronLeft, ChevronRight, Loader2, PencilLine, PieChart, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { fmt } from "@/lib/utils";
+import {
+  fetchUnifiedStatement,
+  type DetectedSubscription,
+  type StatementTransaction,
+} from "@/services/statements";
+import {
+  ToolbarButton,
+  WorkspaceHeader,
+  WorkspacePanel,
+} from "@/components/finance/WorkspacePrimitives";
+import {
+  ManualEntryButton,
+  ManualEntryModal,
+} from "@/components/finance/ManualDataControls";
+import { useLocalStorageState } from "@/lib/useLocalStorageState";
+import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
+import { normalizeTransactionType } from "@/lib/manualTransactions";
+
+type BudgetGroup = "income" | "fixed" | "variable";
+
+interface LegacyBudgetRowData {
+  id: string;
+  label: string;
+  budget: number;
+  actual: number;
+  type: BudgetGroup;
+}
+
+interface BudgetLineItem {
+  id: string;
+  month: string; // YYYY-MM
+  category: string;
+  group: BudgetGroup;
+  plannedAmount: number;
+  manualActual: number;
+  rollover: boolean;
+  notes?: string;
+  isSpendingCategory: boolean;
+}
+
+type StoredBudgetRow = BudgetLineItem | LegacyBudgetRowData;
+
+interface ComputedBudgetLineItem extends BudgetLineItem {
+  transactionActual: number;
+  combinedActual: number;
+  remaining: number;
+}
+
+interface ManualRecurringItem extends DetectedSubscription {
+  sourceType?: "manual";
+  cashflowType?: "income" | "expense" | "transfer";
+  startDate?: string;
+  autopopulateForecast?: boolean;
+}
+
+const DEFAULT_CATEGORIES: Record<BudgetGroup, string[]> = {
+  income: ["Paycheck", "Bonus", "Interest", "Freelance", "Other income"],
+  fixed: ["Rent", "Mortgage", "Insurance", "Utilities", "Debt payment"],
+  variable: ["Groceries", "Dining", "Travel", "Shopping", "Entertainment"],
+};
+
+function monthKeyFromDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthKeyFromIso(iso: string): string | null {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return monthKeyFromDate(parsed);
+}
+
+function formatMonthTitle(monthKey: string): string {
+  const [yearRaw, monthRaw] = monthKey.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return monthKey;
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function shiftMonth(monthKey: string, offset: number): string {
+  const [yearRaw, monthRaw] = monthKey.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return monthKey;
+  return monthKeyFromDate(new Date(year, month - 1 + offset, 1));
+}
+
+function normalizeCategory(category: string): string {
+  return category.trim().toLowerCase();
+}
+
+function recurringItemActiveForMonth(item: ManualRecurringItem, monthKey: string): boolean {
+  const [yearRaw, monthRaw] = monthKey.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return true;
+
+  const rawStart = item.startDate
+    || item.explanation?.first_seen
+    || item.last_seen;
+  if (!rawStart) return true;
+
+  const startDate = item.startDate
+    ? new Date(`${item.startDate}T12:00:00.000Z`)
+    : new Date(rawStart);
+  if (Number.isNaN(startDate.getTime())) return true;
+
+  const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+  return startDate <= monthEnd;
+}
+
+function isBudgetLineItem(row: StoredBudgetRow): row is BudgetLineItem {
+  return (
+    typeof (row as BudgetLineItem).category === "string"
+    && typeof (row as BudgetLineItem).month === "string"
+    && typeof (row as BudgetLineItem).group === "string"
+    && typeof (row as BudgetLineItem).plannedAmount === "number"
+  );
+}
+
+function toBudgetLineItem(row: StoredBudgetRow, fallbackMonth: string): BudgetLineItem {
+  if (isBudgetLineItem(row)) {
+    return {
+      ...row,
+      month: row.month || fallbackMonth,
+      plannedAmount: Number.isFinite(row.plannedAmount) ? row.plannedAmount : 0,
+      manualActual: Number.isFinite(row.manualActual) ? row.manualActual : 0,
+      rollover: Boolean(row.rollover),
+      notes: row.notes?.trim() || undefined,
+      isSpendingCategory:
+        typeof row.isSpendingCategory === "boolean"
+          ? row.isSpendingCategory
+          : row.group !== "income",
+    };
+  }
+
+  return {
+    id: row.id,
+    month: fallbackMonth,
+    category: row.label,
+    group: row.type,
+    plannedAmount: Number.isFinite(row.budget) ? row.budget : 0,
+    manualActual: Number.isFinite(row.actual) ? row.actual : 0,
+    rollover: false,
+    notes: undefined,
+    isSpendingCategory: row.type !== "income",
+  };
+}
+
+function BudgetRow(props: {
+  row: ComputedBudgetLineItem;
+  onEdit: (row: BudgetLineItem) => void;
+  onToggleSpending: (row: BudgetLineItem) => void;
+}) {
+  const progress = props.row.plannedAmount > 0
+    ? Math.min(Math.round((props.row.combinedActual / props.row.plannedAmount) * 100), 100)
+    : 0;
+  const barClassName = props.row.group === "income"
+    ? "bg-[var(--aw-success)]"
+    : props.row.remaining < 0
+      ? "bg-[var(--aw-danger)]"
+      : "bg-[var(--aw-primary)]";
+
+  return (
+    <div className="aw-card aw-card-interactive !px-4 !py-4">
+      <div className="grid grid-cols-[minmax(220px,1.4fr)_repeat(3,minmax(92px,0.6fr))_auto] items-center gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-semibold text-[var(--aw-text)]">{props.row.category}</p>
+            {props.row.rollover ? <span className="aw-pill">Rollover</span> : null}
+            <span className="aw-pill">{props.row.group}</span>
+            {props.row.group !== "income" ? (
+              <button
+                type="button"
+                className="aw-pill transition hover:border-[var(--aw-border-strong)] hover:bg-[var(--aw-surface-subtle)]"
+                onClick={() => props.onToggleSpending(props.row)}
+                title="Manually mark spending category"
+              >
+                {props.row.isSpendingCategory ? "Spending" : "Not spending"}
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-[var(--aw-border)]">
+            <div className={`h-full rounded-full ${barClassName}`} style={{ width: `${progress}%` }} />
+          </div>
+          <p className="mt-2 truncate text-xs text-[var(--aw-text-muted)]">
+            Manual actuals {fmt(props.row.manualActual)} + transactions {fmt(props.row.transactionActual)}
+            {props.row.notes ? ` • ${props.row.notes}` : ""}
+          </p>
+        </div>
+        <span className="aw-number text-sm text-[var(--aw-text-muted)]">{fmt(props.row.plannedAmount)}</span>
+        <span className="aw-number text-sm text-[var(--aw-text-muted)]">{fmt(props.row.combinedActual)}</span>
+        <span
+          className={`aw-number text-sm font-semibold ${props.row.remaining < 0 ? "text-[var(--aw-danger)]" : "text-[var(--aw-text)]"}`}
+        >
+          {fmt(props.row.remaining)}
+        </span>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => props.onEdit(props.row)}
+            className="aw-button-secondary inline-flex h-9 items-center gap-1.5 rounded-[10px] px-3 text-xs"
+          >
+            <PencilLine size={12} />
+            Edit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BudgetSection(props: {
+  title: string;
+  rows: ComputedBudgetLineItem[];
+  onEdit: (row: BudgetLineItem) => void;
+  onToggleSpending: (row: BudgetLineItem) => void;
+}) {
+  return (
+    <section>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <p className="text-sm font-semibold text-[var(--aw-text)]">{props.title}</p>
+        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
+          Category budget rows
+        </span>
+      </div>
+      <div className="space-y-3">
+        {props.rows.length === 0 ? (
+          <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-4 py-3 text-sm text-[var(--aw-text-muted)]">
+            No categories yet.
+          </div>
+        ) : (
+          props.rows.map((row) => (
+            <BudgetRow
+              key={row.id}
+              row={row}
+              onEdit={props.onEdit}
+              onToggleSpending={props.onToggleSpending}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function BudgetsView() {
+  const currentMonthKey = useMemo(() => monthKeyFromDate(new Date()), []);
+  const [loading, setLoading] = useState(true);
+  const [activeMonth, setActiveMonth] = useState(currentMonthKey);
+  const [storedRows, setStoredRows] = useLocalStorageState<StoredBudgetRow[]>(
+    MANUAL_STORAGE_KEYS.budgets,
+    [],
+  );
+  const [manualTransactions] = useLocalStorageState<StatementTransaction[]>(
+    MANUAL_STORAGE_KEYS.transactions,
+    [],
+  );
+  const [connectedTransactions, setConnectedTransactions] = useState<StatementTransaction[]>([]);
+  const [manualRecurringItems] = useLocalStorageState<ManualRecurringItem[]>(
+    MANUAL_STORAGE_KEYS.recurring,
+    [],
+  );
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [formMonth, setFormMonth] = useState(currentMonthKey);
+  const [formCategory, setFormCategory] = useState("");
+  const [formGroup, setFormGroup] = useState<BudgetGroup>("variable");
+  const [formPlannedAmount, setFormPlannedAmount] = useState("");
+  const [formManualActual, setFormManualActual] = useState("");
+  const [formRollover, setFormRollover] = useState(false);
+  const [formNotes, setFormNotes] = useState("");
+  const [formSpendingCategory, setFormSpendingCategory] = useState(true);
+  const [manualError, setManualError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetchUnifiedStatement({ page_size: 240 })
+      .then((statement) => {
+        if (!active) return;
+        setConnectedTransactions(statement.transactions ?? []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setConnectedTransactions([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (storedRows.some((row) => !isBudgetLineItem(row))) {
+      setStoredRows((prev) => prev.map((row) => toBudgetLineItem(row, currentMonthKey)));
+    }
+  }, [currentMonthKey, setStoredRows, storedRows]);
+
+  const budgetRows = useMemo(() => {
+    return storedRows
+      .map((row) => toBudgetLineItem(row, currentMonthKey))
+      .sort((a, b) => a.category.localeCompare(b.category));
+  }, [currentMonthKey, storedRows]);
+
+  const transactionActuals = useMemo(() => {
+    const map = new Map<string, { income: number; expense: number }>();
+    const allTransactions = [...connectedTransactions, ...manualTransactions];
+
+    for (const tx of allTransactions) {
+      const txMonth = monthKeyFromIso(tx.occurred_at);
+      if (!txMonth || txMonth !== activeMonth) continue;
+
+      const key = normalizeCategory(tx.category || "");
+      if (!key) continue;
+
+      const txType = normalizeTransactionType(tx);
+      if (txType === "transfer") continue;
+
+      const existing = map.get(key) ?? { income: 0, expense: 0 };
+      if (txType === "income") {
+        existing.income += Math.abs(tx.amount);
+      } else {
+        existing.expense += Math.abs(tx.amount);
+      }
+      map.set(key, existing);
+    }
+
+    return map;
+  }, [activeMonth, connectedTransactions, manualTransactions]);
+
+  const rowsForActiveMonth = useMemo(() => {
+    return budgetRows.filter((row) => row.month === activeMonth);
+  }, [activeMonth, budgetRows]);
+
+  const computedRows = useMemo<ComputedBudgetLineItem[]>(() => {
+    return rowsForActiveMonth.map((row) => {
+      const key = normalizeCategory(row.category);
+      const actualFromTransactions = transactionActuals.get(key);
+      if (!actualFromTransactions) return row;
+
+      const transactionActual = row.group === "income"
+        ? actualFromTransactions.income
+        : row.isSpendingCategory
+          ? actualFromTransactions.expense
+          : 0;
+      const combinedActual = row.manualActual + transactionActual;
+
+      return {
+        ...row,
+        transactionActual,
+        combinedActual,
+        remaining: row.plannedAmount - combinedActual,
+      };
+    }).map((row) => {
+      if ("transactionActual" in row && "combinedActual" in row && "remaining" in row) {
+        return row;
+      }
+      return {
+        ...row,
+        transactionActual: 0,
+        combinedActual: row.manualActual,
+        remaining: row.plannedAmount - row.manualActual,
+      };
+    });
+  }, [rowsForActiveMonth, transactionActuals]);
+
+  const grouped = useMemo(() => {
+    return {
+      income: computedRows.filter((row) => row.group === "income"),
+      fixed: computedRows.filter((row) => row.group === "fixed"),
+      variable: computedRows.filter((row) => row.group === "variable"),
+    };
+  }, [computedRows]);
+
+  const summary = useMemo(() => {
+    const incomeBudget = grouped.income.reduce((sum, row) => sum + row.plannedAmount, 0);
+    const incomeActual = grouped.income.reduce((sum, row) => sum + row.combinedActual, 0);
+
+    const fixedBudget = grouped.fixed.reduce((sum, row) => sum + row.plannedAmount, 0);
+    const fixedActual = grouped.fixed.reduce((sum, row) => sum + row.combinedActual, 0);
+
+    const variableBudget = grouped.variable.reduce((sum, row) => sum + row.plannedAmount, 0);
+    const variableActual = grouped.variable.reduce((sum, row) => sum + row.combinedActual, 0);
+    const totalPlanned = incomeBudget + fixedBudget + variableBudget;
+    const totalActual = incomeActual + fixedActual + variableActual;
+    const manualActual = computedRows.reduce((sum, row) => sum + row.manualActual, 0);
+    const transactionActual = computedRows.reduce((sum, row) => sum + row.transactionActual, 0);
+    const expensesBudget = fixedBudget + variableBudget;
+    const expensesActual = fixedActual + variableActual;
+    const plannedSavings = incomeBudget - expensesBudget;
+    const actualSavings = incomeActual - expensesActual;
+    const recurringExpected = manualRecurringItems.reduce(
+      (acc, item) => {
+        if (item.autopopulateForecast === false) return acc;
+        if (!recurringItemActiveForMonth(item, activeMonth)) return acc;
+        const amount = Math.abs(item.estimated_monthly_cost || 0);
+        if (!amount) return acc;
+
+        if (item.cashflowType === "income") {
+          acc.income += amount;
+        } else if (item.cashflowType === "transfer") {
+          acc.transfer += amount;
+        } else {
+          acc.expense += amount;
+        }
+        return acc;
+      },
+      { income: 0, expense: 0, transfer: 0 },
+    );
+
+    return {
+      incomeBudget,
+      incomeActual,
+      fixedBudget,
+      fixedActual,
+      variableBudget,
+      variableActual,
+      totalPlanned,
+      totalActual,
+      manualActual,
+      transactionActual,
+      expensesBudget,
+      expensesActual,
+      plannedSavings,
+      actualSavings,
+      remaining: incomeBudget - expensesActual,
+      rolloverCount: computedRows.filter((row) => row.rollover).length,
+      recurringExpectedIncome: recurringExpected.income,
+      recurringExpectedExpense: recurringExpected.expense,
+      recurringExpectedTransfer: recurringExpected.transfer,
+      recurringExpectedNet: recurringExpected.income - recurringExpected.expense,
+    };
+  }, [activeMonth, computedRows, grouped.fixed, grouped.income, grouped.variable, manualRecurringItems]);
+
+  const categoryOptions = useMemo(() => {
+    const existing = budgetRows
+      .filter((row) => row.group === formGroup)
+      .map((row) => row.category);
+    return Array.from(new Set([...DEFAULT_CATEGORIES[formGroup], ...existing])).sort((a, b) =>
+      a.localeCompare(b),
+    );
+  }, [budgetRows, formGroup]);
+
+  const isCustomCategory = useMemo(() => {
+    const trimmed = formCategory.trim();
+    if (!trimmed) return false;
+    return !categoryOptions.some((option) => normalizeCategory(option) === normalizeCategory(trimmed));
+  }, [categoryOptions, formCategory]);
+
+  const openCreateModal = () => {
+    setEditingRowId(null);
+    setFormMonth(activeMonth);
+    setFormCategory("");
+    setFormGroup("variable");
+    setFormPlannedAmount("");
+    setFormManualActual("");
+    setFormRollover(false);
+    setFormNotes("");
+    setFormSpendingCategory(true);
+    setManualError(null);
+    setBudgetModalOpen(true);
+  };
+
+  const openEditModal = (row: BudgetLineItem) => {
+    setEditingRowId(row.id);
+    setFormMonth(row.month);
+    setFormCategory(row.category);
+    setFormGroup(row.group);
+    setFormPlannedAmount(String(row.plannedAmount));
+    setFormManualActual(row.manualActual > 0 ? String(row.manualActual) : "");
+    setFormRollover(row.rollover);
+    setFormNotes(row.notes ?? "");
+    setFormSpendingCategory(row.isSpendingCategory);
+    setManualError(null);
+    setBudgetModalOpen(true);
+  };
+
+  const toggleSpendingCategory = (row: BudgetLineItem) => {
+    if (row.group === "income") return;
+    setStoredRows((prev) =>
+      prev
+        .map((item) => toBudgetLineItem(item, currentMonthKey))
+        .map((item) =>
+          item.id === row.id
+            ? { ...item, isSpendingCategory: !item.isSpendingCategory }
+            : item,
+        ),
+    );
+  };
+
+  const saveBudgetRow = () => {
+    setManualError(null);
+    const month = formMonth.trim();
+    const category = formCategory.trim();
+    const plannedAmount = Number(formPlannedAmount);
+    const manualActual = Number(formManualActual || "0");
+
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      setManualError("Budget month is required.");
+      return;
+    }
+
+    if (!category) {
+      setManualError("Category name is required.");
+      return;
+    }
+
+    if (!Number.isFinite(plannedAmount) || plannedAmount < 0) {
+      setManualError("Planned amount must be zero or greater.");
+      return;
+    }
+
+    if (!Number.isFinite(manualActual) || manualActual < 0) {
+      setManualError("Manual actual must be zero or greater.");
+      return;
+    }
+
+    setStoredRows((prev) => {
+      const normalized = prev.map((row) => toBudgetLineItem(row, currentMonthKey));
+      const payload: BudgetLineItem = {
+        id: editingRowId ?? `budget-${Date.now()}`,
+        month,
+        category,
+        group: formGroup,
+        plannedAmount,
+        manualActual,
+        rollover: formRollover,
+        notes: formNotes.trim() || undefined,
+        isSpendingCategory: formGroup === "income" ? false : formSpendingCategory,
+      };
+
+      if (!editingRowId) {
+        return [payload, ...normalized];
+      }
+
+      return normalized.map((row) => (row.id === editingRowId ? payload : row));
+    });
+
+    setBudgetModalOpen(false);
+    setEditingRowId(null);
+  };
+
+  const deleteBudgetRow = () => {
+    if (!editingRowId) return;
+    setStoredRows((prev) =>
+      prev
+        .map((row) => toBudgetLineItem(row, currentMonthKey))
+        .filter((row) => row.id !== editingRowId),
+    );
+    setBudgetModalOpen(false);
+    setEditingRowId(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="aw-workspace-page flex items-center justify-center py-32">
+        <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="aw-workspace-page">
+      <WorkspaceHeader
+        title={formatMonthTitle(activeMonth)}
+        subtitle="Manual-first budgeting. Connect accounts later whenever you're ready."
+        tabs={[
+          { label: "Budget", active: true },
+          { label: "Forecast" },
+        ]}
+        actions={(
+          <>
+            <ToolbarButton icon={<ChevronLeft size={14} />} onClick={() => setActiveMonth((prev) => shiftMonth(prev, -1))} />
+            <ToolbarButton icon={<ChevronRight size={14} />} onClick={() => setActiveMonth((prev) => shiftMonth(prev, 1))} />
+            <ToolbarButton onClick={() => setActiveMonth(currentMonthKey)}>Today</ToolbarButton>
+            <ManualEntryButton onClick={openCreateModal}>
+              Create budget
+            </ManualEntryButton>
+          </>
+        )}
+      />
+
+      <div className="aw-workspace-grid" data-columns="2-1">
+        <WorkspacePanel title="Budget vs actual">
+          <div className="grid grid-cols-[minmax(220px,1.4fr)_repeat(3,minmax(92px,0.6fr))_auto] gap-4 border-b border-[var(--aw-border)] px-2 pb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
+            <span>Category name</span>
+            <span>Planned</span>
+            <span>Actual</span>
+            <span>Remaining</span>
+            <span className="text-right">Edit</span>
+          </div>
+
+          <div className="space-y-8 pt-5">
+            <BudgetSection
+              title="Income"
+              rows={grouped.income}
+              onEdit={openEditModal}
+              onToggleSpending={toggleSpendingCategory}
+            />
+            <BudgetSection
+              title="Fixed"
+              rows={grouped.fixed}
+              onEdit={openEditModal}
+              onToggleSpending={toggleSpendingCategory}
+            />
+            <BudgetSection
+              title="Variable"
+              rows={grouped.variable}
+              onEdit={openEditModal}
+              onToggleSpending={toggleSpendingCategory}
+            />
+          </div>
+
+          {computedRows.length === 0 ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
+              <div className="aw-card-modal pointer-events-auto w-full max-w-md">
+                <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--aw-primary-soft)] text-[var(--aw-primary)]">
+                  <PieChart size={22} />
+                </div>
+                <p className="text-2xl font-semibold tracking-[-0.03em] text-[var(--aw-text)]">
+                  Create your first budget
+                </p>
+                <p className="mt-3 text-sm leading-6 text-[var(--aw-text-muted)]">
+                  Import transactions later if you connect accounts. Start planning today with manual categories.
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = "/connect";
+                    }}
+                    className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm"
+                  >
+                    Connect an account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openCreateModal}
+                    className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm"
+                  >
+                    Create budget
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </WorkspacePanel>
+
+        <WorkspacePanel title="Summary" heading={fmt(summary.remaining)} action={<span className="aw-pill">Left to budget</span>}>
+          <div className="space-y-6">
+            <div className="aw-card">
+              <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+                <span className="text-[var(--aw-text-muted)]">Month totals</span>
+                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.totalPlanned)} planned</span>
+              </div>
+              <div className="h-2 rounded-full bg-[var(--aw-border)]">
+                <div
+                  className="h-full rounded-full bg-[var(--aw-primary)]"
+                  style={{
+                    width: summary.totalPlanned > 0
+                      ? `${Math.min((summary.totalActual / summary.totalPlanned) * 100, 100)}%`
+                      : "0%",
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.totalActual)} actual</span>
+                <span className="aw-number font-semibold text-[var(--aw-text)]">
+                  {fmt(summary.totalPlanned - summary.totalActual)} variance
+                </span>
+              </div>
+            </div>
+
+            <div className="aw-card">
+              <div className="mb-3 flex items-center justify-between gap-3 text-sm text-[var(--aw-text-muted)]">
+                <span>Fixed</span>
+                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.fixedBudget)} planned</span>
+              </div>
+              <div className="h-2 rounded-full bg-[var(--aw-border)]">
+                <div
+                  className="h-full rounded-full bg-[var(--aw-primary)]"
+                  style={{
+                    width:
+                      summary.fixedBudget > 0
+                        ? `${Math.min((summary.fixedActual / summary.fixedBudget) * 100, 100)}%`
+                        : "0%",
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.fixedActual)} actual</span>
+                <span className="aw-number font-semibold text-[var(--aw-text)]">
+                  {fmt(summary.fixedBudget - summary.fixedActual)} remaining
+                </span>
+              </div>
+            </div>
+
+            <div className="aw-card">
+              <div className="mb-3 flex items-center justify-between gap-3 text-sm text-[var(--aw-text-muted)]">
+                <span>Variable</span>
+                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.variableBudget)} planned</span>
+              </div>
+              <div className="h-2 rounded-full bg-[var(--aw-border)]">
+                <div
+                  className="h-full rounded-full bg-[var(--aw-primary)]"
+                  style={{
+                    width:
+                      summary.variableBudget > 0
+                        ? `${Math.min((summary.variableActual / summary.variableBudget) * 100, 100)}%`
+                        : "0%",
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.variableActual)} actual</span>
+                <span className="aw-number font-semibold text-[var(--aw-text)]">
+                  {fmt(summary.variableBudget - summary.variableActual)} remaining
+                </span>
+              </div>
+            </div>
+
+            <div className="aw-card !p-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Expenses planned</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.expensesBudget)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Expenses actual</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.expensesActual)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Manual actuals entered</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.manualActual)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Actuals from transactions</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.transactionActual)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <span className="text-[var(--aw-text-muted)]">Planned savings</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.plannedSavings)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Actual savings</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.actualSavings)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Rollover categories</span>
+                  <span className="aw-number text-[var(--aw-text)]">{summary.rolloverCount}</span>
+                </div>
+                <div className="mt-1 border-t border-[var(--aw-border)] pt-2" />
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Recurring expected income</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.recurringExpectedIncome)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Recurring expected expenses</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.recurringExpectedExpense)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Recurring transfers</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.recurringExpectedTransfer)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--aw-text-muted)]">Expected recurring net</span>
+                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.recurringExpectedNet)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </WorkspacePanel>
+      </div>
+
+      <ManualEntryModal
+        open={budgetModalOpen}
+        onClose={() => setBudgetModalOpen(false)}
+        title={editingRowId ? "Edit budget line item" : "Create budget"}
+        description="Create manual budgets from day one. Import transactions later if you connect accounts."
+      >
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-xs text-[var(--aw-text-muted)]">Budget month</span>
+              <input
+                value={formMonth}
+                onChange={(event) => setFormMonth(event.target.value)}
+                className="aw-input h-10 text-sm"
+                type="month"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-[var(--aw-text-muted)]">Category group</span>
+              <select
+                value={formGroup}
+                onChange={(event) => {
+                  const nextGroup = event.target.value as BudgetGroup;
+                  setFormGroup(nextGroup);
+                  if (nextGroup === "income") {
+                    setFormSpendingCategory(false);
+                  } else if (!editingRowId) {
+                    setFormSpendingCategory(true);
+                  }
+                }}
+                className="aw-input h-10 text-sm"
+              >
+                <option value="income">Income</option>
+                <option value="fixed">Fixed</option>
+                <option value="variable">Variable</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="space-y-1">
+            <span className="text-xs text-[var(--aw-text-muted)]">Category</span>
+            <input
+              value={formCategory}
+              onChange={(event) => setFormCategory(event.target.value)}
+              className="aw-input h-10 text-sm"
+              placeholder="Groceries"
+              list="calico-budget-categories"
+            />
+            <datalist id="calico-budget-categories">
+              {categoryOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+            {isCustomCategory ? (
+              <p className="text-xs text-[var(--aw-primary)]">Add custom category: this name will be saved as a new category.</p>
+            ) : null}
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-xs text-[var(--aw-text-muted)]">Planned amount</span>
+              <input
+                value={formPlannedAmount}
+                onChange={(event) => setFormPlannedAmount(event.target.value)}
+                className="aw-input h-10 text-sm"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-[var(--aw-text-muted)]">Manual actual (optional)</span>
+              <input
+                value={formManualActual}
+                onChange={(event) => setFormManualActual(event.target.value)}
+                className="aw-input h-10 text-sm"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+              />
+            </label>
+          </div>
+
+          <label className="flex items-center gap-2 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2.5 text-sm text-[var(--aw-text)]">
+            <input
+              checked={formRollover}
+              onChange={(event) => setFormRollover(event.target.checked)}
+              type="checkbox"
+              className="h-4 w-4 rounded border-[var(--aw-border)] text-[var(--aw-primary)] focus:ring-[var(--aw-primary)]"
+            />
+            Enable rollover (optional)
+          </label>
+
+          {formGroup !== "income" ? (
+            <label className="flex items-center gap-2 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2.5 text-sm text-[var(--aw-text)]">
+              <input
+                checked={formSpendingCategory}
+                onChange={(event) => setFormSpendingCategory(event.target.checked)}
+                type="checkbox"
+                className="h-4 w-4 rounded border-[var(--aw-border)] text-[var(--aw-primary)] focus:ring-[var(--aw-primary)]"
+              />
+              Manually mark spending category
+            </label>
+          ) : null}
+
+          <label className="space-y-1">
+            <span className="text-xs text-[var(--aw-text-muted)]">Notes (optional)</span>
+            <textarea
+              value={formNotes}
+              onChange={(event) => setFormNotes(event.target.value)}
+              className="aw-input min-h-[92px] py-2 text-sm"
+              placeholder="Optional notes"
+            />
+          </label>
+
+          {manualError ? (
+            <p className="rounded-lg border border-[var(--aw-danger)]/25 bg-[var(--aw-danger)]/10 px-3 py-2 text-xs text-[var(--aw-danger)]">
+              {manualError}
+            </p>
+          ) : null}
+
+          <div className="flex items-center justify-between gap-2">
+            {editingRowId ? (
+              <button
+                type="button"
+                onClick={deleteBudgetRow}
+                className="aw-button-danger inline-flex h-10 items-center gap-1.5 px-4 text-sm"
+              >
+                <Trash2 size={14} />
+                Delete line
+              </button>
+            ) : <span />}
+
+            <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBudgetModalOpen(false)}
+              className="aw-button-secondary h-10 px-4 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveBudgetRow}
+              className="aw-button-primary h-10 px-4 text-sm"
+            >
+              {editingRowId ? "Save changes" : "Save budget"}
+            </button>
+            </div>
+          </div>
+        </div>
+      </ManualEntryModal>
+    </div>
+  );
+}

@@ -31,10 +31,6 @@ function deriveTaskTitle(tx: Transaction): string {
   if (tx.type === "topup") return "Wallet Top-Up";
   if (tx.type === "send") return "Recipient Transfer";
   if (tx.type === "payout") return "Vendor Purchase";
-  if (tx.type === "procurement_commitment")
-    return "Procurement Purchase Preparation";
-  if (tx.type === "subscription_savings_projection")
-    return "Subscription Savings Projection";
 
   return tx.description.length > 56
     ? `${tx.description.slice(0, 56)}...`
@@ -42,17 +38,6 @@ function deriveTaskTitle(tx: Transaction): string {
 }
 
 function decisionSummary(tx: Transaction): string {
-  if (tx.type === "procurement_commitment" && tx.status === "pending") {
-    return "Purchase flow prepared on live web. Awaiting explicit payment action before any settled debit.";
-  }
-
-  if (
-    tx.type === "subscription_savings_projection" &&
-    tx.status === "pending"
-  ) {
-    return "Projected savings from live subscription operation. Informational only until billing changes are realized.";
-  }
-
   if (tx.status === "pending") {
     return "Awaiting settlement confirmation from payment rails.";
   }

@@ -10,7 +10,7 @@ const TASK_PATTERNS: RegExp[] = [
 ];
 
 const GENERAL_PATTERNS: RegExp[] = [
-  /\b(agent wallet|wallet|account|profile|card|balance|transaction|billing|subscription)\b/i,
+  /\b(calico|wallet|account|profile|card|balance|transaction|billing|subscription)\b/i,
   /\b(connect (my )?card\b|\badd (a )?card\b|\blink (a )?card\b)/i,
   /\b(feature|features|setting|settings|help|support|how do i|how can i)\b/i,
 ];

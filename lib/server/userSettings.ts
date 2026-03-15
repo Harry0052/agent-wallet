@@ -36,7 +36,6 @@ function toModel(row: UserSettingsRow): AppUserSettings {
     timezone: row.timezone,
     dashboardDefaultView: row.dashboard_default_view,
     security: normalizeJsonObject(row.security),
-    agentDefaults: normalizeJsonObject(row.agent_defaults),
     notifications: normalizeJsonObject(row.notifications),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -100,7 +99,6 @@ export async function getUserSettings(appUserId: string): Promise<AppUserSetting
       timezone: DEFAULT_SETTINGS.timezone,
       dashboardDefaultView: DEFAULT_SETTINGS.dashboardDefaultView,
       security: {},
-      agentDefaults: {},
       notifications: {},
     };
   }
@@ -124,7 +122,7 @@ export async function upsertUserSettings(input: {
     timezone: input.timezone?.trim() || current.timezone || DEFAULT_SETTINGS.timezone,
     dashboardDefaultView: input.dashboardDefaultView?.trim() || current.dashboardDefaultView || DEFAULT_SETTINGS.dashboardDefaultView,
     security: { ...current.security, ...(input.securityPatch || {}) },
-    agentDefaults: { ...current.agentDefaults, ...(input.agentDefaultsPatch || {}) },
+    agentDefaults: { ...(input.agentDefaultsPatch || {}) },
     notifications: { ...current.notifications, ...(input.notificationsPatch || {}) },
   };
 

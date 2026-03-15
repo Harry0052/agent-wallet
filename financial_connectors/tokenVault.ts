@@ -17,6 +17,7 @@ export interface ConnectedAccount {
   account_type: ConnectedAccountType;
   mask: string;
   nickname: string;
+  last_synced_at: string | null;
 }
 
 interface ConnectedAccountRow {
@@ -26,6 +27,7 @@ interface ConnectedAccountRow {
   account_type: ConnectedAccountType;
   mask: string;
   nickname: string;
+  last_synced_at: string | null;
 }
 
 interface StoredAccountInput {
@@ -61,6 +63,13 @@ interface LinkedAccountBindingRow {
   plaid_account_id: string;
 }
 
+interface AccountOwnershipRow {
+  id: string;
+  user_id: string;
+  item_id: string;
+  plaid_account_id: string;
+}
+
 export interface ConnectedInstitution {
   institution_name: string;
   account_count: number;
@@ -89,6 +98,7 @@ function rowToConnectedAccount(row: ConnectedAccountRow): ConnectedAccount {
     account_type: row.account_type,
     mask: row.mask,
     nickname: row.nickname,
+    last_synced_at: row.last_synced_at ?? null,
   };
 }
 
@@ -275,7 +285,8 @@ export async function listStoredConnectedAccounts(
         i.institution_name,
         a.account_type,
         a.mask,
-        a.nickname
+        a.nickname,
+        i.updated_at::text AS last_synced_at
       FROM financial_connector_accounts a
       JOIN financial_connector_items i
         ON i.id = a.item_id
@@ -394,4 +405,75 @@ export async function listLinkedAccountBindingsForUser(
     id: row.id,
     plaid_account_id: row.plaid_account_id,
   }));
+}
+
+export async function removeStoredConnectedAccount(input: {
+  userId: string;
+  accountId: string;
+}): Promise<{
+  removed: boolean;
+  removedItem: boolean;
+}> {
+  assertNoAiFinancialConnectorAccess("/financial_connectors/tokenVault.ts");
+  await ensureFinancialConnectorSchema();
+
+  const owned = await query<AccountOwnershipRow>(
+    `
+      SELECT id, user_id, item_id, plaid_account_id
+      FROM financial_connector_accounts
+      WHERE user_id = $1
+        AND id = $2
+      LIMIT 1
+    `,
+    [input.userId, input.accountId],
+  );
+
+  const account = owned.rows[0];
+  if (!account) {
+    return {
+      removed: false,
+      removedItem: false,
+    };
+  }
+
+  await query(
+    `
+      DELETE FROM financial_connector_accounts
+      WHERE user_id = $1
+        AND id = $2
+    `,
+    [input.userId, input.accountId],
+  );
+
+  const remaining = await query<{ count: string }>(
+    `
+      SELECT COUNT(*)::text AS count
+      FROM financial_connector_accounts
+      WHERE user_id = $1
+        AND item_id = $2
+    `,
+    [input.userId, account.item_id],
+  );
+
+  const remainingCount = Number.parseInt(remaining.rows[0]?.count || "0", 10) || 0;
+  if (remainingCount > 0) {
+    return {
+      removed: true,
+      removedItem: false,
+    };
+  }
+
+  await query(
+    `
+      DELETE FROM financial_connector_items
+      WHERE user_id = $1
+        AND id = $2
+    `,
+    [input.userId, account.item_id],
+  );
+
+  return {
+    removed: true,
+    removedItem: true,
+  };
 }

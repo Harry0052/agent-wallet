@@ -3,10 +3,9 @@ import 'server-only';
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 
 const DEFAULT_CLAUDE_MODEL_FALLBACKS = [
-  'claude-sonnet-4-6',
-  'claude-sonnet-4-5-20250929',
-  'claude-sonnet-4-20250514',
-  'claude-haiku-4-5',
+  'claude-opus-4-5-20251101',   // Opus 4.5 — primary
+  'claude-sonnet-4-6',           // Sonnet 4.6 — fallback
+  'claude-haiku-4-5',            // Haiku — last resort (do not migrate)
 ] as const;
 
 type ClaudeMessage = {
@@ -66,12 +65,14 @@ export async function callClaudeMessagesApi(
       headers: {
         'x-api-key': params.apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'effort-2025-11-24',
         'content-type': 'application/json',
       },
       body: JSON.stringify({
         model,
         max_tokens: params.maxTokens,
         temperature: params.temperature ?? 0,
+        output_config: { effort: 'high' },
         messages: params.messages,
       }),
       cache: 'no-store',

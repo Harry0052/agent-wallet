@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { StatementsWorkspace } from "@/components/StatementsWorkspace";
-
-export default function StatementsPage() {
-  return <StatementsWorkspace />;
+export default function StatementsRedirectPage() {
+  redirect("/transactions");
 }

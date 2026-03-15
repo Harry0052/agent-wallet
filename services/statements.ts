@@ -1,3 +1,6 @@
+import type { RecordSourceType } from "@/lib/manualMode";
+import { normalizeRecordSourceType } from "@/lib/sourceType";
+
 export interface StatementTransaction {
   id: string;
   user_id: string;
@@ -9,6 +12,11 @@ export interface StatementTransaction {
   category: string;
   pending: boolean;
   occurred_at: string;
+  transaction_type?: "income" | "expense" | "transfer";
+  account_name?: string;
+  notes?: string;
+  recurring?: boolean;
+  sourceType?: "connected" | "manual";
 }
 
 export interface StatementPagination {
@@ -37,7 +45,7 @@ export interface ConnectedAccount {
   id: string;
   user_id: string;
   institution_name: string;
-  account_type: "credit" | "checking" | "savings";
+  account_type: "credit" | "checking" | "savings" | "cash" | "loan";
   mask: string;
   nickname: string;
 }
@@ -51,6 +59,17 @@ export interface DetectedSubscription {
   confidence: number;
   last_seen: string;
   status: string;
+  lifecycle_status: "detected" | "confirmed" | "ignored" | "inactive" | "manual";
+  source_state: "Synced" | "Imported" | "Inferred" | "Manual";
+  sourceType?: RecordSourceType;
+  explanation: {
+    summary: string;
+    transaction_count: number;
+    first_seen: string | null;
+    last_seen: string | null;
+    average_interval_days: number | null;
+    average_amount: number | null;
+  };
 }
 
 export interface AiSpendingAnalysisResponse {
@@ -132,6 +151,15 @@ function toError(body: { error?: string; errorCode?: string }): Error {
   return new Error(body.error || "Request failed");
 }
 
+function normalizeTransactionSourceType(tx: StatementTransaction): RecordSourceType {
+  return normalizeRecordSourceType(tx.sourceType, "connected");
+}
+
+function normalizeSubscriptionSourceType(sub: DetectedSubscription): RecordSourceType {
+  if (sub.lifecycle_status === "manual") return "manual";
+  return normalizeRecordSourceType(sub.sourceType ?? sub.source_state, "connected");
+}
+
 function addFilters(url: URL, filters?: StatementFilters): URL {
   if (!filters) return url;
   const entries = Object.entries(filters).filter(([, value]) => {
@@ -165,7 +193,13 @@ export async function fetchUnifiedStatement(
     throw toError(body);
   }
 
-  return body.statement;
+  return {
+    ...body.statement,
+    transactions: body.statement.transactions.map((transaction) => ({
+      ...transaction,
+      sourceType: normalizeTransactionSourceType(transaction),
+    })),
+  };
 }
 
 export async function fetchAccountStatement(input: {
@@ -215,8 +249,31 @@ export async function fetchConnectedAccounts(): Promise<ConnectedAccount[]> {
   return body.accounts;
 }
 
+export async function fetchConnectedTransactionsList(): Promise<StatementTransaction[]> {
+  const response = await fetch("/api/connect/transactions", {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    transactions?: StatementTransaction[];
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !Array.isArray(body.transactions)) {
+    throw toError(body);
+  }
+
+  return body.transactions.map((transaction) => ({
+    ...transaction,
+    sourceType: normalizeTransactionSourceType(transaction),
+  }));
+}
+
 export async function fetchSuspectedSubscriptions(): Promise<DetectedSubscription[]> {
-  const response = await fetch("/api/subscriptions/suspected", {
+  const response = await fetch("/api/subscriptions", {
     method: "GET",
     cache: "no-store",
   });
@@ -232,7 +289,74 @@ export async function fetchSuspectedSubscriptions(): Promise<DetectedSubscriptio
     throw toError(body);
   }
 
-  return body.subscriptions;
+  return body.subscriptions.map((subscription) => ({
+    ...subscription,
+    sourceType: normalizeSubscriptionSourceType(subscription),
+  }));
+}
+
+export async function setRecurringLifecycle(input: {
+  subscriptionId: string;
+  status: "confirmed" | "ignored" | "inactive";
+}): Promise<DetectedSubscription[]> {
+  const response = await fetch("/api/subscriptions/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "set_status",
+      subscriptionId: input.subscriptionId,
+      status: input.status,
+    }),
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    subscriptions?: DetectedSubscription[];
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !Array.isArray(body.subscriptions)) {
+    throw toError(body);
+  }
+
+  return body.subscriptions.map((subscription) => ({
+    ...subscription,
+    sourceType: normalizeSubscriptionSourceType(subscription),
+  }));
+}
+
+export async function addManualRecurring(input: {
+  merchant: string;
+  estimatedMonthlyCost: number;
+  recurrenceInterval?: string;
+}): Promise<DetectedSubscription[]> {
+  const response = await fetch("/api/subscriptions/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "manual_add",
+      merchant: input.merchant,
+      estimatedMonthlyCost: input.estimatedMonthlyCost,
+      recurrenceInterval: input.recurrenceInterval,
+    }),
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    subscriptions?: DetectedSubscription[];
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !Array.isArray(body.subscriptions)) {
+    throw toError(body);
+  }
+
+  return body.subscriptions.map((subscription) => ({
+    ...subscription,
+    sourceType: normalizeSubscriptionSourceType(subscription),
+  }));
 }
 
 export async function fetchAiSpendingAnalysis(): Promise<AiSpendingAnalysisResponse> {

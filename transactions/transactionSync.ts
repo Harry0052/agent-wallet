@@ -12,6 +12,8 @@ import {
   setSyncCursor,
   upsertNormalizedTransactions,
 } from "@/transactions/transactionRepository";
+import { generateStatementTasks } from "@/statements/taskGenerator";
+import { emitEngineEvent } from "@/lib/server/engines/eventBus";
 
 export interface TransactionSyncResult {
   user_id: string;
@@ -103,7 +105,7 @@ export async function syncPlaidTransactionsForConnectorItem(
     cursor,
   });
 
-  return {
+  const result: TransactionSyncResult = {
     user_id: input.userId,
     plaid_item_id: input.plaidItemId,
     added_count: addedCount,
@@ -112,6 +114,16 @@ export async function syncPlaidTransactionsForConnectorItem(
     pages: pageCount,
     cursor,
   };
+
+  await generateStatementTasks(input.userId, result);
+
+  emitEngineEvent('transaction_synced', input.userId, {
+    addedCount: addedCount,
+    modifiedCount: modifiedCount,
+    removedCount: removedCount,
+  });
+
+  return result;
 }
 
 export async function syncPlaidTransactionsForUser(

@@ -55,6 +55,12 @@ export async function POST(req: NextRequest) {
       success: true,
       phase: 'exchange_token',
     });
+    logServerEvent("info", "smart.telemetry.connect.connection_success", {
+      userId,
+      sourceType: "connected_account",
+      accountCount: exchanged.accounts.length,
+      institutionCount: exchanged.institutions.length,
+    });
 
     logServerEvent("info", "connect.exchange_token.success", {
       userId,
@@ -74,6 +80,10 @@ export async function POST(req: NextRequest) {
         ip: resolveClientIp(req),
         success: false,
         phase: 'exchange_token',
+      });
+      logServerEvent("info", "smart.telemetry.connect.connection_failure", {
+        userId: auth.auth.walletUserId,
+        sourceType: "connected_account",
       });
     }
 

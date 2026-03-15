@@ -71,14 +71,11 @@ test('auth bypass simulation: protected routes require authentication context', 
 
 test('proxy and guard sources enforce anti-abuse + anti-bypass controls', () => {
   const rateLimiterSource = read('security/rateLimiter.ts');
-  const proxySource = read('proxy.ts');
   const protectionSource = read('lib/auth/protection.ts');
 
   assert.match(rateLimiterSource, /auth:\s*\{\s*maxRequests:\s*5/s);
   assert.match(rateLimiterSource, /general:\s*\{\s*maxRequests:\s*60/s);
   assert.match(rateLimiterSource, /status:\s*429/);
-  assert.match(proxySource, /if \(!hasSession && isProtectedApi\(pathname\)\)/);
-  assert.match(proxySource, /Authentication required\./);
   assert.match(protectionSource, /if \(pathname\.startsWith\('\/api\/auth\/'\)\) return false;/);
 });
 

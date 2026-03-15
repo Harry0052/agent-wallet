@@ -7,7 +7,7 @@ import {
 } from "@/lib/server/observability";
 import {
   detectAndPersistRecurringSubscriptions,
-  listSubscriptions,
+  listRecurringIntelligence,
 } from "@/subscription_intelligence/subscriptionService";
 import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
@@ -25,7 +25,11 @@ export async function GET(req: NextRequest) {
   try {
     const userId = auth.auth.walletUserId;
     await detectAndPersistRecurringSubscriptions(userId);
-    const subscriptions = await listSubscriptions({ userId });
+    const statusParam = req.nextUrl.searchParams.get("status")?.trim();
+    const subscriptions = await listRecurringIntelligence({
+      userId,
+      ...(statusParam ? { status: statusParam } : {}),
+    });
 
     return NextResponse.json({
       ok: true,

@@ -18,10 +18,11 @@ test('onboarding persistence schema exists with per-user ownership', () => {
   assert.match(schema, /FOREIGN KEY \(user_id\)[\s\S]*REFERENCES app_users\(id\)[\s\S]*ON DELETE CASCADE/);
 });
 
-test('protected app layout requires onboarding completion before dashboard access', () => {
+test('protected app layout requires authenticated app access with onboarding gating', () => {
   const source = read('app/(app)/layout.tsx');
-  assert.match(source, /await requirePageAuth\('\/login'\)/);
-  assert.match(source, /await requireOnboardingCompleted\('\/onboarding'\)/);
+  assert.match(source, /await requireAuthenticatedAppAccess\(/);
+  assert.match(source, /loginRedirect:\s*'\/login'/);
+  assert.match(source, /onboardingRedirect:\s*'\/onboarding'/);
 });
 
 test('auth routes return redirect destination based on onboarding state', () => {
@@ -42,15 +43,14 @@ test('onboarding API is authenticated and exposes wallet/profile setup state', (
 
 test('onboarding UI initializes wallet, saves profile, and supports skip flow', () => {
   const source = read('components/onboarding/OnboardingFlow.tsx');
-  assert.match(source, /fetch\('\/api\/wallet\/init'/);
-  assert.match(source, /fetch\('\/api\/wallet\/profile'/);
-  assert.match(source, /fetch\('\/api\/onboarding'/);
-  assert.match(source, /Connect tools now/);
+  assert.match(source, /fetch\(["']\/api\/wallet\/init["']/);
+  assert.match(source, /fetch\(["']\/api\/wallet\/profile["']/);
+  assert.match(source, /fetch\(["']\/api\/onboarding["']/);
+  assert.match(source, /Connect account/);
   assert.match(source, /Skip for now/);
-  assert.match(source, /Continue to dashboard/);
 });
 
-test('onboarding page redirects completed users to operator', () => {
+test('onboarding page redirects completed users to home', () => {
   const source = read('app/onboarding/page.tsx');
-  assert.match(source, /requirePendingOnboarding\('\/operator'\)/);
+  assert.match(source, /requirePendingOnboarding\('\/home'\)/);
 });

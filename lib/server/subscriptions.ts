@@ -1,12 +1,117 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  ActiveSubscriptionTask,
-  SubscriptionActionRecord,
-  SubscriptionOperationStatus,
-  SubscriptionOperationType,
-} from '@/lib/types';
 import { query } from '@/lib/server/db';
-import { parseProcurementRecommendation, recommendationAmount } from '@/lib/server/procurementRecommendation';
+
+// --- Local type definitions (previously in @/lib/types and @/lib/server/procurementRecommendation) ---
+
+export type SubscriptionOperationType =
+  | 'inspect_billing'
+  | 'renewal_check'
+  | 'downgrade'
+  | 'cancel'
+  | 'switch_billing';
+
+export type SubscriptionOperationStatus = 'running' | 'completed' | 'blocked' | 'failed';
+
+type ProcurementTaskStatus =
+  | 'planning'
+  | 'planned'
+  | 'needs_clarification'
+  | 'researching'
+  | 'researched'
+  | 'comparing'
+  | 'compared'
+  | 'approval_required'
+  | 'approved'
+  | 'rejected'
+  | 'purchase_prep'
+  | 'purchase_ready'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface ActiveSubscriptionTask {
+  taskId: string;
+  title: string;
+  vendorName: string;
+  planName: string;
+  amount: number | null;
+  amountBasis: 'monthly' | 'annual' | 'unknown';
+  billingFrequency: string;
+  sourceUrl: string;
+  approvedAt?: string;
+  taskStatus: ProcurementTaskStatus;
+}
+
+export interface SubscriptionActionRecord {
+  id: string;
+  userId: string;
+  taskId: string;
+  operation: SubscriptionOperationType;
+  status: SubscriptionOperationStatus;
+  summary?: string;
+  evidenceUrls: string[];
+  projectedSavings: number | null;
+  projectedSavingsBasis: 'monthly' | 'annual' | 'unknown';
+  currency: string | null;
+  renewalDate?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface RecommendationRecord {
+  engineVersion: string;
+  generatedAt: string;
+  winner: {
+    vendorName: string;
+    planName: string;
+    monthlyPrice: number | null;
+    annualPrice: number | null;
+    billingFrequency: string;
+    pricingPageUrl: string;
+    [key: string]: unknown;
+  } | null;
+  policy?: {
+    amountEvaluated: number | null;
+    amountBasis: 'monthly' | 'annual' | 'unknown';
+    [key: string]: unknown;
+  } | null;
+  approval?: { decision: string; decidedAt?: string } | null;
+  purchasePrep?: { checkoutUrl?: string; [key: string]: unknown } | null;
+  whyWinner: string[];
+  alternatives: unknown[];
+  [key: string]: unknown;
+}
+
+function parseProcurementRecommendation(value: Record<string, unknown> | null): RecommendationRecord | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Partial<RecommendationRecord>;
+  if (
+    typeof raw.engineVersion !== 'string' ||
+    typeof raw.generatedAt !== 'string' ||
+    !Array.isArray(raw.whyWinner) ||
+    !Array.isArray(raw.alternatives)
+  ) {
+    return null;
+  }
+  return raw as RecommendationRecord;
+}
+
+function recommendationAmount(rec: RecommendationRecord): {
+  amount: number | null;
+  basis: 'monthly' | 'annual' | 'unknown';
+} {
+  if (rec.policy?.amountEvaluated !== null && rec.policy?.amountEvaluated !== undefined) {
+    return { amount: rec.policy.amountEvaluated, basis: rec.policy.amountBasis };
+  }
+  if (rec.winner?.monthlyPrice !== null && rec.winner?.monthlyPrice !== undefined) {
+    return { amount: rec.winner.monthlyPrice, basis: 'monthly' };
+  }
+  if (rec.winner?.annualPrice !== null && rec.winner?.annualPrice !== undefined) {
+    return { amount: rec.winner.annualPrice, basis: 'annual' };
+  }
+  return { amount: null, basis: 'unknown' };
+}
 
 type ActiveTaskRow = {
   id: string;

@@ -5,7 +5,7 @@ import { hasWebhookBeenProcessed, markWebhookProcessed } from '@/lib/server/ledg
 import { getStripeWebhookSecret } from '@/lib/server/env';
 import { getStripeClient } from '@/lib/server/stripe';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
-import { createPostgresTwoPhaseStore } from '@/lib/payments/ledger';
+import { createPostgresTwoPhaseStore } from '@/lib/server/paymentsLedger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

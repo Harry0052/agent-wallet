@@ -1,151 +1,94 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
-  Activity,
-  Command,
-  Receipt,
+  ArrowLeftRight,
+  BarChart3,
+  Home,
+  Landmark,
+  Lightbulb,
+  LineChart,
+  PieChart,
+  RefreshCw,
   Settings,
-  WalletCards,
-  Wrench,
+  Target,
+  TrendingUp,
+  type LucideIcon,
 } from "lucide-react";
-import { useApp } from "@/lib/store";
-import { fmt } from "@/lib/utils";
-import { logout } from '@/services/auth';
 
-const navLinks = [
-  { href: "/operator", label: "Dashboard", icon: Command },
-  { href: "/execution", label: "Tasks", icon: Activity },
-  { href: "/tools", label: "Tools", icon: Wrench },
-  { href: "/wallet", label: "Wallet", icon: WalletCards },
-  { href: "/statements", label: "Statements", icon: Receipt },
-  { href: "/settings", label: "Settings", icon: Settings },
+const mainLinks = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/accounts", label: "Accounts", icon: Landmark },
+  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { href: "/recurring", label: "Recurring", icon: RefreshCw },
+  { href: "/cashflow", label: "Cash Flow", icon: TrendingUp },
 ] as const;
 
-function getSystemStatusLabel(
-  isProcessing: boolean,
-  status: string | undefined,
-): string {
-  if (status === "awaiting-approval") return "Needs Approval";
-  if (isProcessing) return "Running Task";
-  if (status === "completed") return "Task Complete";
-  if (status === "cancelled") return "Task Cancelled";
-  return "Ready";
-}
+const planLinks = [
+  { href: "/budgets", label: "Budgets", icon: PieChart },
+  { href: "/goals", label: "Goals", icon: Target },
+  { href: "/investments", label: "Investments", icon: LineChart },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/insights", label: "Insights", icon: Lightbulb },
+] as const;
 
-function getSystemStatusState(
-  isProcessing: boolean,
-  status: string | undefined,
-): "live" | "ok" | "alert" {
-  if (status === "cancelled") return "alert";
-  if (status === "awaiting-approval" || isProcessing) return "live";
-  return "ok";
-}
+const utilLinks = [{ href: "/settings", label: "Settings", icon: Settings }] as const;
 
 export function AppNav() {
-  const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const { wallet, isProcessing, activeTask } = useApp();
-  const isDemoMode = searchParams.get("demo") === "1";
 
-  const systemLabel = getSystemStatusLabel(isProcessing, activeTask?.status);
-  const systemState = getSystemStatusState(isProcessing, activeTask?.status);
-
-  const buildHref = (base: string) => {
-    if (isDemoMode) return `${base}?demo=1`;
-    return base;
-  };
-
-  const onLogout = async () => {
-    await logout();
-    router.replace('/login');
-    router.refresh();
+  const renderLink = (link: { href: string; label: string; icon: LucideIcon }) => {
+    const isActive = pathname === link.href;
+    const Icon = link.icon;
+    return (
+      <Link key={link.href} href={link.href} className="sw-sidebar-link" data-active={isActive}>
+        <Icon size={18} strokeWidth={isActive ? 2 : 1.7} />
+        {link.label}
+      </Link>
+    );
   };
 
   return (
     <>
-      {/* Desktop top nav */}
-      <nav className="aw-global-nav hidden md:block" data-surface="light">
-        <div className="aw-global-nav-inner max-w-[1280px] px-5">
-          {/* Left: Logo */}
-          <Link
-            href="/"
-            className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80"
-          >
-            <div className="aw-brand-mark">
-              <span className="text-[0.65rem] font-bold tracking-wider text-white">
-                AW
-              </span>
-            </div>
-            <span className="text-[0.95rem] font-semibold tracking-[0.01em] text-[var(--aw-text)]">
-              Agent Wallet
-            </span>
-            <span className="hidden rounded-full border border-[var(--aw-border-strong)] bg-[var(--aw-primary-soft)] px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-[var(--aw-primary-strong)] lg:inline-flex">
-              Financial OS
-            </span>
-          </Link>
-
-          {/* Center: Page links */}
-          <div className="flex items-center gap-0.5">
-            {navLinks.map((link) => {
-              const isActive = pathname === link.href;
-              const Icon = link.icon;
-              return (
-                <Link
-                  key={link.href}
-                  href={buildHref(link.href)}
-                  className="aw-nav-link"
-                  data-active={isActive}
-                >
-                  <Icon size={14} />
-                  {link.label}
-                </Link>
-              );
-            })}
+      <nav className="sw-sidebar hidden md:flex">
+        <div className="sw-sidebar-logo">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--aw-primary-soft)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+            <img src="/calico-icon.png" alt="Calico" className="h-6 w-6 rounded-lg object-cover" />
           </div>
-
-          {/* Right: Status + Balance */}
-          <div className="flex shrink-0 items-center gap-2.5">
-            <span className="aw-status-chip" data-state={systemState}>
-              {systemLabel}
-            </span>
-            <div className="flex items-center gap-1.5 rounded-full border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-1.5">
-              <WalletCards size={13} className="text-[var(--aw-primary-strong)]" />
-              <span className="text-[0.78rem] font-bold text-[var(--aw-text)]">
-                {fmt(wallet.balance)}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="aw-button-secondary px-3 py-1.5 text-xs"
-              onClick={() => { void onLogout(); }}
-            >
-              Logout
-            </button>
+          <div>
+            <p className="text-[0.94rem] font-semibold tracking-[-0.02em] text-[var(--aw-text)]">Calico</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Financial OS</p>
           </div>
+        </div>
+
+        <div className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Workspace</div>
+        <div className="sw-sidebar-nav">{mainLinks.map(renderLink)}</div>
+
+        <div className="sw-sidebar-divider" />
+
+        <div className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Planning</div>
+        <div className="sw-sidebar-nav">{planLinks.map(renderLink)}</div>
+
+        <div className="mt-auto rounded-[16px] border border-[var(--aw-border)] bg-white/70 p-2 shadow-[0_4px_12px_rgba(15,23,42,0.04)]">
+          <div className="sw-sidebar-nav">{utilLinks.map(renderLink)}</div>
         </div>
       </nav>
 
-      {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--aw-border)] bg-white/92 backdrop-blur-xl md:hidden">
-        <div className="flex items-center justify-between px-1 py-2">
-          {navLinks.map((link) => {
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--aw-border)] bg-white/90 backdrop-blur-xl md:hidden">
+        <div className="flex items-center justify-around px-2 py-2">
+          {[mainLinks[0], mainLinks[1], mainLinks[2], mainLinks[3], utilLinks[0]].map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
             return (
               <Link
                 key={link.href}
-                href={buildHref(link.href)}
-                className={`flex min-w-[3.55rem] flex-col items-center gap-0.5 px-1.5 py-1 text-[0.58rem] font-semibold transition-colors ${
-                  isActive
-                    ? "text-[var(--aw-primary-strong)]"
-                    : "text-[var(--aw-text-muted)] hover:text-[var(--aw-text-soft)]"
+                href={link.href}
+                className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-1 text-[10px] font-semibold transition-colors ${
+                  isActive ? "text-[var(--aw-primary)]" : "text-[var(--aw-text-muted)]"
                 }`}
               >
-                <Icon size={18} />
+                <Icon size={20} strokeWidth={isActive ? 2 : 1.6} />
                 {link.label}
               </Link>
             );

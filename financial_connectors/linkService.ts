@@ -78,7 +78,7 @@ export async function createUserLinkToken(userId: string): Promise<{
   const plaid = getPlaidClient();
   const created = await plaid.createLinkToken({
     userId,
-    clientName: "Agent Wallet",
+    clientName: "Calico",
     products: ["auth"],
   });
 

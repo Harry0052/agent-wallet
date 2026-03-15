@@ -1,6 +1,6 @@
 // ============================================================
-// Agent Wallet – Core Types
-// A chat-first autonomous wallet for AI web agents
+// Calico – Core Types
+// A calm, premium, consumer-facing AI-native personal financial OS
 // ============================================================
 
 // -- Wallet --------------------------------------------------
@@ -32,13 +32,13 @@ export interface SavedPaymentMethod {
 }
 
 export interface WalletSettings {
-  maxTransaction: number;        // max per single transaction
-  dailyLimit: number;            // daily spend limit
-  monthlyBudget: number;         // monthly spend limit
-  approvalThreshold: number;     // require approval at/above this amount
-  requireLocation: boolean;      // ask for location on purchase tasks
-  allowedMerchants: string[];    // empty => allow all except blocked
-  blockedMerchants: string[];    // always denied
+  maxTransaction: number;
+  dailyLimit: number;
+  monthlyBudget: number;
+  approvalThreshold: number;
+  requireLocation: boolean;
+  allowedMerchants: string[];
+  blockedMerchants: string[];
 }
 
 export type TransactionType =
@@ -48,8 +48,6 @@ export type TransactionType =
   | 'payout'
   | 'refund'
   | 'reversal'
-  | 'procurement_commitment'
-  | 'subscription_savings_projection'
   | 'subscription_debit';
 export type TransactionDirection = 'credit' | 'debit';
 export type TransactionStatus = 'pending' | 'succeeded' | 'failed' | 'canceled';
@@ -108,544 +106,108 @@ export interface AppUserSettings {
   userId: string;
   locale: string;
   timezone: string;
-  dashboardDefaultView: 'operator' | 'execution' | 'wallet' | 'tools' | string;
+  dashboardDefaultView: 'home' | 'transactions' | 'subscriptions' | 'insights' | 'settings' | string;
   security: Record<string, unknown>;
-  agentDefaults: Record<string, unknown>;
   notifications: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 }
 
-// -- Chat ----------------------------------------------------
+// -- Subscription Detection ----------------------------------
 
-export type MessageRole = 'user' | 'assistant' | 'system';
-export type MessageType =
-  | 'text'
-  | 'options'       // vendor/product choices
-  | 'approval'      // approve/reject prompt
-  | 'receipt'        // purchase receipt
-  | 'funding'        // add-funds request
-  | 'agent-log'      // TinyFish action log
-  | 'evidence'       // TinyFish extracted evidence
-  | 'thinking'       // agent "thinking" indicator
-  | 'task-progress'  // live task state machine progress
-  | 'signup-summary'; // post-signup summary card
-
-export interface ChatMessage {
-  id: string;
-  role: MessageRole;
-  content: string;
-  type: MessageType;
-  data?: OptionsData | ApprovalData | ReceiptData | AgentLogData | FundingData | EvidenceData | TaskProgressData | SignupSummaryData;
-  timestamp: string;
-}
-
-export interface OptionsData {
-  options: VendorOption[];
-  recommendedId?: string;
-}
-
-export interface VendorOption {
-  id: string;
-  name: string;
-  item: string;
-  price: number;
-  distance?: string;
-  rating?: number;
-  url?: string;
-  tags?: string[];
-}
-
-export interface ApprovalData {
-  merchant: string;
-  item: string;
-  amount: number;
-  taskId: string;
-}
-
-export interface ReceiptData {
-  merchant: string;
-  item: string;
-  amount: number;
-  previousBalance: number;
-  newBalance: number;
-  transactionId: string;
-}
-
-export interface FundingData {
-  amount: number;
-  paymentMethodId?: string;
-  paymentMethodLabel?: string;
-  topupMode?: 'checkout' | 'saved_payment_method' | 'setup_required';
-  requireApproval?: boolean;
-  allowForgetAfterUse?: boolean;
-  allowDeny?: boolean;
-  requiresVerification?: boolean;
-  checkoutUrl?: string;
-  setupUrl?: string;
-}
-
-export interface AgentLogData {
-  steps: AgentStep[];
-  payload?: Record<string, unknown>;
-}
-
-export interface EvidenceRecord {
-  vendorName: string;
-  planName: string;
-  price: number;
-  billingFrequency: string;
-  keyFeatures: string[];
-  sourceUrl: string;
-  extractedAt: string;
-}
-
-export interface EvidenceData {
-  findings: EvidenceRecord[];
-}
-
-export interface SignupSummaryData {
-  merchant: string;
-  plan: string;
-  price: number;
-  billingCycle: string;
-  loginIdentifierMasked: string;
-  toolId: string | null;
-  subscriptionAdded: boolean;
-  status: 'complete' | 'action_required';
-  blockerMessage?: string;
-}
-
-// -- Memory --------------------------------------------------
-
-export type MemoryKey =
-  | 'session:active_task'
-  | 'session:messages'
-  | 'session:live_run';
-
-export interface SessionSnapshot {
-  messages: ChatMessage[];
-  activeTask: AgentTask | null;
-  liveRun: LiveRunState | null;
-}
-
-// -- Procurement ---------------------------------------------
-
-export interface ProcurementBudgetConstraint {
-  amount: number | null;
-  currency: 'USD';
-  period: 'monthly' | 'yearly' | 'one_time' | 'unknown';
-  rawText?: string;
-}
-
-export interface ProcurementPlan {
-  normalizedGoal: string;
-  category: string;
-  scopeLocked: boolean;
-  targetVendorCandidates: string[];
-  budgetConstraint: ProcurementBudgetConstraint;
-  mustHaveFeatures: string[];
-  comparisonCriteria: string[];
-  clarificationNeeded: boolean;
-  followUpQuestions: string[];
-}
-
-export interface ProcurementTaskRecord {
+export interface DetectedSubscription {
   id: string;
   userId: string;
-  taskType: string;
-  status:
-  | 'planning'
-  | 'planned'
-  | 'needs_clarification'
-  | 'researching'
-  | 'researched'
-  | 'comparing'
-  | 'awaiting_approval'
-  | 'purchase_preparing'
-  | 'purchase_prepared'
-  | 'rejected'
-  | 'failed';
-  goal: string;
-  budgetLimit: number | null;
-  category: string | null;
-  targetVendors: string[];
-  comparisonCriteria: string[];
-  mustHaveFeatures: string[];
-  findings: Record<string, unknown> | null;
-  recommendation: Record<string, unknown> | null;
-  planningOutput: ProcurementPlan;
-  error?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ProcurementFinding {
-  id: string;
-  taskId: string;
-  userId: string;
-  vendorName: string;
-  pricingPageUrl: string;
-  planName: string;
-  monthlyPrice: number | null;
-  annualPrice: number | null;
-  billingFrequency: string;
-  contentAvailability?: string | null;
-  notes?: string | null;
-  notableFeatures: string[];
-  extractionTimestamp: string;
-  createdAt: string;
-}
-
-export interface ProcurementResearchLog {
-  id: string;
-  taskId: string;
-  actionType: string;
-  status: 'running' | 'done' | 'error';
-  message: string;
-  url?: string;
-  phase?: string;
-  event?: string;
-  code?: string;
-  createdAt: string;
-}
-
-export interface ProcurementLifecycleState {
-  phase: 'planning' | 'researching' | 'comparing' | 'approval' | 'purchase_prep' | 'subscription_ops' | 'failed';
-  canRetry: boolean;
-  retryHint?: string;
-}
-
-export interface ProcurementRecommendationOption {
-  findingId: string;
-  vendorName: string;
-  planName: string;
-  monthlyPrice: number | null;
-  annualPrice: number | null;
-  billingFrequency: string;
-  contentAvailability?: string | null;
-  notes?: string | null;
-  pricingPageUrl: string;
-  notableFeatures: string[];
-  extractionTimestamp: string;
-}
-
-export interface ProcurementPolicyCheck {
-  key: string;
-  label: string;
-  passed: boolean;
-  blocking: boolean;
-  detail: string;
-}
-
-export interface ProcurementPolicyResult {
-  allowed: boolean;
-  approvalRequired: boolean;
-  amountEvaluated: number | null;
-  amountBasis: 'monthly' | 'annual' | 'unknown';
-  currency: 'USD';
-  checks: ProcurementPolicyCheck[];
-  reason?: string;
-  evaluatedAt: string;
-}
-
-export interface ProcurementApprovalState {
-  decision: 'approved' | 'rejected';
-  decidedAt: string;
-}
-
-export interface ProcurementLedgerPreview {
-  entryId: string;
-  type: 'procurement_commitment';
-  status: 'pending';
+  merchant: string;
   amount: number;
   currency: string;
-  description: string;
-}
-
-export interface ProcurementPurchasePrepState {
-  status: 'running' | 'prepared' | 'failed';
-  preparedAt?: string;
-  checkoutUrl?: string;
-  proofUrls: string[];
-  pendingLedgerEntry?: ProcurementLedgerPreview;
-  blocker?: {
-    code: string;
-    message: string;
-    missingFields: string[];
-    sensitive: boolean;
-    canResume: boolean;
+  frequency: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual';
+  confidence: number;
+  status: 'active' | 'paused' | 'cancelled' | 'unknown';
+  lastSeen: string;
+  nextChargeDate?: string;
+  priceChange?: {
+    previousAmount: number;
+    changeDetectedAt: string;
   };
-  error?: string;
-}
-
-export interface ProcurementRecommendationRecord {
-  engineVersion: string;
-  generatedAt: string;
-  goal: string;
-  budgetLimit: number | null;
-  budgetAssessment: 'fits_budget' | 'mixed' | 'over_budget' | 'unknown';
-  noFitExplanation: string | null;
-  confidence?: number;
-  exceptions?: string[];
-  winner: ProcurementRecommendationOption | null;
-  alternatives: ProcurementRecommendationOption[];
-  whyWinner: string[];
-  evidenceLinks?: string[];
-  policy: ProcurementPolicyResult | null;
-  approval?: ProcurementApprovalState;
-  purchasePrep?: ProcurementPurchasePrepState;
-}
-
-export type SubscriptionOperationType =
-  | 'inspect_billing'
-  | 'renewal_check'
-  | 'downgrade'
-  | 'cancel'
-  | 'switch_billing';
-
-export type SubscriptionOperationStatus = 'running' | 'completed' | 'blocked' | 'failed';
-
-export interface ActiveSubscriptionTask {
-  taskId: string;
-  title: string;
-  vendorName: string;
-  planName: string;
-  amount: number | null;
-  amountBasis: 'monthly' | 'annual' | 'unknown';
-  billingFrequency: string;
-  sourceUrl: string;
-  approvedAt?: string;
-  taskStatus: ProcurementTaskRecord['status'];
-}
-
-export interface SubscriptionActionRecord {
-  id: string;
-  userId: string;
-  taskId: string;
-  operation: SubscriptionOperationType;
-  status: SubscriptionOperationStatus;
-  summary?: string;
-  evidenceUrls: string[];
-  projectedSavings: number | null;
-  projectedSavingsBasis: 'monthly' | 'annual' | 'unknown';
-  currency: string | null;
-  renewalDate?: string;
-  error?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type ToolConnectionType = 'password' | 'oauth' | 'api_key' | 'session';
-export type UserToolStatus = 'connected' | 'disconnected' | 'pending' | 'failed';
-export type UserToolCreatedBy = 'manual' | 'signup_flow' | 'oauth' | 'imported';
-export type UserToolEventType =
-  | 'connected'
-  | 'updated'
-  | 'login_used'
-  | 'login_failed'
-  | 'disabled'
-  | 'enabled'
-  | 'removed'
-  | 'signup_created';
-
-export interface ToolCatalogItem {
-  id: string;
-  key: string;
-  displayName: string;
-  category: string | null;
-  iconName: string | null;
-  homepageUrl: string | null;
-  loginUrl: string | null;
-  signupUrl: string | null;
-  supportsOauth: boolean;
-  supportsPasswordLogin: boolean;
-  supportsApiKey: boolean;
-  defaultEnabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface UserToolRecord {
-  id: string;
-  userId: string;
-  toolId: string;
-  status: UserToolStatus;
-  enabled: boolean;
-  hasSecret: boolean;
-  connectionType: ToolConnectionType;
-  label: string | null;
-  loginIdentifierMasked: string | null;
-  lastUsedAt: string | null;
-  lastVerifiedAt: string | null;
-  createdBy: UserToolCreatedBy;
-  createdAt: string;
-  updatedAt: string;
-  tool: {
-    key: string;
-    displayName: string;
-    category: string | null;
-    iconName: string | null;
-    homepageUrl: string | null;
-    loginUrl: string | null;
-    signupUrl: string | null;
-    supportsOauth: boolean;
-    supportsPasswordLogin: boolean;
-    supportsApiKey: boolean;
-    defaultEnabled: boolean;
-  };
-}
-
-export interface UserToolEventRecord {
-  id: string;
-  userToolId: string;
-  eventType: UserToolEventType;
-  message: string | null;
-  createdAt: string;
-}
-
-// -- Agent / TinyFish ----------------------------------------
-
-export type AgentStepType =
-  | 'search'
-  | 'visit'
-  | 'extract'
-  | 'compare'
-  | 'select'
-  | 'checkout'
-  | 'form-fill'
-  | 'confirm'
-  | 'plan'
-  | 'guardrail'
-  | 'payment';
-
-export type AgentStepStatus = 'running' | 'done' | 'error';
-
-export interface AgentStep {
-  id: string;
-  type: AgentStepType;
-  description: string;
-  url?: string;
-  status: AgentStepStatus;
-  timestamp: string;
-}
-
-export type TaskState =
-  | 'received'
-  | 'parsing'
-  | 'needs_clarification'
-  | 'resolving_recipient'
-  | 'ready_to_execute'
-  | 'executing'
-  | 'awaiting_approval'
-  | 'completed'
-  | 'failed';
-
-export interface TaskProgressData {
-  taskState: TaskState;
-  stateHistory: Array<{ state: TaskState; label: string; timestamp: string }>;
-}
-
-export type LiveRunStatus =
-  | 'idle'
-  | 'started'
-  | 'running'
-  | 'complete'
-  | 'failed'
-  | 'canceled';
-
-export type LiveRunEventType =
-  | 'STARTED'
-  | 'STREAMING_URL'
-  | 'PROGRESS'
-  | 'COMPLETE';
-
-export interface LiveRunEvent {
-  id: string;
-  type: LiveRunEventType;
-  label: 'Started' | 'Running' | 'Complete' | 'Failed' | 'Canceled';
-  message: string;
-  purpose?: string;
-  timestamp: string;
-  raw?: unknown;
-}
-
-export interface LiveRunResult {
-  status: 'complete' | 'failed' | 'canceled';
-  summary: string;
-  resultJson?: unknown;
-  error?: string;
-  raw?: unknown;
-}
-
-export interface LiveRunState {
-  runId: string | null;
-  status: LiveRunStatus;
-  events: LiveRunEvent[];
-  streamingUrl: string | null;
-  result: LiveRunResult | null;
-  error: string | null;
-  updatedAt: string | null;
-}
-
-export interface AgentTask {
-  id: string;
-  intent: string;
   category?: string;
-  maxBudget: number;
-  location?: string;
-  status: 'active' | 'awaiting-approval' | 'completed' | 'cancelled';
-  taskState: TaskState;
-  steps: AgentStep[];
-  reasoningPlan?: string[];
-  selectedOption?: VendorOption;
-  recipientId?: string;
-  startedAt: string;
-  completedAt?: string;
-  pendingRecipientName?: string;
-  pendingAmount?: number;
-  signupMerchant?: string;
-  signupPlan?: string;
-  signupPrice?: number;
-  signupBillingCycle?: string;
-  failure?: {
-    code: string;
-    stage: string;
-    message: string;
-    userMessage?: string;
-    recoverable?: boolean;
-    blockedReasons?: string[];
-    details?: Record<string, unknown>;
-  } | null;
-  signupExecution?: {
-    compatibility?: Record<string, unknown>;
-    riskGate?: Record<string, unknown>;
-    payment?: {
-      paymentFlowId?: string;
-      fundingMode?: string;
-      authorizationStatus?: string;
-      captureStatus?: string;
-      authorizedAt?: string | null;
-      capturedAt?: string | null;
-      refundedAt?: string | null;
-      retryScheduled?: boolean;
-      nextRetryAt?: string | null;
-    };
-    activation?: {
-      status: 'PENDING' | 'ACTIVE' | 'FAILED' | 'UNKNOWN';
-      verifiedAt: string | null;
-      settlementRecommendation: string;
-      nextAction: string;
-      evidenceCount: number;
-      evidence: Array<Record<string, unknown>>;
-      toolId?: string | null;
-    };
-    refund?: {
-      initiated: boolean;
-      refundCaseId?: string;
-      status?: string;
-      userExplanation?: string;
-    };
-    blocker?: Record<string, unknown> | null;
-  };
+  createdAt: string;
+  updatedAt: string;
 }
+
+// -- Insights ------------------------------------------------
+
+export type InsightType =
+  | 'unusual_spending'
+  | 'price_increase'
+  | 'waste'
+  | 'category_drift'
+  | 'found_money'
+  | 'budget_risk';
+
+export type InsightSeverity = 'info' | 'warning' | 'action_needed';
+export type InsightStatus = 'active' | 'dismissed' | 'acted_on' | 'expired';
+
+export interface Insight {
+  id: string;
+  userId: string;
+  insightType: InsightType;
+  title: string;
+  summary: string;
+  detail: Record<string, unknown>;
+  severity: InsightSeverity;
+  status: InsightStatus;
+  relatedMerchant?: string;
+  amountImpact?: number;
+  generatedAt: string;
+  dismissedAt?: string;
+}
+
+export interface SuggestedAction {
+  id: string;
+  userId: string;
+  actionType: string;
+  title: string;
+  description: string;
+  detail: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  insightId?: string;
+  estimatedSavings?: number;
+}
+
+export interface NotificationPreferences {
+  userId: string;
+  emailInsights: boolean;
+  pushInsights: boolean;
+  weeklySummary: boolean;
+  billReminders: boolean;
+  unusualActivity: boolean;
+}
+
+// -- Engine Types ------------------------------------------
+
+export type FinancialTaskType =
+  | 'cancel_subscription'
+  | 'review_charge'
+  | 'reduce_spending'
+  | 'fund_wallet'
+  | 'move_to_savings'
+  | 'reconnect_account';
+
+export type FinancialTaskStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'dismissed'
+  | 'snoozed';
+
+export type CommandIntent =
+  | 'query_spending'
+  | 'query_subscription'
+  | 'query_cashflow'
+  | 'query_health'
+  | 'affordability_check'
+  | 'action_cancel_subscription'
+  | 'action_move_money'
+  | 'action_set_budget'
+  | 'general_overview';

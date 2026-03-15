@@ -88,7 +88,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
 
     setIsLoading(true);
     try {
-      let redirectTo = '/operator';
+      let redirectTo = '/home';
       if (isSignup) {
         const result = await signup({ email, password });
         redirectTo = result.redirectTo;
@@ -113,8 +113,8 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
         <h1 className="aw-page-title mt-1">{isSignup ? 'Create account' : 'Log in'}</h1>
         <p className="aw-page-subtitle mt-2">
           {isSignup
-            ? 'Create your private Agent Wallet workspace.'
-            : 'Sign in to your private Agent Wallet workspace.'}
+            ? 'Create your private Calico workspace.'
+            : 'Sign in to your private Calico workspace.'}
         </p>
 
         <div className="mt-5">
@@ -190,7 +190,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
         </form>
 
         <p className="mt-4 text-xs text-[var(--aw-text-muted)]">
-          {isSignup ? 'Already have an account?' : 'New to Agent Wallet?'}{' '}
+          {isSignup ? 'Already have an account?' : 'New to Calico?'}{' '}
           <Link
             href={isSignup ? '/login' : '/signup'}
             className="font-semibold text-[var(--aw-primary-strong)] hover:underline"

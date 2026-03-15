@@ -169,5 +169,5 @@ export async function isOnboardingComplete(appUserId: string): Promise<boolean> 
 
 export async function getPostAuthRedirectPath(appUserId: string): Promise<string> {
   const complete = await isOnboardingComplete(appUserId);
-  return complete ? '/operator' : '/onboarding';
+  return complete ? '/home' : '/onboarding';
 }

@@ -6,7 +6,6 @@ import {
   getWallet,
   recordLedgerEntryUnique,
 } from '@/lib/server/ledger';
-import { runRecoveryReconciliationCycle } from '@/lib/reconciliation/reconcileFailedPurchases';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 import { enforceApiAuth } from '@/security/authGuard';
 import { enforceRateLimit } from '@/security/rateLimiter';
@@ -163,12 +162,6 @@ export async function POST(req: NextRequest) {
 
     const updatedWallet = await getWallet(userId);
 
-    await runRecoveryReconciliationCycle({
-      userId,
-      autoRecover: false,
-      limit: 200,
-    }).catch(() => undefined);
-
     logServerEvent('info', 'wallet.subscription_debit.completed', {
       userId,
       ledgerEntryId: transaction.id,
@@ -264,12 +257,6 @@ export async function DELETE(req: NextRequest) {
     });
 
     const updatedWallet = await getWallet(userId);
-
-    await runRecoveryReconciliationCycle({
-      userId,
-      autoRecover: false,
-      limit: 200,
-    }).catch(() => undefined);
 
     logServerEvent('info', 'wallet.subscription_refund.completed', {
       userId,
