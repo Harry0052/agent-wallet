@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createSession, createUserWithPassword, AuthError } from '@/lib/server/auth';
-import { setSessionCookie } from '@/lib/server/authCookies';
+import { createUserWithPassword, AuthError } from '@/lib/server/auth';
 import { recordAccountAuditEvent } from '@/lib/server/accountAudit';
 import { extractRequestMeta } from '@/lib/server/requestMeta';
-import { getPostAuthRedirectPath } from '@/lib/server/onboarding';
 import { enforceRateLimit } from '@/security/rateLimiter';
 import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
 import {
@@ -42,12 +40,6 @@ export async function POST(req: NextRequest) {
       password: body.password,
     });
 
-    const session = await createSession({
-      appUserId: created.appUserId,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-    });
-
     await recordAccountAuditEvent({
       userId: created.appUserId,
       action: 'signup',
@@ -55,16 +47,14 @@ export async function POST(req: NextRequest) {
       userAgent: meta.userAgent,
     });
 
-    const response = NextResponse.json({
+    // Do NOT create a session on signup — user must explicitly log in.
+    return NextResponse.json({
       ok: true,
       user: {
         email: created.email,
       },
-      redirectTo: await getPostAuthRedirectPath(created.appUserId),
+      signupComplete: true,
     });
-
-    setSessionCookie(response, session.token, session.expiresAt);
-    return response;
   } catch (error) {
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')

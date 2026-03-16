@@ -11,24 +11,20 @@ interface AuthSuccessBody {
 export async function signup(input: {
   email: string;
   password: string;
-}): Promise<{ redirectTo: string }> {
+}): Promise<{ signupComplete: true }> {
   const response = await fetch('/api/auth/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
 
-  const body = (await response.json()) as AuthSuccessBody;
+  const body = (await response.json()) as AuthSuccessBody & { signupComplete?: boolean };
 
   if (!response.ok || !body.ok) {
     throw new Error(formatError(body));
   }
 
-  return {
-    redirectTo: typeof body.redirectTo === 'string' && body.redirectTo
-      ? body.redirectTo
-      : '/home',
-  };
+  return { signupComplete: true };
 }
 
 export async function login(input: {

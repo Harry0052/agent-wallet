@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  AlertTriangle,
   Bell,
   Cable,
   ChevronRight,
   CreditCard,
   KeyRound,
   LogOut,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { EditProfileModal } from "@/modals/EditProfileModal";
@@ -26,6 +28,7 @@ import {
   type BillingStatus,
   type PlanId,
 } from "@/services/billing";
+import { deleteAccount } from "@/services/entitlements";
 
 type OpenModal = null | "edit-profile" | "security" | "notifications";
 
@@ -124,6 +127,78 @@ function BillingBanner({ billing, onManage }: { billing: BillingStatus; onManage
   );
 }
 
+function DeleteAccountButton() {
+  const router = useRouter();
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDelete = async () => {
+    if (confirmText !== "DELETE MY ACCOUNT") return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount(confirmText);
+      router.replace("/login");
+      router.refresh();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Deletion failed");
+      setIsDeleting(false);
+    }
+  };
+
+  if (!showConfirm) {
+    return (
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-medium text-[var(--aw-danger)] transition hover:bg-[var(--aw-danger)]/10"
+      >
+        <Trash2 size={13} />
+        Delete account
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-medium text-[var(--aw-danger)]">
+        Type <strong>DELETE MY ACCOUNT</strong> to confirm:
+      </p>
+      <input
+        type="text"
+        value={confirmText}
+        onChange={(e) => setConfirmText(e.target.value)}
+        placeholder="DELETE MY ACCOUNT"
+        className="aw-input h-9 w-full text-xs"
+        style={{ borderColor: "var(--aw-danger)" }}
+      />
+      {deleteError && (
+        <p className="text-xs text-[var(--aw-danger)]">{deleteError}</p>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => void handleDelete()}
+          disabled={confirmText !== "DELETE MY ACCOUNT" || isDeleting}
+          className="rounded-lg px-4 py-2 text-xs font-semibold text-white transition disabled:opacity-40"
+          style={{ background: "var(--aw-danger)" }}
+        >
+          {isDeleting ? "Deleting..." : "Permanently delete"}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setShowConfirm(false); setConfirmText(""); }}
+          className="rounded-lg px-4 py-2 text-xs font-medium text-[var(--aw-text-muted)]"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -209,7 +284,7 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 flex items-center gap-3">
         <button
           type="button"
           onClick={() => {
@@ -220,6 +295,18 @@ export function SettingsPage() {
           <LogOut size={14} />
           Log out
         </button>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="mt-12 rounded-xl border border-[var(--aw-danger)]/20 p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <AlertTriangle size={16} className="text-[var(--aw-danger)]" />
+          <span className="text-sm font-semibold text-[var(--aw-danger)]">Danger zone</span>
+        </div>
+        <p className="mb-4 text-xs text-[var(--aw-text-muted)]">
+          Permanently delete your account and all associated data. This action cannot be undone.
+        </p>
+        <DeleteAccountButton />
       </div>
 
       <EditProfileModal

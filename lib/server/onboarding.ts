@@ -168,6 +168,12 @@ export async function isOnboardingComplete(appUserId: string): Promise<boolean> 
 }
 
 export async function getPostAuthRedirectPath(appUserId: string): Promise<string> {
+  // Check plan first — users must choose a plan before onboarding
+  const { getUserSubscription, getBillingState } = await import('@/lib/server/billing');
+  const sub = await getUserSubscription(appUserId);
+  const billing = getBillingState(sub);
+  if (!billing.isActive) return '/plans';
+
   const complete = await isOnboardingComplete(appUserId);
   return complete ? '/home' : '/onboarding';
 }

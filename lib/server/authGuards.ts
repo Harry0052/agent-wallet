@@ -3,6 +3,7 @@ import 'server-only';
 import { redirect, unstable_rethrow } from 'next/navigation';
 import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/server/auth';
 import { getPostAuthRedirectPath, isOnboardingComplete } from '@/lib/server/onboarding';
+import { getUserSubscription, getBillingState } from '@/lib/server/billing';
 
 async function resolveAuthenticatedUserOrRedirect(loginRedirect: string): Promise<AuthenticatedUser> {
   try {
@@ -35,19 +36,29 @@ export async function redirectAuthenticatedUser(home = '/home'): Promise<void> {
 export async function requireAuthenticatedAppAccess(input?: {
   loginRedirect?: string;
   onboardingRedirect?: string;
+  plansRedirect?: string;
 }): Promise<AuthenticatedUser> {
   const loginRedirect = input?.loginRedirect || '/login';
+  const plansRedirect = input?.plansRedirect || '/plans';
   const onboardingRedirect = input?.onboardingRedirect || '/onboarding';
   const user = await resolveAuthenticatedUserOrRedirect(loginRedirect);
 
   try {
+    // Check plan first — users must have an active subscription
+    const sub = await getUserSubscription(user.appUserId);
+    const billing = getBillingState(sub);
+    if (!billing.isActive) {
+      redirect(plansRedirect);
+    }
+
+    // Then check onboarding
     const complete = await isOnboardingComplete(user.appUserId);
     if (!complete) {
       redirect(onboardingRedirect);
     }
   } catch (error) {
     unstable_rethrow(error);
-    console.error('[authGuards] failed to resolve onboarding state', error);
+    console.error('[authGuards] failed to resolve app access state', error);
     redirect(loginRedirect);
   }
 

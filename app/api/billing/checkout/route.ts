@@ -34,8 +34,15 @@ export async function POST(req: NextRequest) {
     }
 
     const origin = req.headers.get('origin') || req.nextUrl.origin;
-    const successUrl = `${origin}/settings?billing=success`;
-    const cancelUrl = `${origin}/settings?billing=cancelled`;
+    // After first checkout, route to onboarding. For upgrades, route to settings.
+    const { isOnboardingComplete } = await import('@/lib/server/onboarding');
+    const onboardingDone = await isOnboardingComplete(user.appUserId);
+    const successUrl = onboardingDone
+      ? `${origin}/settings?billing=success`
+      : `${origin}/onboarding?billing=success`;
+    const cancelUrl = onboardingDone
+      ? `${origin}/settings?billing=cancelled`
+      : `${origin}/plans?billing=cancelled`;
 
     const checkoutUrl = await createCheckoutSession({
       userId: user.appUserId,
