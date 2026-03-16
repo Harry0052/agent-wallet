@@ -26,8 +26,34 @@ function appOrigin(): string {
 }
 
 function googleOauthRedirectUri(): string {
-  return getOptionalSecret('GOOGLE_OAUTH_REDIRECT_URI')
-    || `${appOrigin()}/api/auth/google/callback`;
+  const derived = `${appOrigin()}/api/auth/google/callback`;
+  const override = getOptionalSecret('GOOGLE_OAUTH_REDIRECT_URI');
+
+  if (!override) return derived;
+
+  // Safety: never allow a localhost redirect in production
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const parsed = new URL(override);
+      if (['localhost', '127.0.0.1', '0.0.0.0'].includes(parsed.hostname)) {
+        console.warn(
+          '[GoogleOAuth] GOOGLE_OAUTH_REDIRECT_URI contains localhost in production — ignoring override and using derived URI.',
+        );
+        return derived;
+      }
+      if (!parsed.pathname.endsWith('/api/auth/google/callback')) {
+        console.warn(
+          `[GoogleOAuth] GOOGLE_OAUTH_REDIRECT_URI path "${parsed.pathname}" does not end with /api/auth/google/callback — ignoring override and using derived URI.`,
+        );
+        return derived;
+      }
+    } catch {
+      console.warn('[GoogleOAuth] GOOGLE_OAUTH_REDIRECT_URI is not a valid URL — ignoring override and using derived URI.');
+      return derived;
+    }
+  }
+
+  return override;
 }
 
 function googleOAuthConfig(): {
