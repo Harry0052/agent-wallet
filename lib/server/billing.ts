@@ -72,7 +72,14 @@ function getStripePriceId(plan: PlanId): string {
     pro: 'STRIPE_PRICE_PRO_MONTHLY',
     autonomous: 'STRIPE_PRICE_AUTONOMOUS_MONTHLY',
   };
-  return getRequiredSecret(envMap[plan]);
+  const envKey = envMap[plan];
+  const priceId = getRequiredSecret(envKey);
+  if (!priceId.startsWith('price_')) {
+    throw new Error(
+      `${envKey} does not look like a valid Stripe price ID (expected "price_..." prefix, got "${priceId.slice(0, 12)}...")`,
+    );
+  }
+  return priceId;
 }
 
 function getStripeWebhookSecretBilling(): string {

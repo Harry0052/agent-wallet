@@ -96,13 +96,18 @@ const cardVariants = {
 
 export function PlanSelection() {
   const [loading, setLoading] = useState<PlanId | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSelect = async (planId: PlanId) => {
+    setError(null);
     setLoading(planId);
     try {
       await startCheckout(planId);
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      setError(message);
       setLoading(null);
+      console.error('[PlanSelection] Checkout failed:', message);
     }
   };
 
@@ -141,6 +146,17 @@ export function PlanSelection() {
       >
         Pick the plan that fits your financial life. You can upgrade or change anytime.
       </motion.p>
+
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 w-full max-w-4xl rounded-xl px-4 py-3 text-center text-sm"
+          style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B" }}
+        >
+          {error}
+        </motion.div>
+      )}
 
       <motion.div
         variants={containerVariants}

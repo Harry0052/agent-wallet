@@ -69,8 +69,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const isConfigError = message.includes('Missing required secret') || message.includes('does not look like a valid Stripe price');
+    const userMessage = isConfigError
+      ? 'Checkout is temporarily unavailable. Please try again later.'
+      : message;
+
     return NextResponse.json(
-      apiError('STRIPE_FAILURE', message, true),
+      apiError('STRIPE_FAILURE', userMessage, true),
       { status: 500 },
     );
   }

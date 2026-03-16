@@ -43,6 +43,10 @@ export async function startCheckout(plan: PlanId): Promise<void> {
     throw new Error(body.error || 'Checkout failed');
   }
 
+  if (!body.url || typeof body.url !== 'string') {
+    throw new Error('No checkout URL returned. Please try again.');
+  }
+
   window.location.href = body.url;
 }
 
