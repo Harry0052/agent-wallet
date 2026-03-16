@@ -237,4 +237,3 @@ export function createSecureDbClient(
 export function getDatabaseConnectionString(): string {
   return getRequiredSecret('DATABASE_URL');
 }
-
