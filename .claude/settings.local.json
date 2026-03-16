@@ -32,7 +32,9 @@
       "Bash(ffprobe:*)",
       "Bash(ls:*)",
       "Bash(find:*)",
-      "WebFetch(domain:dribbble.com)"
+      "WebFetch(domain:dribbble.com)",
+      "Bash(curl:*)",
+      "mcp__claude-flow__browser_open"
     ]
   },
   "enableAllProjectMcpServers": true,

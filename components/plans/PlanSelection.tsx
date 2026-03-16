@@ -99,15 +99,17 @@ export function PlanSelection() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSelect = async (planId: PlanId) => {
+    console.log('[Checkout] Starting checkout for plan:', planId);
     setError(null);
     setLoading(planId);
     try {
       await startCheckout(planId);
+      console.log('[Checkout] Redirect initiated');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setError(message);
       setLoading(null);
-      console.error('[PlanSelection] Checkout failed:', message);
+      console.error('[Checkout] Failed:', message);
     }
   };
 

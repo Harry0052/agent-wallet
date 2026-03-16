@@ -27,27 +27,39 @@ export async function fetchBillingStatus(): Promise<BillingStatus> {
 }
 
 export async function startCheckout(plan: PlanId): Promise<void> {
-  const response = await fetch('/api/billing/checkout', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan }),
-  });
+  let response: Response;
+  try {
+    response = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan }),
+    });
+  } catch (networkError) {
+    throw new Error('Network error. Check your connection and try again.');
+  }
 
-  const body = await response.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error(`Server returned invalid response (HTTP ${response.status}).`);
+  }
 
   if (!response.ok || !body.ok) {
     if (response.status === 401) {
       window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
       return;
     }
-    throw new Error(body.error || 'Checkout failed');
+    throw new Error((body.error as string) || 'Checkout failed');
   }
 
-  if (!body.url || typeof body.url !== 'string') {
+  const checkoutUrl = body.url;
+  if (!checkoutUrl || typeof checkoutUrl !== 'string') {
     throw new Error('No checkout URL returned. Please try again.');
   }
 
-  window.location.href = body.url;
+  // Navigate to Stripe Checkout
+  window.location.assign(checkoutUrl);
 }
 
 export async function openBillingPortal(): Promise<void> {
