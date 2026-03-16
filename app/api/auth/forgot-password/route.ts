@@ -14,7 +14,7 @@ const BodySchema = z.object({
 });
 
 function buildResetUrl(token: string): string {
-  const origin = process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || 'http://localhost:3000';
+  const origin = process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || 'https://startcalico.com';
   return `${origin}/reset-password?token=${encodeURIComponent(token)}`;
 }
 

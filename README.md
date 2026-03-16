@@ -97,7 +97,7 @@ cp .env.example .env.local
 Stripe webhook forwarding:
 
 ```bash
-stripe listen --forward-to localhost:3000/api/stripe/webhook
+stripe listen --forward-to startcalico.com/api/stripe/webhook
 ```
 
 Compatibility endpoint also supported:

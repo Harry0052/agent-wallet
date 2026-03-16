@@ -22,7 +22,7 @@ export interface VerifiedAppleIdentity {
 }
 
 function appOrigin(): string {
-  return process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || 'http://localhost:3000';
+  return process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || 'https://startcalico.com';
 }
 
 function appleClientId(): string {

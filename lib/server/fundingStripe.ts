@@ -21,7 +21,7 @@ import {
 import type { SavedPaymentMethod } from '@/lib/types';
 
 function resolveAppOrigin(): string {
-  const explicit = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL;
+  const explicit = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_ORIGIN;
   if (explicit && /^https?:\/\//i.test(explicit)) {
     return explicit.replace(/\/+$/, '');
   }
@@ -31,8 +31,7 @@ function resolveAppOrigin(): string {
     return `https://${vercelUrl.replace(/^https?:\/\//i, '').replace(/\/+$/, '')}`;
   }
 
-  const port = process.env.PORT || '3000';
-  return `http://localhost:${port}`;
+  return 'https://startcalico.com';
 }
 
 function normalizeTopupAmountCents(amount: number): number {

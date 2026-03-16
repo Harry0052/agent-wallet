@@ -222,7 +222,7 @@ const cryptoPatterns = {
     // Insecure random
     /Math\.random\s*\(\s*\)/g,
     // Missing HTTPS
-    /http:\/\/(?!localhost|127\.0\.0\.1)/gi,
+    /http:\/\/(?!startcalico.com|127\.0\.0\.1)/gi,
     // Weak cipher modes
     /createCipher(?:iv)?\s*\(\s*['"](?:des|rc4|blowfish)['"]/gi
   ],
