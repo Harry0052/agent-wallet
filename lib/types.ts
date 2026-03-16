@@ -201,6 +201,86 @@ export type FinancialTaskStatus =
   | 'dismissed'
   | 'snoozed';
 
+export type AutomationActionType =
+  | 'subscription_cancel'
+  | 'subscription_negotiate'
+  | 'bill_pay'
+  | 'savings_transfer'
+  | 'debt_optimize'
+  | 'expense_categorization'
+  | 'refund_budget'
+  | 'recurring_review'
+  | 'trial_conversion_review'
+  | 'bill_split';
+
+export type AutomationPolicyMode =
+  | 'suggest_only'
+  | 'user_confirm_required'
+  | 'autopilot_allowed';
+
+export type AutomationActionStatus =
+  | 'detected'
+  | 'suggested'
+  | 'pending_confirm'
+  | 'attempted'
+  | 'completed'
+  | 'failed'
+  | 'dismissed'
+  | 'snoozed';
+
+export interface AutomationExplainability {
+  summary: string;
+  factors: string[];
+  confidence: number;
+  coverageConfidence: number;
+}
+
+export interface AutomationActionRecord {
+  id: string;
+  userId: string;
+  taskId: string;
+  actionType: AutomationActionType;
+  policy: AutomationPolicyMode;
+  status: AutomationActionStatus;
+  title: string;
+  summary: string;
+  dedupKey: string;
+  confidence: number;
+  coverageConfidence: number;
+  explainability: AutomationExplainability;
+  payload: Record<string, unknown>;
+  amount: number | null;
+  currency: string | null;
+  requiresExplicitConfirmation: boolean;
+  cooldownUntil: string | null;
+  snoozedUntil: string | null;
+  lastError: string | null;
+  attemptedAt: string | null;
+  completedAt: string | null;
+  dismissedAt: string | null;
+  detectedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationActionSummary {
+  generatedAt: string;
+  policyMode: AutomationPolicyMode;
+  pendingConfirmCount: number;
+  suggestedCount: number;
+  activeCount: number;
+  completed7dCount: number;
+  failed7dCount: number;
+  dismissed7dCount: number;
+  topActions: Array<{
+    id: string;
+    title: string;
+    actionType: AutomationActionType;
+    status: AutomationActionStatus;
+    confidence: number;
+  }>;
+}
+
 export type CommandIntent =
   | 'query_spending'
   | 'query_subscription'

@@ -8,6 +8,7 @@ import {
   Home,
   Landmark,
   Lightbulb,
+  ListChecks,
   LineChart,
   PieChart,
   RefreshCw,
@@ -22,6 +23,7 @@ const mainLinks = [
   { href: "/accounts", label: "Accounts", icon: Landmark },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/recurring", label: "Recurring", icon: RefreshCw },
+  { href: "/tasks", label: "Tasks", icon: ListChecks },
   { href: "/cashflow", label: "Cash Flow", icon: TrendingUp },
 ] as const;
 
@@ -77,7 +79,7 @@ export function AppNav() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--aw-border)] bg-white/90 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-around px-2 py-2">
-          {[mainLinks[0], mainLinks[1], mainLinks[2], mainLinks[3], utilLinks[0]].map((link) => {
+          {[mainLinks[0], mainLinks[2], mainLinks[3], mainLinks[4], utilLinks[0]].map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
             return (

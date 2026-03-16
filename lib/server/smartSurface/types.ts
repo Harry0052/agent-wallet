@@ -1,4 +1,5 @@
 import type { SourceState } from "@/lib/server/smartHome";
+import type { MoneyIntelligenceResult } from "@/lib/server/moneyIntelligence/types";
 
 export type SmartSurfaceIntent =
   | "lower_bills"
@@ -52,6 +53,17 @@ export interface SmartSurfaceContext {
     sourceState: SourceState;
     lowData: boolean;
     lowDataReason: string | null;
+  };
+  moneyIntelligence: {
+    affordability: MoneyIntelligenceResult["affordability"];
+    weeklyPrediction: MoneyIntelligenceResult["weeklyPrediction"];
+    monthlySurvivalForecast: MoneyIntelligenceResult["monthlySurvivalForecast"];
+    billPredictions: MoneyIntelligenceResult["billPredictions"];
+    netWorth: MoneyIntelligenceResult["netWorth"];
+    coverage: MoneyIntelligenceResult["coverage"];
+    alerts: MoneyIntelligenceResult["alerts"];
+    statement: Omit<MoneyIntelligenceResult["statement"], "classifiedTransactions">;
+    advancedIntelligence: MoneyIntelligenceResult["advancedIntelligence"];
   };
   trust: {
     knows: string;

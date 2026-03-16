@@ -15,6 +15,7 @@ import {
 } from '@/lib/server/fundingStripe';
 import { markPaymentMethodRemovedByStripeIdWithUsers } from '@/lib/server/fundingPaymentMethods';
 import { apiError, logServerEvent } from '@/lib/server/observability';
+import { handleSubscriptionWebhookEvent } from '@/lib/server/billing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -333,6 +334,32 @@ export async function POST(req: NextRequest) {
           amount,
           eventId: event.id,
           chargeId: charge.id,
+        });
+      }
+    }
+
+    // ── Subscription billing events ────────────────────────────────
+    const subscriptionEventTypes = [
+      'checkout.session.completed',
+      'customer.subscription.created',
+      'customer.subscription.updated',
+      'customer.subscription.deleted',
+      'customer.subscription.trial_will_end',
+      'invoice.paid',
+      'invoice.payment_failed',
+    ];
+    if (subscriptionEventTypes.includes(event.type)) {
+      try {
+        await handleSubscriptionWebhookEvent(event);
+        logServerEvent('info', 'stripe.webhook.subscription_event_processed', {
+          eventId: event.id,
+          eventType: event.type,
+        });
+      } catch (subError) {
+        logServerEvent('error', 'stripe.webhook.subscription_event_failed', {
+          eventId: event.id,
+          eventType: event.type,
+          error: subError instanceof Error ? subError.message : String(subError),
         });
       }
     }

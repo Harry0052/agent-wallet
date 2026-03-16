@@ -866,6 +866,83 @@ export async function ensureSchema(): Promise<void> {
     `);
 
     await safePoolQuery(`
+      CREATE TABLE IF NOT EXISTS automation_actions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        policy_mode TEXT NOT NULL,
+        status TEXT NOT NULL,
+        title TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        dedup_key TEXT NOT NULL,
+        confidence NUMERIC(5, 4) NOT NULL,
+        coverage_confidence NUMERIC(5, 4) NOT NULL,
+        explainability JSONB NOT NULL DEFAULT '{}'::jsonb,
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        amount NUMERIC(14, 2),
+        currency TEXT,
+        requires_explicit_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
+        cooldown_until TIMESTAMPTZ,
+        snoozed_until TIMESTAMPTZ,
+        last_error TEXT,
+        attempted_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        dismissed_at TIMESTAMPTZ,
+        detected_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await safePoolQuery(`
+      CREATE INDEX IF NOT EXISTS idx_automation_actions_user_status_updated
+      ON automation_actions (user_id, status, updated_at DESC);
+    `);
+
+    await safePoolQuery(`
+      CREATE INDEX IF NOT EXISTS idx_automation_actions_task_id
+      ON automation_actions (task_id, updated_at DESC);
+    `);
+
+    await safePoolQuery(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_automation_actions_active_dedup
+      ON automation_actions (user_id, dedup_key)
+      WHERE status IN ('detected', 'suggested', 'pending_confirm', 'attempted', 'failed', 'snoozed');
+    `);
+
+    await safePoolQuery(`
+      CREATE TABLE IF NOT EXISTS automation_action_events (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        action_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        from_status TEXT,
+        to_status TEXT,
+        reason TEXT,
+        idempotency_key TEXT,
+        metadata JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await safePoolQuery(`
+      CREATE INDEX IF NOT EXISTS idx_automation_action_events_user_created
+      ON automation_action_events (user_id, created_at DESC);
+    `);
+
+    await safePoolQuery(`
+      CREATE INDEX IF NOT EXISTS idx_automation_action_events_action_created
+      ON automation_action_events (action_id, created_at DESC);
+    `);
+
+    await safePoolQuery(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_automation_action_events_idempotent
+      ON automation_action_events (action_id, event_type, idempotency_key)
+      WHERE idempotency_key IS NOT NULL;
+    `);
+
+    await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -1454,6 +1531,36 @@ export async function ensureSchema(): Promise<void> {
             )) NOT VALID;
         END IF;
       END $$;
+    `);
+
+    // ── Calico billing: user_subscriptions table ────────────────────
+    await safePoolQuery(`
+      CREATE TABLE IF NOT EXISTS user_subscriptions (
+        user_id TEXT PRIMARY KEY,
+        stripe_customer_id TEXT NOT NULL,
+        stripe_subscription_id TEXT,
+        plan TEXT NOT NULL DEFAULT 'starter',
+        status TEXT NOT NULL DEFAULT 'incomplete',
+        trial_start TIMESTAMPTZ,
+        trial_end TIMESTAMPTZ,
+        current_period_start TIMESTAMPTZ,
+        current_period_end TIMESTAMPTZ,
+        cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+        last_webhook_event_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await safePoolQuery(`
+      CREATE INDEX IF NOT EXISTS idx_user_subscriptions_stripe_customer
+      ON user_subscriptions (stripe_customer_id);
+    `);
+
+    await safePoolQuery(`
+      CREATE INDEX IF NOT EXISTS idx_user_subscriptions_stripe_sub
+      ON user_subscriptions (stripe_subscription_id)
+      WHERE stripe_subscription_id IS NOT NULL;
     `);
   })().catch((error) => {
     // Allow retries on subsequent calls if first schema init failed transiently.

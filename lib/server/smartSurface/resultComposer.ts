@@ -16,6 +16,7 @@ export function composeSmartSurfaceResult(input: {
 }): SmartSurfaceResult {
   const { intent, context } = input;
   const dataReason = context.dataState.lowDataReason || "Using current synced financial context.";
+  const money = context.moneyIntelligence;
 
   if (intent === "lower_bills") {
     return {
@@ -64,7 +65,8 @@ export function composeSmartSurfaceResult(input: {
   }
 
   if (intent === "plan_cash_30d") {
-    const projectedDelta = context.wallet.balance - context.recurring.monthlyTotal;
+    const projectedDelta = money.monthlySurvivalForecast.projectedEndBalance30d - context.wallet.balance;
+    const forecast = money.monthlySurvivalForecast;
     return {
       title: "30-day cash plan",
       sourceState: context.recurring.count > 0 ? "Inferred" : "Synced",
@@ -72,13 +74,13 @@ export function composeSmartSurfaceResult(input: {
         ? `Projected 30-day delta is positive: ${fmtMoney(projectedDelta)}.`
         : `Projected 30-day delta is negative: ${fmtMoney(projectedDelta)}.`,
       whyThisResult: context.recurring.count > 0
-        ? "You asked for a cash plan. Calico used wallet balance and recurring obligations to project 30-day risk."
+        ? "You asked for a cash plan. Calico used deterministic bill prediction, spending burn-rate, and income cadence signals."
         : `You asked for a cash plan. Recurring signals are limited right now. ${dataReason}`,
-      canDoNow: "Open funding setup, then review recurring obligations to improve the projection baseline.",
+      canDoNow: "Open funding setup, then review recurring obligations and upcoming bill timeline to improve projection confidence.",
       checklist: [
         "Check 7-day obligations and funding readiness",
         "Review recurring spend impact on cash runway",
-        "Adjust guardrails if projected cash risk is elevated",
+        `Forecast status: ${forecast.status}`,
       ],
       actions: [
         { label: "Go to wallet funding", href: "/wallet?open_payment_setup=1" },
@@ -113,10 +115,10 @@ export function composeSmartSurfaceResult(input: {
       title: "Spending breakdown",
       sourceState: context.statements.hasRecentData ? "Inferred" : "Manual",
       summary: context.statements.hasRecentData
-        ? `Analyzing ${context.statements.transactionCount} transactions across your connected accounts.`
+        ? `Analyzing ${context.statements.transactionCount} transactions; true spend is ${fmtMoney(money.statement.trueSpendAmount)} after exclusions.`
         : "Connect account data to see your spending breakdown.",
       whyThisResult: context.statements.hasRecentData
-        ? "You asked about spending. Calico is summarizing transaction patterns from synced data."
+        ? "You asked about spending. Calico is using deterministic statement aggregation that excludes transfers, refunds, reversals, card payments, and duplicates."
         : `You asked about spending. ${dataReason}`,
       canDoNow: "Open Statements to drill into categories, merchants, and time periods.",
       checklist: [
@@ -132,19 +134,21 @@ export function composeSmartSurfaceResult(input: {
   }
 
   if (intent === "query_health") {
+    const advanced = money.advancedIntelligence;
     return {
       title: "Financial health check",
       sourceState: context.statements.hasRecentData ? "Inferred" : "Manual",
       summary: context.statements.hasRecentData
-        ? `Your financial picture includes ${context.recurring.count} recurring obligations and ${fmtMoney(context.wallet.balance)} available.`
+        ? `Tracked net worth is ${fmtMoney(money.netWorth.trackedNetWorth)} with a ${money.monthlySurvivalForecast.status} 30-day survival forecast, ${advanced.financialRiskScoring.riskBand} risk band, and ${advanced.financialStressDetection.status} stress status.`
         : "Connect account data to compute your financial health score.",
       whyThisResult: context.statements.hasRecentData
-        ? "You asked about financial health. Calico evaluated recurring burden, spending patterns, and cash position."
+        ? "You asked about financial health. Calico evaluated net worth trend, bill load, projected spending runway, transparent risk scoring, and rule-based stress detection."
         : `You asked about financial health. ${dataReason}`,
       canDoNow: "Review recurring costs, fund your wallet, and address stale connections.",
       checklist: [
-        "Check recurring monthly obligations",
-        "Review cash position and 30-day projection",
+        `Check recurring monthly obligations (${context.recurring.count} tracked)`,
+        `Review cash position and 30-day projection (${money.monthlySurvivalForecast.status})`,
+        `Risk band / stress: ${advanced.financialRiskScoring.riskBand} / ${advanced.financialStressDetection.status}`,
         "Reconnect any stale account connections",
       ],
       actions: [
@@ -155,21 +159,22 @@ export function composeSmartSurfaceResult(input: {
   }
 
   if (intent === "affordability_check") {
-    const projectedDelta = context.wallet.balance - context.recurring.monthlyTotal;
+    const affordability = money.affordability;
+    const untilIncome = affordability.safeToSpendUntilNextIncome;
     return {
       title: "Affordability check",
-      sourceState: context.recurring.count > 0 ? "Inferred" : "Synced",
-      summary: projectedDelta >= 0
-        ? `After upcoming obligations, you have approximately ${fmtMoney(projectedDelta)} available.`
-        : `Your upcoming obligations exceed available cash by ${fmtMoney(Math.abs(projectedDelta))}.`,
-      whyThisResult: context.recurring.count > 0
-        ? "You asked if you can afford something. Calico subtracted upcoming recurring costs from your current balance."
+      sourceState: context.statements.hasRecentData ? "Inferred" : "Manual",
+      summary: untilIncome === null
+        ? `Safe to spend today is ${fmtMoney(affordability.safeToSpendToday)}, and this week ${fmtMoney(affordability.safeToSpendThisWeek)}.`
+        : `Safe to spend today is ${fmtMoney(affordability.safeToSpendToday)} and until next income ${fmtMoney(untilIncome)}.`,
+      whyThisResult: context.statements.hasRecentData
+        ? "You asked if you can afford something. Calico used deterministic affordability logic from projected bills and spending burn."
         : `You asked about affordability. ${dataReason}`,
-      canDoNow: "Review your balance, upcoming bills, and consider funding your wallet if needed.",
+      canDoNow: "Review your balance, upcoming bills, and compare purchase amount to safe-to-spend windows.",
       checklist: [
-        "Verify current wallet balance",
-        "Review upcoming 7-day obligations",
-        "Fund wallet if purchase exceeds safe-to-spend",
+        `Safe today: ${fmtMoney(affordability.safeToSpendToday)}`,
+        `Safe this week: ${fmtMoney(affordability.safeToSpendThisWeek)}`,
+        `Safe this month: ${fmtMoney(affordability.safeToSpendThisMonth)}`,
       ],
       actions: [
         { label: "Go to wallet", href: "/wallet" },

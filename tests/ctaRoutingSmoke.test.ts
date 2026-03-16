@@ -33,6 +33,7 @@ const VALID_APP_ROUTES = [
   '/accounts',
   '/transactions',
   '/recurring',
+  '/tasks',
   '/cashflow',
   '/budgets',
   '/goals',

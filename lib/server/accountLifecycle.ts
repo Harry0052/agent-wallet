@@ -29,6 +29,10 @@ const WALLET_SCOPED_TABLES = [
   'procurement_tasks',
   'subscription_actions',
   'agent_memory',
+  'financial_sync_leases',
+  'financial_sync_runs',
+  'financial_notifications',
+  'financial_documents',
 ] as const;
 
 function quotedTableName(table: string): string {

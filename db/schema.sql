@@ -349,6 +349,141 @@ CREATE TABLE IF NOT EXISTS agent_tasks (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS automation_actions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  policy_mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  dedup_key TEXT NOT NULL,
+  confidence NUMERIC(5, 4) NOT NULL,
+  coverage_confidence NUMERIC(5, 4) NOT NULL,
+  explainability JSONB NOT NULL DEFAULT '{}'::jsonb,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  amount NUMERIC(14, 2),
+  currency TEXT,
+  requires_explicit_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
+  cooldown_until TIMESTAMPTZ,
+  snoozed_until TIMESTAMPTZ,
+  last_error TEXT,
+  attempted_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  dismissed_at TIMESTAMPTZ,
+  detected_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_automation_actions_user_status_updated
+ON automation_actions (user_id, status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_automation_actions_task_id
+ON automation_actions (task_id, updated_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_automation_actions_active_dedup
+ON automation_actions (user_id, dedup_key)
+WHERE status IN ('detected', 'suggested', 'pending_confirm', 'attempted', 'failed', 'snoozed');
+
+CREATE TABLE IF NOT EXISTS automation_action_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  action_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  from_status TEXT,
+  to_status TEXT,
+  reason TEXT,
+  idempotency_key TEXT,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_automation_action_events_user_created
+ON automation_action_events (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_automation_action_events_action_created
+ON automation_action_events (action_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_automation_action_events_idempotent
+ON automation_action_events (action_id, event_type, idempotency_key)
+WHERE idempotency_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS financial_sync_leases (
+  user_id TEXT NOT NULL,
+  plaid_item_id TEXT NOT NULL,
+  holder_id TEXT NOT NULL,
+  lease_until TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, plaid_item_id)
+);
+
+CREATE TABLE IF NOT EXISTS financial_sync_runs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  plaid_item_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  status TEXT NOT NULL,
+  cursor_start TEXT,
+  cursor_end TEXT,
+  added_count INTEGER NOT NULL DEFAULT 0,
+  modified_count INTEGER NOT NULL DEFAULT 0,
+  removed_count INTEGER NOT NULL DEFAULT 0,
+  pages INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_financial_sync_runs_user_started
+ON financial_sync_runs (user_id, started_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_financial_sync_runs_idempotent
+ON financial_sync_runs (user_id, plaid_item_id, idempotency_key);
+
+CREATE TABLE IF NOT EXISTS financial_notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  dedup_key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  status TEXT NOT NULL,
+  deep_link TEXT NOT NULL,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  cooldown_until TIMESTAMPTZ,
+  throttled_count INTEGER NOT NULL DEFAULT 0,
+  last_triggered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, dedup_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_financial_notifications_user_status_updated
+ON financial_notifications (user_id, status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS financial_documents (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  document_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  source_hash TEXT,
+  storage_provider TEXT,
+  encrypted_ref TEXT,
+  ref_key_version TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_financial_documents_user_created
+ON financial_documents (user_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS web_action_logs (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,

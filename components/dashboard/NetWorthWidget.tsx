@@ -11,11 +11,16 @@ import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes
 export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
   const summary = buildDashboardSummary(props);
   const chartData = summary.netWorth;
+  const netWorthConfidence = props.home.moneyIntelligence?.netWorth.confidence;
 
   return (
     <WidgetContainer
       title="Net Worth"
-      subtitle={summary.live ? "Auto-refreshes from connected and manual account updates." : "Static placeholder until live data is available."}
+      subtitle={summary.live
+        ? netWorthConfidence
+          ? `Auto-refreshes from connected and manual account updates. Confidence ${Math.round(netWorthConfidence * 100)}%.`
+          : "Auto-refreshes from connected and manual account updates."
+        : "Static placeholder until live data is available."}
       dragHandleProps={props.dragHandleProps}
     >
       <div className="flex flex-col gap-5">

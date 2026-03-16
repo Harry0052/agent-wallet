@@ -1,3 +1,6 @@
+import type { MoneyIntelligenceResult } from "@/lib/server/moneyIntelligence/types";
+import type { AutomationActionSummary } from "@/lib/types";
+
 export type SourceState = "Synced" | "Imported" | "Inferred" | "Manual";
 
 export interface SmartHomeAction {
@@ -46,6 +49,43 @@ export interface SmartHomePayload {
       href: string;
       description: string;
     }>;
+  };
+  healthScore?: {
+    adjustedOverallScore: number;
+    trend: "improving" | "stable" | "declining";
+    topRecommendation: string;
+  };
+  cashFlow?: {
+    safeToSpendToday: number;
+    safeToSpendThisWeek: number;
+    safeToSpendThisMonth: number;
+    safeToSpendUntilNextIncome: number | null;
+    daysUntilNegative: number | null;
+    confidence: number;
+  };
+  moneyIntelligence?: {
+    generatedAt: string;
+    engineVersion: string;
+    rulesVersion: string;
+    statement: Omit<MoneyIntelligenceResult["statement"], "classifiedTransactions">;
+    coverage: MoneyIntelligenceResult["coverage"];
+    netWorth: MoneyIntelligenceResult["netWorth"];
+    spendingLimits: MoneyIntelligenceResult["spendingLimits"];
+    affordability: MoneyIntelligenceResult["affordability"];
+    weeklyPrediction: MoneyIntelligenceResult["weeklyPrediction"];
+    monthlySurvivalForecast: MoneyIntelligenceResult["monthlySurvivalForecast"];
+    billPredictions: MoneyIntelligenceResult["billPredictions"];
+    subscriptionTimeline: MoneyIntelligenceResult["subscriptionTimeline"];
+    alerts: MoneyIntelligenceResult["alerts"];
+    categoryLearning: MoneyIntelligenceResult["categoryLearning"];
+    studentFocus: MoneyIntelligenceResult["studentFocus"];
+    advancedIntelligence: MoneyIntelligenceResult["advancedIntelligence"];
+  };
+  automation?: {
+    summary: AutomationActionSummary;
+    policy: {
+      defaultMode: "suggest_only" | "user_confirm_required" | "autopilot_allowed";
+    };
   };
   quickIntents: string[];
   insightCards: SmartHomeInsightCard[];

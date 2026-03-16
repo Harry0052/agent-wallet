@@ -162,6 +162,13 @@ function recurringActionPlan(lifecycle: DetectedSubscription["lifecycle_status"]
   ];
 }
 
+function studentCardStatusLabel(status: "good" | "watch" | "risk" | "manual"): string {
+  if (status === "good") return "On track";
+  if (status === "watch") return "Watch";
+  if (status === "risk") return "Needs attention";
+  return "Manual-first";
+}
+
 export function StatementsWorkspace() {
   const searchParams = useSearchParams();
   const panelParam = searchParams.get("panel") || "";
@@ -337,6 +344,10 @@ export function StatementsWorkspace() {
     () => recurringActive.reduce((sum, item) => sum + item.estimated_monthly_cost, 0),
     [recurringActive],
   );
+  const statementMoneyIntel = unified?.money_intelligence || null;
+  const statementAutomation = unified?.automation?.summary || null;
+  const statementAlerts = statementMoneyIntel?.alerts.slice(0, 2) || [];
+  const studentCards = statementMoneyIntel?.studentFocus.cards || [];
 
   const aiInsightHeadline = useMemo(() => {
     if (recurringActive.length === 0) {
@@ -629,32 +640,123 @@ export function StatementsWorkspace() {
             Loading summary...
           </p>
         ) : (
-          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <article className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-3">
-              <p className="text-xs text-[var(--aw-text-muted)]">Total Monthly Spend</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
-                {fmt(unified?.total_spend_month || 0)}
-              </p>
-            </article>
-            <article className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-3">
-              <p className="text-xs text-[var(--aw-text-muted)]">Tracked Recurring Items</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
-                {subscriptions.length}
-              </p>
-              <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
-                {recurringDetectedCount} awaiting confirmation
-              </p>
-            </article>
-            <article className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-3">
-              <p className="text-xs text-[var(--aw-text-muted)]">Potential Savings</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
-                {fmt(potentialSavings)}
-              </p>
-              <div className="mt-2">
-                <SourceStateBadge state={hasAnalysisData ? "Inferred" : "Manual"} />
+          <>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <article className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-3">
+                <p className="text-xs text-[var(--aw-text-muted)]">Total Monthly Spend</p>
+                <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                  {fmt(unified?.total_spend_month || 0)}
+                </p>
+              </article>
+              <article className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-3">
+                <p className="text-xs text-[var(--aw-text-muted)]">Tracked Recurring Items</p>
+                <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                  {subscriptions.length}
+                </p>
+                <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
+                  {recurringDetectedCount} awaiting confirmation
+                </p>
+              </article>
+              <article className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-3">
+                <p className="text-xs text-[var(--aw-text-muted)]">Potential Savings</p>
+                <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                  {fmt(potentialSavings)}
+                </p>
+                <div className="mt-2">
+                  <SourceStateBadge state={hasAnalysisData ? "Inferred" : "Manual"} />
+                </div>
+              </article>
+            </div>
+            {statementMoneyIntel ? (
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">Safe to spend today</p>
+                  <p className="aw-number mt-1 text-lg font-semibold text-[var(--aw-text)]">
+                    {fmt(statementMoneyIntel.affordability.safeToSpendToday)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
+                    Confidence {Math.round(statementMoneyIntel.affordability.confidence * 100)}%
+                  </p>
+                </article>
+                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">Safe this week</p>
+                  <p className="aw-number mt-1 text-lg font-semibold text-[var(--aw-text)]">
+                    {fmt(statementMoneyIntel.affordability.safeToSpendThisWeek)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
+                    Predicted: {fmt(statementMoneyIntel.weeklyPrediction.predictedSpendNext7d)}
+                  </p>
+                </article>
+                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">Safe this month</p>
+                  <p className="aw-number mt-1 text-lg font-semibold text-[var(--aw-text)]">
+                    {fmt(statementMoneyIntel.affordability.safeToSpendThisMonth)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
+                    Forecast: {statementMoneyIntel.monthlySurvivalForecast.status}
+                  </p>
+                </article>
+                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">Until next income</p>
+                  <p className="aw-number mt-1 text-lg font-semibold text-[var(--aw-text)]">
+                    {statementMoneyIntel.affordability.safeToSpendUntilNextIncome === null
+                      ? "Unavailable"
+                      : fmt(statementMoneyIntel.affordability.safeToSpendUntilNextIncome)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
+                    {statementMoneyIntel.affordability.incomeCadenceReliable ? "Reliable cadence" : "Cadence unreliable"}
+                  </p>
+                </article>
               </div>
-            </article>
-          </div>
+            ) : null}
+            {studentCards.length > 0 ? (
+              <div className="mt-3 rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                <p className="text-xs font-semibold text-[var(--aw-text)]">Student Focus Cards</p>
+                <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
+                  Friendly, paycheck-safe guidance for school-life spending.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {studentCards.map((card) => (
+                    <article key={card.id} className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-[var(--aw-text)]">{card.title}</p>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">
+                          {studentCardStatusLabel(card.status)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--aw-text-soft)]">{card.summary}</p>
+                      <p className="aw-number mt-1.5 text-sm font-semibold text-[var(--aw-text)]">
+                        {card.amount === null ? "Unavailable" : fmt(card.amount)}
+                      </p>
+                      <p className="text-[10px] text-[var(--aw-text-muted)]">
+                        {card.amountLabel} · {Math.round(card.confidence * 100)}% confidence
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {statementAlerts.length > 0 ? (
+              <div className="mt-3 rounded-xl border border-[var(--aw-warning)]/30 bg-[var(--aw-warning)]/8 px-3 py-2.5">
+                {statementAlerts.map((alert) => (
+                  <p key={alert.id} className="text-xs text-[var(--aw-text-soft)]">
+                    <span className="font-semibold text-[var(--aw-text)]">{alert.title}:</span> {alert.summary}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {statementAutomation ? (
+              <div className="mt-3 rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
+                <p className="text-xs font-semibold text-[var(--aw-text)]">Automation Task Center</p>
+                <p className="mt-1 text-xs text-[var(--aw-text-soft)]">
+                  {statementAutomation.pendingConfirmCount} pending confirm · {statementAutomation.activeCount} active · {statementAutomation.completed7dCount} completed in 7 days.
+                </p>
+                <Link href="/tasks" className="mt-2 inline-flex text-xs font-semibold text-[var(--aw-primary-strong)] hover:underline">
+                  Open Task Center
+                </Link>
+              </div>
+            ) : null}
+          </>
         )}
       </section>
 

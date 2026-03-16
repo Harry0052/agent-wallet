@@ -10,6 +10,14 @@ import { analyzeSpending } from '@/ai_spend_intelligence/spendAnalyzer';
 import { detectAnomalies } from '@/ai_spend_intelligence/anomalyDetector';
 import { adviseOnSubscriptions } from '@/ai_spend_intelligence/subscriptionAdvisor';
 import { listSavedFundingMethods } from '@/lib/server/fundingStripe';
+import {
+  buildMoneyIntelligenceFromSources,
+} from '@/lib/server/moneyIntelligence/engine';
+import { listCategoryLearningRules } from '@/lib/server/moneyIntelligence/categoryLearningStore';
+import type { MoneyIntelligenceResult } from '@/lib/server/moneyIntelligence/types';
+import { getAutomationSummaryForUser } from '@/lib/server/automation/service';
+import type { AutomationActionSummary } from '@/lib/types';
+import { logServerEvent } from '@/lib/server/observability';
 
 export type SourceState = 'Synced' | 'Imported' | 'Inferred' | 'Manual';
 
@@ -67,8 +75,35 @@ export interface SmartHomePayload {
   };
   cashFlow?: {
     safeToSpendToday: number;
+    safeToSpendThisWeek: number;
+    safeToSpendThisMonth: number;
+    safeToSpendUntilNextIncome: number | null;
     daysUntilNegative: number | null;
     confidence: number;
+  };
+  moneyIntelligence?: {
+    generatedAt: string;
+    engineVersion: string;
+    rulesVersion: string;
+    statement: Omit<MoneyIntelligenceResult['statement'], 'classifiedTransactions'>;
+    coverage: MoneyIntelligenceResult['coverage'];
+    netWorth: MoneyIntelligenceResult['netWorth'];
+    spendingLimits: MoneyIntelligenceResult['spendingLimits'];
+    affordability: MoneyIntelligenceResult['affordability'];
+    weeklyPrediction: MoneyIntelligenceResult['weeklyPrediction'];
+    monthlySurvivalForecast: MoneyIntelligenceResult['monthlySurvivalForecast'];
+    billPredictions: MoneyIntelligenceResult['billPredictions'];
+    subscriptionTimeline: MoneyIntelligenceResult['subscriptionTimeline'];
+    alerts: MoneyIntelligenceResult['alerts'];
+    categoryLearning: MoneyIntelligenceResult['categoryLearning'];
+    studentFocus: MoneyIntelligenceResult['studentFocus'];
+    advancedIntelligence: MoneyIntelligenceResult['advancedIntelligence'];
+  };
+  automation?: {
+    summary: AutomationActionSummary;
+    policy: {
+      defaultMode: 'suggest_only' | 'user_confirm_required' | 'autopilot_allowed';
+    };
   };
   quickIntents: string[];
   insightCards: SmartHomeInsightCard[];
@@ -84,10 +119,6 @@ export interface SmartHomePayload {
 
 function roundCurrency(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-function monthlyToWindow(amountMonthly: number, days: number): number {
-  return (amountMonthly / 30) * days;
 }
 
 function oldestRecentIso(values: Array<string | null | undefined>): string | null {
@@ -123,13 +154,22 @@ function resolveLowDataMode(input: {
 }
 
 export async function buildSmartHomePayload(userId: string): Promise<SmartHomePayload> {
-  const [wallet, connectedAccounts, connectedApps, recurring, transactions, paymentMethods] = await Promise.all([
+  const [wallet, connectedAccounts, connectedApps, recurring, transactions, paymentMethods, categoryRules, automationSummaryResult] = await Promise.all([
     getWallet(userId),
     listConnectedAccounts(userId),
     listConnectedApps(userId),
     detectAndPersistRecurringSubscriptions(userId),
     listNormalizedTransactions({ userId, limit: 500 }),
     listSavedFundingMethods(userId),
+    listCategoryLearningRules(userId),
+    getAutomationSummaryForUser({ userId }).catch((error) => {
+      const message = error instanceof Error ? error.message : 'unknown';
+      logServerEvent('warn', 'smart.home.automation_summary.unavailable', {
+        userId,
+        message,
+      });
+      return null;
+    }),
   ]);
 
   const activeAccountIds = new Set(connectedAccounts.map((account) => account.id));
@@ -155,9 +195,51 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     transactions: safeDataset.normalizedTransactions,
   });
 
+  const nowIso = new Date().toISOString();
+  const moneyIntelligence = buildMoneyIntelligenceFromSources({
+    sources: {
+      walletBalance: wallet.balance,
+      currency: wallet.currency,
+      transactions: activeTransactions.map((tx) => ({
+        id: tx.id,
+        merchantName: tx.merchant_name,
+        normalizedMerchant: tx.normalized_merchant,
+        amount: tx.amount,
+        category: tx.category,
+        pending: tx.pending,
+        occurredAt: tx.occurred_at,
+        linkedAccountId: tx.linked_account_id,
+      })),
+      recurring: recurring.map((item) => ({
+        id: item.id,
+        merchant: item.merchant,
+        estimatedMonthlyCost: item.estimated_monthly_cost,
+        recurrenceInterval: item.recurrence_interval,
+        confidence: item.confidence,
+        lastSeen: item.last_seen,
+      })),
+      connectedAccounts: connectedAccounts.map((account) => ({
+        id: account.id,
+        lastSyncedAt: account.last_synced_at,
+      })),
+      categoryRules,
+    },
+    nowIso,
+  });
+
   const recurringMonthly = recurring.reduce((sum, item) => sum + item.estimated_monthly_cost, 0);
-  const upcomingBills7d = roundCurrency(monthlyToWindow(recurringMonthly, 7));
-  const outlook30dDelta = roundCurrency(wallet.balance - recurringMonthly);
+  const upcomingBills7d = roundCurrency(
+    moneyIntelligence.billPredictions
+      .filter((bill) => {
+        const dueMs = Date.parse(bill.dueDate);
+        const nowMs = Date.parse(nowIso);
+        return Number.isFinite(dueMs) && dueMs >= nowMs && dueMs <= nowMs + 7 * 24 * 60 * 60 * 1000;
+      })
+      .reduce((sum, bill) => sum + bill.amount, 0),
+  );
+  const outlook30dDelta = roundCurrency(
+    moneyIntelligence.monthlySurvivalForecast.projectedEndBalance30d - wallet.balance,
+  );
 
   const foundMoney = roundCurrency(
     subscriptionAdvice.cancellation_suggestions.reduce((sum, s) => sum + s.monthly_cost, 0),
@@ -173,7 +255,6 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     ...connectedAccounts.map((account) => account.last_synced_at),
     activeTransactions[0]?.occurred_at,
   ]);
-  const nowIso = new Date().toISOString();
   const lowDataMode = resolveLowDataMode({
     connectedAccountsCount: connectedAccounts.length,
     activeTransactionsCount: activeTransactions.length,
@@ -319,8 +400,8 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
       title: 'Budget / Cash Risk',
       summary:
         outlook30dDelta < 0
-          ? `Projected 30-day cash delta is negative (${outlook30dDelta.toFixed(2)}).`
-          : `Projected 30-day cash delta is positive (+$${outlook30dDelta.toFixed(2)}).`,
+          ? `Projected 30-day cash delta is negative (${outlook30dDelta.toFixed(2)}). Risk ${moneyIntelligence.advancedIntelligence.financialRiskScoring.riskBand}, stress ${moneyIntelligence.advancedIntelligence.financialStressDetection.status}.`
+          : `Projected 30-day cash delta is positive (+$${outlook30dDelta.toFixed(2)}). Risk ${moneyIntelligence.advancedIntelligence.financialRiskScoring.riskBand}, stress ${moneyIntelligence.advancedIntelligence.financialStressDetection.status}.`,
       whyThisCard: recurring.length > 0
         ? "Projection combines current wallet balance with tracked recurring obligations."
         : "Projection currently uses wallet balance and limited recurring inputs.",
@@ -353,7 +434,14 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
   ];
 
   let healthScore: SmartHomePayload['healthScore'];
-  let cashFlow: SmartHomePayload['cashFlow'];
+  let cashFlow: SmartHomePayload['cashFlow'] = {
+    safeToSpendToday: moneyIntelligence.affordability.safeToSpendToday,
+    safeToSpendThisWeek: moneyIntelligence.affordability.safeToSpendThisWeek,
+    safeToSpendThisMonth: moneyIntelligence.affordability.safeToSpendThisMonth,
+    safeToSpendUntilNextIncome: moneyIntelligence.affordability.safeToSpendUntilNextIncome,
+    daysUntilNegative: moneyIntelligence.monthlySurvivalForecast.estimatedRunwayDays,
+    confidence: moneyIntelligence.affordability.confidence,
+  };
 
   try {
     const { computeHealthScore } = await import('@/lib/server/engines/healthScoreEngine');
@@ -371,16 +459,31 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     const { predictCashFlow } = await import('@/lib/server/engines/cashFlowEngine');
     const cashFlowResult = await predictCashFlow(userId);
     if (cashFlowResult.status === 'success') {
+      const conservativeToday = Math.max(
+        0,
+        Math.min(
+          moneyIntelligence.affordability.safeToSpendToday,
+          cashFlowResult.data.safeToSpendToday,
+        ),
+      );
       cashFlow = {
-        safeToSpendToday: cashFlowResult.data.safeToSpendToday,
+        safeToSpendToday: roundCurrency(conservativeToday),
+        safeToSpendThisWeek: moneyIntelligence.affordability.safeToSpendThisWeek,
+        safeToSpendThisMonth: moneyIntelligence.affordability.safeToSpendThisMonth,
+        safeToSpendUntilNextIncome: moneyIntelligence.affordability.safeToSpendUntilNextIncome,
         daysUntilNegative: cashFlowResult.data.daysUntilNegative,
-        confidence: cashFlowResult.confidence,
+        confidence: roundCurrency(
+          Math.min(cashFlowResult.confidence, moneyIntelligence.affordability.confidence),
+        ),
       };
     }
   } catch { /* engine not yet available */ }
 
+  const { classifiedTransactions, ...statementSummary } = moneyIntelligence.statement;
+  void classifiedTransactions;
+
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: nowIso,
     summary: {
       netCashPosition: roundCurrency(wallet.balance - spend.total_spend),
       availableCash: roundCurrency(wallet.balance),
@@ -403,7 +506,33 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     },
     healthScore,
     cashFlow,
-    quickIntents: ['Lower bills', 'Review unusual spend', 'Plan cash next 30 days', 'Check account health'],
+    moneyIntelligence: {
+      generatedAt: moneyIntelligence.generatedAt,
+      engineVersion: moneyIntelligence.engineVersion,
+      rulesVersion: moneyIntelligence.rulesVersion,
+      statement: statementSummary,
+      coverage: moneyIntelligence.coverage,
+      netWorth: moneyIntelligence.netWorth,
+      spendingLimits: moneyIntelligence.spendingLimits,
+      affordability: moneyIntelligence.affordability,
+      weeklyPrediction: moneyIntelligence.weeklyPrediction,
+      monthlySurvivalForecast: moneyIntelligence.monthlySurvivalForecast,
+      billPredictions: moneyIntelligence.billPredictions,
+      subscriptionTimeline: moneyIntelligence.subscriptionTimeline,
+      alerts: moneyIntelligence.alerts,
+      categoryLearning: moneyIntelligence.categoryLearning,
+      studentFocus: moneyIntelligence.studentFocus,
+      advancedIntelligence: moneyIntelligence.advancedIntelligence,
+    },
+    automation: automationSummaryResult
+      ? {
+          summary: automationSummaryResult.summary,
+          policy: {
+            defaultMode: automationSummaryResult.policy.defaultMode,
+          },
+        }
+      : undefined,
+    quickIntents: ['Can I afford tonight?', 'Lower bills', 'Review unusual spend', 'Plan cash next 30 days', 'Check account health'],
     insightCards: cards,
     walletStrip: [
       { label: 'Fund', href: '/wallet?open_payment_setup=1' },

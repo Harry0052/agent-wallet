@@ -18,6 +18,10 @@ import {
   type ConnectedAccountRecord,
   type ConnectedInstitutionRecord,
 } from "@/services/connect";
+import {
+  dismissFinancialNotification,
+  fetchFinancialOsDashboard,
+} from "@/services/financialOs";
 import { fmt } from "@/lib/utils";
 import {
   ToolbarButton,
@@ -33,6 +37,7 @@ import {
   type ManualAccountType,
 } from "@/lib/manualMode";
 import { sourceTypeUiLabel } from "@/lib/sourceType";
+import type { UnifiedFinancialAccountDashboard } from "@/lib/server/financialOs/types";
 
 interface AccountsBundle {
   accounts: ConnectedAccountRecord[];
@@ -134,6 +139,7 @@ export function AccountsView() {
   const [bundle, setBundle] = useState<AccountsBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [financialInfra, setFinancialInfra] = useState<UnifiedFinancialAccountDashboard | null>(null);
 
   const [manualAccounts, setManualAccounts] = useLocalStorageState<ManualAccountRecord[]>(
     MANUAL_STORAGE_KEYS.accounts,
@@ -158,13 +164,24 @@ export function AccountsView() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      setBundle(await fetchConnectedAccountsBundle());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load accounts.");
-    } finally {
-      setLoading(false);
+    const [accountsResult, infraResult] = await Promise.allSettled([
+      fetchConnectedAccountsBundle(),
+      fetchFinancialOsDashboard(),
+    ]);
+
+    if (accountsResult.status === "fulfilled") {
+      setBundle(accountsResult.value);
+    } else {
+      setBundle(null);
+      setError(accountsResult.reason instanceof Error ? accountsResult.reason.message : "Failed to load accounts.");
     }
+
+    if (infraResult.status === "fulfilled") {
+      setFinancialInfra(infraResult.value);
+    } else {
+      setFinancialInfra(null);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -295,6 +312,15 @@ export function AccountsView() {
     return [...connectedRows, ...manualRows].sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
   }, [connectedAccounts, connectedAverageBalance, manualAccounts]);
 
+  const topTimeline = useMemo(
+    () => (financialInfra?.timeline || []).slice(0, 6),
+    [financialInfra?.timeline],
+  );
+  const topNotifications = useMemo(
+    () => (financialInfra?.notifications || []).slice(0, 4),
+    [financialInfra?.notifications],
+  );
+
   const onCreateManualAccount = () => {
     setManualError(null);
     const name = manualName.trim();
@@ -383,6 +409,85 @@ export function AccountsView() {
           </>
         )}
       />
+
+      {financialInfra ? (
+        <WorkspacePanel title="Financial OS Infrastructure">
+          <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+            <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+              <p className="text-xs text-[var(--aw-text-muted)]">Connected accounts</p>
+              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                {financialInfra.sync.connectedAccountCount}
+              </p>
+            </article>
+            <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+              <p className="text-xs text-[var(--aw-text-muted)]">Fresh sync</p>
+              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                {financialInfra.sync.freshAccountCount}
+              </p>
+            </article>
+            <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+              <p className="text-xs text-[var(--aw-text-muted)]">Internal transfers</p>
+              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                {fmt(financialInfra.moneyFlow.internalTransferAmount)}
+              </p>
+            </article>
+            <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+              <p className="text-xs text-[var(--aw-text-muted)]">Task center active</p>
+              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                {financialInfra.taskCenter.activeCount}
+              </p>
+            </article>
+          </div>
+
+          {topNotifications.length > 0 ? (
+            <div className="mb-4 rounded-xl border border-[var(--aw-border)] bg-white p-3">
+              <p className="text-xs font-semibold text-[var(--aw-text)]">Actionable notifications</p>
+              <div className="mt-2 space-y-2">
+                {topNotifications.map((item) => (
+                  <div key={item.id} className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-[var(--aw-text)]">{item.title}</p>
+                      <button
+                        type="button"
+                        className="text-[11px] text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
+                        onClick={() => {
+                          void dismissFinancialNotification(item.id).then(() => load());
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                    <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">{item.summary}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+            <p className="text-xs font-semibold text-[var(--aw-text)]">Financial timeline</p>
+            <div className="mt-2 space-y-2">
+              {topTimeline.length === 0 ? (
+                <p className="text-xs text-[var(--aw-text-muted)]">No timeline events yet.</p>
+              ) : (
+                topTimeline.map((event) => (
+                  <a
+                    key={event.id}
+                    href={event.deepLink}
+                    className="block rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2 transition hover:border-[var(--aw-border-strong)]"
+                  >
+                    <p className="text-xs font-semibold text-[var(--aw-text)]">{event.title}</p>
+                    <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">{event.summary}</p>
+                    <p className="mt-0.5 text-[11px] text-[var(--aw-text-muted)]">
+                      {new Date(event.occurredAt).toLocaleDateString()} · {event.priority.toUpperCase()}
+                    </p>
+                  </a>
+                ))
+              )}
+            </div>
+          </div>
+        </WorkspacePanel>
+      ) : null}
 
       <WorkspacePanel title="Net worth chart">
         <div className="mb-5 flex flex-wrap items-end gap-3">

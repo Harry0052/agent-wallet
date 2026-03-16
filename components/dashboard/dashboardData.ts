@@ -140,19 +140,36 @@ export function buildBudgetCategories(wallet: Wallet | null, transactions: State
 export function buildDashboardSummary(props: DashboardWidgetProps) {
   const { home, wallet, dataSource, accountsConnected, useLiveData } = props;
   const live = useLiveData && accountsConnected;
+  const intelligence = home.moneyIntelligence;
   const spending = buildSpendingDataset(dataSource.transactions, live);
   let netWorth = buildNetWorthDataset(wallet, dataSource.transactions, live);
-  const budgetCategories = buildBudgetCategories(wallet, dataSource.transactions, live);
+  const budgetCategories = intelligence
+    ? intelligence.spendingLimits.categoryBudgets.slice(0, 4).map((budget) => ({
+        category: budget.category.replace(/_/g, " "),
+        spent: Math.round(budget.observedMonthlySpend),
+        total: Math.max(1, Math.round(budget.recommendedMonthlyBudget)),
+        progress: Math.min(100, Math.round((budget.observedMonthlySpend / Math.max(budget.recommendedMonthlyBudget, 1)) * 100)),
+      }))
+    : buildBudgetCategories(wallet, dataSource.transactions, live);
   const hasManualAccountBalance = dataSource.accounts.some((account) => typeof account.balance === "number");
   const manualAccountNetWorth = dataSource.accounts.reduce(
     (sum, account) => sum + (typeof account.balance === "number" ? account.balance : 0),
     0,
   );
   const liveNetWorth = live
-    ? wallet?.balance ?? (hasManualAccountBalance ? manualAccountNetWorth : home.summary.netCashPosition)
+    ? intelligence?.netWorth.trackedNetWorth
+      ?? wallet?.balance
+      ?? (hasManualAccountBalance ? manualAccountNetWorth : home.summary.netCashPosition)
     : 1;
 
-  if (live && !wallet && hasManualAccountBalance) {
+  if (live && intelligence?.netWorth?.trend7d?.length) {
+    netWorth = intelligence.netWorth.trend7d.map((point) => ({
+      label: new Date(point.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      value: Math.round(point.netWorth),
+    }));
+  }
+
+  if (live && !wallet && hasManualAccountBalance && !(intelligence?.netWorth?.trend7d?.length)) {
     netWorth = placeholderNetWorth.map((point, index) => ({
       ...point,
       value: Math.max(0, Math.round(liveNetWorth * (0.92 + index * 0.02))),
@@ -160,7 +177,9 @@ export function buildDashboardSummary(props: DashboardWidgetProps) {
   }
 
   const previousNetWorth = netWorth[Math.max(0, netWorth.length - 2)]?.value ?? liveNetWorth;
-  const netWorthDelta = live ? liveNetWorth - previousNetWorth : 0;
+  const netWorthDelta = live
+    ? intelligence?.netWorth?.delta7d ?? (liveNetWorth - previousNetWorth)
+    : 0;
 
   return {
     live,
@@ -169,7 +188,7 @@ export function buildDashboardSummary(props: DashboardWidgetProps) {
     budgetCategories,
     netWorthValue: live ? liveNetWorth : 1,
     netWorthDelta,
-    monthlyBudget: wallet?.settings.monthlyBudget ?? 0,
+    monthlyBudget: intelligence?.spendingLimits.monthlyLimit ?? wallet?.settings.monthlyBudget ?? 0,
   };
 }
 

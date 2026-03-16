@@ -30,7 +30,9 @@
       "Bash(cd:*)",
       "Bash(which ffmpeg:*)",
       "Bash(ffprobe:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:dribbble.com)"
     ]
   },
   "enableAllProjectMcpServers": true,

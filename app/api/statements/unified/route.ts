@@ -7,6 +7,8 @@ import {
 } from "@/lib/server/observability";
 import { parseStatementQueryParams } from "@/statements/statementService";
 import { getUnifiedStatement } from "@/statements/unifiedStatement";
+import { buildMoneyIntelligenceForUser } from "@/lib/server/moneyIntelligence/engine";
+import { getAutomationSummaryForUser } from "@/lib/server/automation/service";
 import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
 
@@ -23,15 +25,69 @@ export async function GET(req: NextRequest) {
   try {
     const userId = auth.auth.walletUserId;
     const parsed = parseStatementQueryParams(req.nextUrl.searchParams);
-    const statement = await getUnifiedStatement({
-      userId,
-      filters: parsed.filters,
-      pagination: parsed.pagination,
-    });
+    const [statement, moneyIntelligence, automationSummary] = await Promise.all([
+      getUnifiedStatement({
+        userId,
+        filters: parsed.filters,
+        pagination: parsed.pagination,
+      }),
+      buildMoneyIntelligenceForUser(userId).catch((error) => {
+        const message = error instanceof Error ? error.message : "unknown";
+        logServerEvent("warn", "statements.unified.money_intelligence.unavailable", {
+          userId,
+          message,
+        });
+        return null;
+      }),
+      getAutomationSummaryForUser({ userId }).catch((error) => {
+        const message = error instanceof Error ? error.message : "unknown";
+        logServerEvent("warn", "statements.unified.automation_summary.unavailable", {
+          userId,
+          message,
+        });
+        return null;
+      }),
+    ]);
+    const moneyStatement = moneyIntelligence
+      ? (({ classifiedTransactions, ...rest }) => {
+          void classifiedTransactions;
+          return rest;
+        })(moneyIntelligence.statement)
+      : null;
 
     return NextResponse.json({
       ok: true,
-      statement,
+      statement: {
+        ...statement,
+        money_intelligence: moneyIntelligence
+          ? {
+              generatedAt: moneyIntelligence.generatedAt,
+              engineVersion: moneyIntelligence.engineVersion,
+              rulesVersion: moneyIntelligence.rulesVersion,
+              statement: moneyStatement,
+              coverage: moneyIntelligence.coverage,
+              netWorth: moneyIntelligence.netWorth,
+              spendingLimits: moneyIntelligence.spendingLimits,
+              affordability: moneyIntelligence.affordability,
+              weeklyPrediction: moneyIntelligence.weeklyPrediction,
+              monthlySurvivalForecast: moneyIntelligence.monthlySurvivalForecast,
+              billPredictions: moneyIntelligence.billPredictions,
+              subscriptionTimeline: moneyIntelligence.subscriptionTimeline,
+              alerts: moneyIntelligence.alerts,
+              categoryLearning: moneyIntelligence.categoryLearning,
+              studentFocus: moneyIntelligence.studentFocus,
+              advancedIntelligence: moneyIntelligence.advancedIntelligence,
+            }
+          : null,
+        automation: automationSummary
+          ? {
+              summary: automationSummary.summary,
+              policy: {
+                defaultMode: automationSummary.policy.defaultMode,
+              },
+            }
+          : null,
+      },
     });
   } catch (error) {
     if (isAuthError(error)) {

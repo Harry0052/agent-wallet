@@ -12,6 +12,7 @@ import {
 import { fmt, fmtDate } from "@/lib/utils";
 import {
   fetchUnifiedStatement,
+  submitCategoryCorrection,
   type StatementTransaction,
   type UnifiedStatement,
 } from "@/services/statements";
@@ -73,6 +74,11 @@ export function TransactionsView() {
   const [manualNotes, setManualNotes] = useState("");
   const [manualRecurring, setManualRecurring] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+  const [categoryCorrectionTx, setCategoryCorrectionTx] = useState<StatementTransaction | null>(null);
+  const [correctedCategory, setCorrectedCategory] = useState("");
+  const [correctionBusy, setCorrectionBusy] = useState(false);
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [correctionNotice, setCorrectionNotice] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -233,6 +239,55 @@ export function TransactionsView() {
     setManualModalOpen(false);
   };
 
+  const openCategoryCorrection = (tx: StatementTransaction) => {
+    setCorrectionError(null);
+    setCorrectionNotice(null);
+    setCategoryCorrectionTx(tx);
+    setCorrectedCategory((tx.category || "").trim());
+  };
+
+  const saveCategoryCorrection = async () => {
+    if (!categoryCorrectionTx) return;
+    const normalizedMerchant = (categoryCorrectionTx.normalized_merchant || categoryCorrectionTx.merchant_name || "").trim().toLowerCase();
+    const originalCategory = (categoryCorrectionTx.category || "uncategorized").trim().toLowerCase();
+    const nextCategory = correctedCategory.trim().toLowerCase();
+
+    if (!normalizedMerchant) {
+      setCorrectionError("Merchant is required to learn category mapping.");
+      return;
+    }
+    if (!nextCategory) {
+      setCorrectionError("Corrected category is required.");
+      return;
+    }
+
+    setCorrectionBusy(true);
+    setCorrectionError(null);
+    try {
+      const result = await submitCategoryCorrection({
+        transactionId: categoryCorrectionTx.id,
+        normalizedMerchant,
+        originalCategory,
+        correctedCategory: nextCategory,
+      });
+      setCorrectionNotice(
+        result.ruleStatus === "active"
+          ? "Category learning updated. This merchant now has an active learned rule."
+          : "Correction saved. Calico will activate learning after repeated consistent corrections.",
+      );
+      setCategoryCorrectionTx(null);
+      await loadData();
+    } catch (e) {
+      setCorrectionError(e instanceof Error ? e.message : "Failed to save category correction.");
+    } finally {
+      setCorrectionBusy(false);
+    }
+  };
+
+  const moneyIntelligence = statement?.money_intelligence || null;
+  const topAlerts = moneyIntelligence?.alerts?.slice(0, 2) || [];
+  const tonightCard = moneyIntelligence?.studentFocus.cards.find((card) => card.id === "can_i_afford_tonight") || null;
+
   return (
     <div className="aw-workspace-page">
       <WorkspaceHeader
@@ -282,6 +337,65 @@ export function TransactionsView() {
           {filteredTransactions.length} transaction{filteredTransactions.length === 1 ? "" : "s"}
         </p>
       </div>
+
+      {moneyIntelligence ? (
+        <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-4">
+          <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Safe today</p>
+            <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendToday)}</p>
+            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">Confidence {Math.round(moneyIntelligence.affordability.confidence * 100)}%</p>
+          </article>
+          <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Safe this week</p>
+            <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendThisWeek)}</p>
+            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">Predicted spend {fmt(moneyIntelligence.weeklyPrediction.predictedSpendNext7d)}</p>
+          </article>
+          <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Safe this month</p>
+            <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendThisMonth)}</p>
+            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">{moneyIntelligence.monthlySurvivalForecast.status.toUpperCase()} forecast</p>
+          </article>
+          <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Until next income</p>
+            <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">
+              {moneyIntelligence.affordability.safeToSpendUntilNextIncome === null
+                ? "Unavailable"
+                : fmt(moneyIntelligence.affordability.safeToSpendUntilNextIncome)}
+            </p>
+            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
+              {moneyIntelligence.affordability.incomeCadenceReliable
+                ? "Income cadence reliable"
+                : "Cadence unreliable"}
+            </p>
+          </article>
+        </div>
+      ) : null}
+
+      {tonightCard ? (
+        <div className="mb-4 rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
+          <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">{tonightCard.title}</p>
+          <p className="mt-1 text-sm font-semibold text-[var(--aw-text)]">
+            {tonightCard.amount === null ? "Unavailable" : fmt(tonightCard.amount)} safe cap
+          </p>
+          <p className="mt-1 text-xs text-[var(--aw-text-soft)]">{tonightCard.summary}</p>
+        </div>
+      ) : null}
+
+      {topAlerts.length > 0 ? (
+        <div className="mb-4 rounded-xl border border-[var(--aw-warning)]/30 bg-[var(--aw-warning)]/8 px-3 py-2.5">
+          {topAlerts.map((alert) => (
+            <p key={alert.id} className="text-xs text-[var(--aw-text-soft)]">
+              <span className="font-semibold text-[var(--aw-text)]">{alert.title}:</span> {alert.summary}
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      {correctionNotice ? (
+        <div className="mb-4 rounded-xl border border-[var(--aw-success)]/35 bg-[var(--aw-success)]/10 px-3 py-2 text-xs text-[var(--aw-success)]">
+          {correctionNotice}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mb-4 rounded-2xl border border-[var(--aw-border)] bg-white px-4 py-3 text-sm text-[var(--aw-text)]">
@@ -353,6 +467,13 @@ export function TransactionsView() {
                       {tx.category || "Uncategorized"}
                       {tx.notes ? ` • ${tx.notes}` : ""}
                     </p>
+                    <button
+                      type="button"
+                      className="mt-1 text-[11px] font-semibold text-[var(--aw-primary)] hover:text-[var(--aw-primary-strong)]"
+                      onClick={() => openCategoryCorrection(tx)}
+                    >
+                      Correct category
+                    </button>
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm text-[var(--aw-text)]">{tx.account_name || "-"}</p>
@@ -508,6 +629,55 @@ export function TransactionsView() {
               className="aw-button-primary h-10 px-4 text-sm"
             >
               Save transaction
+            </button>
+          </div>
+        </div>
+      </ManualEntryModal>
+
+      <ManualEntryModal
+        open={categoryCorrectionTx !== null}
+        onClose={() => {
+          if (!correctionBusy) setCategoryCorrectionTx(null);
+        }}
+        title="Correct category"
+        description="Teach Calico by confirming a better category for this merchant."
+      >
+        <div className="space-y-3">
+          <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2 text-xs text-[var(--aw-text-soft)]">
+            Merchant: <span className="font-semibold text-[var(--aw-text)]">{categoryCorrectionTx?.merchant_name || categoryCorrectionTx?.normalized_merchant || "-"}</span>
+            <br />
+            Current category: <span className="font-semibold text-[var(--aw-text)]">{categoryCorrectionTx?.category || "uncategorized"}</span>
+          </div>
+          <label className="space-y-1">
+            <span className="text-xs text-[var(--aw-text-muted)]">Corrected category</span>
+            <input
+              value={correctedCategory}
+              onChange={(event) => setCorrectedCategory(event.target.value)}
+              className="aw-input h-10 text-sm"
+              placeholder="groceries"
+            />
+          </label>
+          {correctionError ? (
+            <p className="rounded-lg border border-[var(--aw-danger)]/25 bg-[var(--aw-danger)]/10 px-3 py-2 text-xs text-[var(--aw-danger)]">
+              {correctionError}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setCategoryCorrectionTx(null)}
+              className="aw-button-secondary h-10 px-4 text-sm"
+              disabled={correctionBusy}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => { void saveCategoryCorrection(); }}
+              className="aw-button-primary h-10 px-4 text-sm"
+              disabled={correctionBusy}
+            >
+              {correctionBusy ? "Saving..." : "Save correction"}
             </button>
           </div>
         </div>

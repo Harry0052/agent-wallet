@@ -37,6 +37,7 @@ test('home payload includes top summary, freshness, trust, and drill-in strips',
   assert.match(source, /walletStrip:\s*\[/);
   assert.match(source, /statementsStrip:\s*\[/);
   assert.match(source, /trust:\s*\{/);
+  assert.match(source, /studentFocus/);
 });
 
 test('home payload includes explicit low-data mode and ordered next-best actions', () => {

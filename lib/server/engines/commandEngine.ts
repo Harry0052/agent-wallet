@@ -323,19 +323,24 @@ async function dispatchQueryIntent(
 
     case 'affordability_check': {
       try {
-        const { predictCashFlow } = await import(
-          '@/lib/server/engines/cashFlowEngine'
+        const { buildMoneyIntelligenceForUser } = await import(
+          '@/lib/server/moneyIntelligence/engine'
         );
-        const cashflow = await predictCashFlow(userId);
+        const money = await buildMoneyIntelligenceForUser(userId);
+        const affordability = money.affordability;
         return {
           canAfford: parsed.amount != null
-            ? (cashflow?.data?.safeToSpendToday ?? 0) >= parsed.amount
+            ? affordability.safeToSpendToday >= parsed.amount
             : null,
-          safeToSpendToday: cashflow?.data?.safeToSpendToday ?? null,
+          safeToSpendToday: affordability.safeToSpendToday,
+          safeToSpendThisWeek: affordability.safeToSpendThisWeek,
+          safeToSpendThisMonth: affordability.safeToSpendThisMonth,
+          safeToSpendUntilNextIncome: affordability.safeToSpendUntilNextIncome,
+          confidence: affordability.confidence,
           requestedAmount: parsed.amount,
         };
       } catch {
-        return { status: 'unavailable', reason: 'Cash flow engine not yet available' };
+        return { status: 'unavailable', reason: 'Affordability engine not yet available' };
       }
     }
 

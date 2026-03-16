@@ -1,5 +1,7 @@
 import type { RecordSourceType } from "@/lib/manualMode";
 import { normalizeRecordSourceType } from "@/lib/sourceType";
+import type { MoneyIntelligenceResult } from "@/lib/server/moneyIntelligence/types";
+import type { AutomationActionSummary } from "@/lib/types";
 
 export interface StatementTransaction {
   id: string;
@@ -32,6 +34,44 @@ export interface UnifiedStatement {
   total_spend_month: number;
   transactions: StatementTransaction[];
   pagination: StatementPagination;
+  money_intelligence?: {
+    generatedAt: string;
+    engineVersion: string;
+    rulesVersion: string;
+    statement: Omit<MoneyIntelligenceResult["statement"], "classifiedTransactions">;
+    coverage: MoneyIntelligenceResult["coverage"];
+    netWorth: MoneyIntelligenceResult["netWorth"];
+    spendingLimits: MoneyIntelligenceResult["spendingLimits"];
+    affordability: MoneyIntelligenceResult["affordability"];
+    weeklyPrediction: MoneyIntelligenceResult["weeklyPrediction"];
+    monthlySurvivalForecast: MoneyIntelligenceResult["monthlySurvivalForecast"];
+    billPredictions: MoneyIntelligenceResult["billPredictions"];
+    subscriptionTimeline: MoneyIntelligenceResult["subscriptionTimeline"];
+    alerts: MoneyIntelligenceResult["alerts"];
+    categoryLearning: MoneyIntelligenceResult["categoryLearning"];
+    studentFocus: MoneyIntelligenceResult["studentFocus"];
+    advancedIntelligence: MoneyIntelligenceResult["advancedIntelligence"];
+  } | null;
+  automation?: {
+    summary: AutomationActionSummary;
+    policy: {
+      defaultMode: "suggest_only" | "user_confirm_required" | "autopilot_allowed";
+    };
+  } | null;
+}
+
+export interface StatementCategoryCorrection {
+  id: string;
+  transaction_id: string | null;
+  normalized_merchant: string;
+  original_category: string;
+  corrected_category: string;
+  created_at: string;
+}
+
+export interface StatementCategoryCorrectionsPayload {
+  rules: MoneyIntelligenceResult["categoryLearning"]["activeRules"];
+  corrections: StatementCategoryCorrection[];
 }
 
 export interface AccountStatement {
@@ -390,5 +430,70 @@ export async function fetchAiSpendingAnalysis(): Promise<AiSpendingAnalysisRespo
     analysis: body.analysis,
     transaction_summary: body.transaction_summary,
     generated_at: body.generated_at,
+  };
+}
+
+export async function fetchCategoryCorrections(
+  limit = 30,
+): Promise<StatementCategoryCorrectionsPayload> {
+  const response = await fetch(
+    `/api/statements/category-corrections?limit=${encodeURIComponent(String(limit))}`,
+    {
+      method: "GET",
+      cache: "no-store",
+    },
+  );
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    rules?: StatementCategoryCorrectionsPayload["rules"];
+    corrections?: StatementCategoryCorrection[];
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || !Array.isArray(body.rules) || !Array.isArray(body.corrections)) {
+    throw toError(body);
+  }
+
+  return {
+    rules: body.rules,
+    corrections: body.corrections,
+  };
+}
+
+export async function submitCategoryCorrection(input: {
+  transactionId?: string;
+  normalizedMerchant: string;
+  originalCategory: string;
+  correctedCategory: string;
+}): Promise<{
+  recorded: boolean;
+  ruleStatus: "active" | "pending";
+  rule: MoneyIntelligenceResult["categoryLearning"]["activeRules"][number] | null;
+}> {
+  const response = await fetch("/api/statements/category-corrections", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    recorded?: boolean;
+    ruleStatus?: "active" | "pending";
+    rule?: MoneyIntelligenceResult["categoryLearning"]["activeRules"][number] | null;
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !body.ok || typeof body.recorded !== "boolean" || !body.ruleStatus) {
+    throw toError(body);
+  }
+
+  return {
+    recorded: body.recorded,
+    ruleStatus: body.ruleStatus,
+    rule: body.rule || null,
   };
 }

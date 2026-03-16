@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Bell,
   Cable,
   ChevronRight,
+  CreditCard,
   KeyRound,
   LogOut,
   UserRound,
@@ -18,16 +19,24 @@ import {
   type AuthenticatedAccount,
 } from "@/services/account";
 import { logout } from "@/services/auth";
+import {
+  fetchBillingStatus,
+  startCheckout,
+  openBillingPortal,
+  type BillingStatus,
+  type PlanId,
+} from "@/services/billing";
 
 type OpenModal = null | "edit-profile" | "security" | "notifications";
 
 interface SettingRowProps {
   icon: typeof UserRound;
   label: string;
+  sublabel?: string;
   onClick: () => void;
 }
 
-function SettingRow({ icon: Icon, label, onClick }: SettingRowProps) {
+function SettingRow({ icon: Icon, label, sublabel, onClick }: SettingRowProps) {
   return (
     <button
       type="button"
@@ -36,17 +45,92 @@ function SettingRow({ icon: Icon, label, onClick }: SettingRowProps) {
     >
       <span className="inline-flex items-center gap-3 text-sm font-medium text-[var(--aw-text)]">
         <Icon size={16} className="text-[var(--aw-text-muted)]" />
-        {label}
+        <span>
+          {label}
+          {sublabel && (
+            <span className="ml-2 text-xs font-normal text-[var(--aw-text-muted)]">
+              {sublabel}
+            </span>
+          )}
+        </span>
       </span>
       <ChevronRight size={14} className="text-[var(--aw-text-muted)]" />
     </button>
   );
 }
 
+function BillingBanner({ billing, onManage }: { billing: BillingStatus; onManage: () => void }) {
+  if (!billing.isActive && !billing.plan) {
+    return (
+      <div className="aw-card mt-6 !p-4" style={{ borderLeft: "3px solid var(--calico-primary, #FDBA74)" }}>
+        <p className="text-sm font-semibold text-[var(--aw-text)]">No active plan</p>
+        <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
+          Subscribe to a plan to unlock all features.
+        </p>
+        <div className="mt-3 flex gap-2">
+          {(["starter", "pro", "autonomous"] as PlanId[]).map((plan) => (
+            <button
+              key={plan}
+              type="button"
+              onClick={() => { void startCheckout(plan); }}
+              className="rounded-full px-3 py-1.5 text-xs font-semibold transition"
+              style={{
+                background: plan === "pro" ? "var(--calico-primary, #FDBA74)" : "var(--calico-card, #FFFCF8)",
+                color: "var(--calico-text, #111)",
+                border: plan === "pro" ? "none" : "1px solid var(--calico-border, #F2DECC)",
+              }}
+            >
+              {plan === "starter" ? "Start Free Trial" : plan === "pro" ? "Subscribe Pro" : "Autonomous"}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const statusLabel = billing.isTrial
+    ? `${billing.planName} (trial${billing.trialEnd ? ` until ${new Date(billing.trialEnd).toLocaleDateString()}` : ""})`
+    : billing.cancelAtPeriodEnd
+      ? `${billing.planName} (cancels ${billing.currentPeriodEnd ? new Date(billing.currentPeriodEnd).toLocaleDateString() : "soon"})`
+      : `${billing.planName} — $${billing.priceMonthly}/mo`;
+
+  return (
+    <div className="aw-card mt-6 !p-4" style={{ borderLeft: "3px solid var(--calico-primary, #FDBA74)" }}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[var(--aw-text)]">{statusLabel}</p>
+          <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
+            {billing.status === "active" && !billing.cancelAtPeriodEnd && "Active subscription"}
+            {billing.status === "trialing" && "Free trial active"}
+            {billing.cancelAtPeriodEnd && "Will cancel at end of period"}
+            {billing.status === "past_due" && "Payment past due — update your card"}
+            {billing.status === "canceled" && "Subscription canceled"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onManage}
+          className="rounded-full px-3 py-1.5 text-xs font-semibold transition"
+          style={{
+            background: "var(--calico-card, #FFFCF8)",
+            border: "1px solid var(--calico-border, #F2DECC)",
+            color: "var(--calico-text, #111)",
+          }}
+        >
+          Manage billing
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [account, setAccount] = useState<AuthenticatedAccount | null>(null);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [openModal, setOpenModal] = useState<OpenModal>(null);
+  const [billingMessage, setBillingMessage] = useState<string | null>(null);
 
   const refreshAccount = useCallback(async () => {
     try {
@@ -56,14 +140,39 @@ export function SettingsPage() {
     }
   }, []);
 
+  const refreshBilling = useCallback(async () => {
+    try {
+      setBilling(await fetchBillingStatus());
+    } catch {
+      // silent — user may not have billing yet
+    }
+  }, []);
+
   useEffect(() => {
     void refreshAccount();
-  }, [refreshAccount]);
+    void refreshBilling();
+  }, [refreshAccount, refreshBilling]);
+
+  useEffect(() => {
+    const billingParam = searchParams.get("billing");
+    if (billingParam === "success") {
+      setBillingMessage("Subscription activated! Welcome aboard.");
+      void refreshBilling();
+      window.history.replaceState({}, "", "/settings");
+    } else if (billingParam === "cancelled") {
+      setBillingMessage("Checkout was cancelled. You can try again anytime.");
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, [searchParams, refreshBilling]);
 
   const onLogout = async () => {
     await logout();
     router.replace("/login");
     router.refresh();
+  };
+
+  const handleManageBilling = () => {
+    void openBillingPortal();
   };
 
   return (
@@ -76,12 +185,27 @@ export function SettingsPage() {
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">{account.email}</p>
       ) : null}
 
+      {billingMessage && (
+        <div className="mt-4 rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(253,186,116,0.18)", border: "1px solid var(--calico-primary, #FDBA74)", color: "var(--calico-text, #111)" }}>
+          {billingMessage}
+          <button type="button" onClick={() => setBillingMessage(null)} className="ml-3 text-xs underline">dismiss</button>
+        </div>
+      )}
+
+      {billing && <BillingBanner billing={billing} onManage={handleManageBilling} />}
+
       <div className="aw-card mt-8 !p-2">
         <div className="space-y-0.5">
           <SettingRow icon={UserRound} label="Profile" onClick={() => setOpenModal("edit-profile")} />
           <SettingRow icon={KeyRound} label="Password & 2FA" onClick={() => setOpenModal("security")} />
           <SettingRow icon={Bell} label="Notifications" onClick={() => setOpenModal("notifications")} />
           <SettingRow icon={Cable} label="Connected accounts" onClick={() => { window.location.href = "/connect"; }} />
+          <SettingRow
+            icon={CreditCard}
+            label="Billing"
+            sublabel={billing?.planName || "No plan"}
+            onClick={handleManageBilling}
+          />
         </div>
       </div>
 

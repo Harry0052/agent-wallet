@@ -10,11 +10,14 @@ import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes
 
 export function SpendingWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
   const summary = buildDashboardSummary(props);
+  const money = props.home.moneyIntelligence;
 
   return (
     <WidgetContainer
       title="Spending"
-      subtitle="This month vs last month across days 1 to 30."
+      subtitle={money
+        ? `True spend ${toCurrency(money.statement.trueSpendAmount)}. Predicted next 7 days: ${toCurrency(money.weeklyPrediction.predictedSpendNext7d)}.`
+        : "This month vs last month across days 1 to 30."}
       dragHandleProps={props.dragHandleProps}
     >
       <div className="space-y-5">

@@ -9,6 +9,8 @@ import { detectAndPersistRecurringSubscriptions } from "@/subscription_intellige
 import { buildSafeSpendingDataset } from "@/security/aiSanitizer";
 import { detectAnomalies } from "@/ai_spend_intelligence/anomalyDetector";
 import { adviseOnSubscriptions } from "@/ai_spend_intelligence/subscriptionAdvisor";
+import { buildMoneyIntelligenceFromSources } from "@/lib/server/moneyIntelligence/engine";
+import { listCategoryLearningRules } from "@/lib/server/moneyIntelligence/categoryLearningStore";
 import type { SmartSurfaceContext } from "@/lib/server/smartSurface/types";
 
 function roundCurrency(value: number): number {
@@ -16,13 +18,14 @@ function roundCurrency(value: number): number {
 }
 
 export async function assembleSmartSurfaceContext(userId: string): Promise<SmartSurfaceContext> {
-  const [wallet, fundingMethods, connectedAccounts, connectedApps, transactions, recurring] = await Promise.all([
+  const [wallet, fundingMethods, connectedAccounts, connectedApps, transactions, recurring, categoryRules] = await Promise.all([
     getWallet(userId),
     listSavedFundingMethods(userId),
     listConnectedAccounts(userId),
     listConnectedApps(userId),
     listNormalizedTransactions({ userId, limit: 500 }),
     detectAndPersistRecurringSubscriptions(userId),
+    listCategoryLearningRules(userId),
   ]);
 
   const activeAccountIds = new Set(connectedAccounts.map((account) => account.id));
@@ -69,9 +72,43 @@ export async function assembleSmartSurfaceContext(userId: string): Promise<Smart
     : hasAnyConnectedSource
       ? "Manual"
       : "Manual";
+  const nowIso = new Date().toISOString();
+  const moneyIntelligence = buildMoneyIntelligenceFromSources({
+    sources: {
+      walletBalance: wallet.balance,
+      currency: wallet.currency,
+      transactions: activeTransactions.map((tx) => ({
+        id: tx.id,
+        merchantName: tx.merchant_name,
+        normalizedMerchant: tx.normalized_merchant,
+        amount: tx.amount,
+        category: tx.category,
+        pending: tx.pending,
+        occurredAt: tx.occurred_at,
+        linkedAccountId: tx.linked_account_id,
+      })),
+      recurring: recurring.map((item) => ({
+        id: item.id,
+        merchant: item.merchant,
+        estimatedMonthlyCost: item.estimated_monthly_cost,
+        recurrenceInterval: item.recurrence_interval,
+        confidence: item.confidence,
+        lastSeen: item.last_seen,
+        lifecycleStatus: "detected",
+      })),
+      connectedAccounts: connectedAccounts.map((account) => ({
+        id: account.id,
+        lastSyncedAt: account.last_synced_at,
+      })),
+      categoryRules,
+    },
+    nowIso,
+  });
+  const { classifiedTransactions, ...statementSummary } = moneyIntelligence.statement;
+  void classifiedTransactions;
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: nowIso,
     wallet: {
       balance: roundCurrency(wallet.balance),
       currency: wallet.currency,
@@ -97,6 +134,17 @@ export async function assembleSmartSurfaceContext(userId: string): Promise<Smart
       sourceState: contextSourceState,
       lowData: !hasRecentData,
       lowDataReason,
+    },
+    moneyIntelligence: {
+      affordability: moneyIntelligence.affordability,
+      weeklyPrediction: moneyIntelligence.weeklyPrediction,
+      monthlySurvivalForecast: moneyIntelligence.monthlySurvivalForecast,
+      billPredictions: moneyIntelligence.billPredictions,
+      netWorth: moneyIntelligence.netWorth,
+      coverage: moneyIntelligence.coverage,
+      alerts: moneyIntelligence.alerts,
+      statement: statementSummary,
+      advancedIntelligence: moneyIntelligence.advancedIntelligence,
     },
     trust: {
       knows: `Calico knows ${connectedAccounts.length} connected accounts, ${connectedApps.length} connected apps, ${activeTransactions.length} synced transactions, and ${fundingMethods.length} funding methods.`,

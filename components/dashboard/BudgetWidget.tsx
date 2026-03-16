@@ -12,12 +12,17 @@ import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes
 
 export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
   const { budgetCategories, monthlyBudget } = buildDashboardSummary(props);
+  const money = props.home.moneyIntelligence;
   const hasBudget = props.useLiveData && props.accountsConnected && budgetCategories.length > 0 && monthlyBudget > 0;
 
   return (
     <WidgetContainer
       title="Budget"
-      subtitle={hasBudget ? `Monthly target ${toCurrency(monthlyBudget)}` : "Plan your categories before live budgeting turns on."}
+      subtitle={hasBudget
+        ? money
+          ? `Auto-created guardrails from real spending behavior. Total monthly limit ${toCurrency(monthlyBudget)}.`
+          : `Monthly target ${toCurrency(monthlyBudget)}`
+        : "Plan your categories before live budgeting turns on."}
       dragHandleProps={props.dragHandleProps}
     >
       {hasBudget ? (
