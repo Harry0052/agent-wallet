@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppProvider } from '@/lib/store';
 import { AppNav } from '@/components/AppNav';
+import { CalicoAssistant } from '@/components/CalicoAssistant';
 
 function AppEntryReveal({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = useState<"loading" | "revealing" | "ready">("loading");
@@ -80,6 +81,7 @@ export function AppLayoutShell({ children }: { children: React.ReactNode }) {
         >
           {children}
         </motion.div>
+        <CalicoAssistant />
       </AppEntryReveal>
     </AppProvider>
   );

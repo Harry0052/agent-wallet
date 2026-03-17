@@ -17,12 +17,12 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
 
   return (
     <WidgetContainer
-      title="Budget"
+      title="Spending Plan"
       subtitle={hasBudget
         ? money
-          ? `Auto-created guardrails from real spending behavior. Total monthly limit ${toCurrency(monthlyBudget)}.`
-          : `Monthly target ${toCurrency(monthlyBudget)}`
-        : "Plan your categories before live budgeting turns on."}
+          ? `Your monthly spending limit is ${toCurrency(monthlyBudget)}. Calico tracks it for you.`
+          : `You planned to spend ${toCurrency(monthlyBudget)} this month`
+        : "Set up a plan so you know where your money goes."}
       dragHandleProps={props.dragHandleProps}
     >
       {hasBudget ? (
@@ -45,16 +45,16 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
             href="/budgets"
             className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]"
           >
-            Open detailed budget
+            See full spending plan
             <ArrowRight size={15} />
           </Link>
         </div>
       ) : (
         <div style={dashboardDashedStyle} className="flex h-full flex-col justify-between rounded-[20px] p-4">
           <div>
-            <p className="text-lg font-semibold text-[var(--calico-text)]">You don&apos;t have a budget yet</p>
+            <p className="text-lg font-semibold text-[var(--calico-text)]">No spending plan yet</p>
             <p className="mt-2 max-w-[18rem] text-sm leading-6 text-[var(--calico-text-muted)]">
-              Connect an account for automatic actuals, or continue manually by creating your first budget.
+              Create a plan so Calico can help you track where your money goes each month.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -70,7 +70,7 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
               style={dashboardPrimaryButtonStyle}
               className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-primary-hover)]"
             >
-              Create budget
+              Create spending plan
             </Link>
           </div>
         </div>

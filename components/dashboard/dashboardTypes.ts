@@ -4,6 +4,7 @@ import type { ConnectedAccountRecord } from "@/services/connect";
 import type { DetectedSubscription, StatementTransaction } from "@/services/statements";
 
 export type DashboardWidgetId =
+  | "okayToSpend"
   | "budget"
   | "creditScore"
   | "netWorth"

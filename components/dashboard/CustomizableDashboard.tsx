@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { LayoutGrid, Sparkles } from "lucide-react";
 import { AdviceWidget } from "@/components/dashboard/AdviceWidget";
 import { BudgetWidget } from "@/components/dashboard/BudgetWidget";
+import { OkayToSpendWidget } from "@/components/dashboard/OkayToSpendWidget";
 import { CreditScoreWidget } from "@/components/dashboard/CreditScoreWidget";
 import { CustomizeDashboardPanel } from "@/components/dashboard/CustomizeDashboardPanel";
 import { GettingStartedWidget } from "@/components/dashboard/GettingStartedWidget";
@@ -30,6 +31,7 @@ import { calicoThemeVars } from "@/styles/theme";
 import type { DashboardPreferences, DashboardWidgetId, DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 
 const widgetRenderers: Record<DashboardWidgetId, ComponentType<DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }>> = {
+  okayToSpend: OkayToSpendWidget,
   budget: BudgetWidget,
   creditScore: CreditScoreWidget,
   netWorth: NetWorthWidget,
@@ -152,10 +154,10 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,207,232,0.26),transparent_34%),linear-gradient(135deg,rgba(255,252,248,0.98),rgba(255,241,230,0.94))]" />
             <div className="relative flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
               <div className="max-w-3xl">
-                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-[var(--calico-primary)]">Custom Dashboard</p>
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-[var(--calico-primary)]">Your Dashboard</p>
                 <h1 className="mt-4 text-4xl font-semibold tracking-[-0.03em] text-[var(--calico-text)] md:text-5xl">{greeting}</h1>
                 <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--calico-text-muted)]">
-                  A modular Calico financial cockpit with drag-and-drop widgets, local customization, and first-class manual plus connected data modes.
+                  Here's your money at a glance. Drag things around to set it up the way you like.
                 </p>
               </div>
 

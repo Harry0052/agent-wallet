@@ -15,12 +15,12 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
 
   return (
     <WidgetContainer
-      title="Net Worth"
+      title="Total Money"
       subtitle={summary.live
         ? netWorthConfidence
-          ? `Auto-refreshes from connected and manual account updates. Confidence ${Math.round(netWorthConfidence * 100)}%.`
-          : "Auto-refreshes from connected and manual account updates."
-        : "Static placeholder until live data is available."}
+          ? `What you have minus what you owe. Updates automatically.`
+          : "What you have minus what you owe. Updates automatically."
+        : "Connect an account to see your real numbers here."}
       dragHandleProps={props.dragHandleProps}
     >
       <div className="flex flex-col gap-5">
@@ -49,7 +49,7 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
                 <XAxis dataKey="label" tick={{ fill: calicoTheme.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis hide domain={[0, "dataMax + 100"]} />
                 <Tooltip
-                  formatter={(value) => [toCurrency(Number(value ?? 0)), "Net worth"]}
+                  formatter={(value) => [toCurrency(Number(value ?? 0)), "Total money"]}
                   contentStyle={{ background: calicoTheme.card, border: `1px solid ${calicoTheme.border}`, borderRadius: 16, boxShadow: "0 8px 18px rgba(15,23,42,0.08)" }}
                   itemStyle={{ color: calicoTheme.text }}
                   labelStyle={{ color: calicoTheme.textMuted }}

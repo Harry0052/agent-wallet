@@ -14,8 +14,8 @@ export function TransactionsWidget(props: DashboardWidgetProps & { dragHandlePro
 
   return (
     <WidgetContainer
-      title="Transactions"
-      subtitle={items.length > 0 ? "Recent synced activity across connected accounts." : "Recent posted activity will appear here when data is available."}
+      title="Money Moves"
+      subtitle={items.length > 0 ? "Your most recent spending and income." : "Your recent activity will show up here once you connect an account."}
       dragHandleProps={props.dragHandleProps}
       action={
         <Link href="/transactions" className="inline-flex rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1 text-xs font-semibold text-[var(--calico-text)] transition hover:bg-[var(--calico-card)]">
@@ -26,9 +26,9 @@ export function TransactionsWidget(props: DashboardWidgetProps & { dragHandlePro
       {items.length === 0 ? (
         <div style={dashboardDashedStyle} className="flex h-full min-h-[220px] items-center justify-center rounded-[20px] p-6 text-center">
           <div>
-            <p className="text-lg font-semibold text-[var(--calico-text)]">You have no transactions yet</p>
+            <p className="text-lg font-semibold text-[var(--calico-text)]">No money moves yet</p>
             <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
-              Connect a bank or credit account and your latest activity will appear automatically, or add transactions manually now.
+              Connect a bank or card and your spending will show up here, or add something yourself.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               <Link
@@ -36,7 +36,7 @@ export function TransactionsWidget(props: DashboardWidgetProps & { dragHandlePro
                 style={dashboardPrimaryButtonStyle}
                 className="inline-flex h-10 items-center justify-center rounded-full px-4 text-xs font-semibold transition hover:bg-[var(--calico-primary-hover)]"
               >
-                Add transaction manually
+                Add one yourself
               </Link>
               <Link
                 href="/connect"
@@ -62,7 +62,7 @@ export function TransactionsWidget(props: DashboardWidgetProps & { dragHandlePro
             </div>
           ))}
           <Link href="/transactions" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
-            View all transactions
+            See all money moves
             <ArrowRight size={15} />
           </Link>
         </div>

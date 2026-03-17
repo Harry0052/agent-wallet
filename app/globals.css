@@ -46,6 +46,76 @@
   --aw-chart-grid: #F2DECC;
 }
 
+/* ── Dark mode via [data-theme="dark"] on <html> ── */
+[data-theme="dark"] {
+  --aw-bg: #1A1612;
+  --aw-bg-2: #221E19;
+  --aw-surface-1: #252018;
+  --aw-surface-2: #2A2520;
+  --aw-surface-muted: #2E2822;
+  --aw-surface-subtle: #332D26;
+  --aw-surface-emphasis: #3D362D;
+  --aw-border: #4A3F34;
+  --aw-border-strong: #5C5044;
+  --aw-text: #F5EDE6;
+  --aw-text-soft: #D4C8BA;
+  --aw-text-muted: #9B8B7B;
+  --aw-primary: #FDBA74;
+  --aw-primary-strong: #FDBA74;
+  --aw-primary-soft: rgba(251, 207, 232, 0.2);
+  --aw-primary-secondary: rgba(251, 207, 232, 0.15);
+  --aw-primary-secondary-soft: rgba(253, 230, 138, 0.15);
+  --aw-accent: #FDE68A;
+  --aw-success: #4ADE80;
+  --aw-warning: #FDE68A;
+  --aw-danger: #F87171;
+  --aw-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+  --aw-shadow-soft: 0 2px 12px rgba(0, 0, 0, 0.2);
+  --aw-shadow-md: 0 4px 24px rgba(0, 0, 0, 0.25);
+  --aw-chart-primary: #FDBA74;
+  --aw-chart-secondary: rgba(251, 207, 232, 0.5);
+  --aw-chart-positive: #4ADE80;
+  --aw-chart-negative: #F87171;
+  --aw-chart-grid: #4A3F34;
+  color-scheme: dark;
+}
+
+/* System preference fallback */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    --aw-bg: #1A1612;
+    --aw-bg-2: #221E19;
+    --aw-surface-1: #252018;
+    --aw-surface-2: #2A2520;
+    --aw-surface-muted: #2E2822;
+    --aw-surface-subtle: #332D26;
+    --aw-surface-emphasis: #3D362D;
+    --aw-border: #4A3F34;
+    --aw-border-strong: #5C5044;
+    --aw-text: #F5EDE6;
+    --aw-text-soft: #D4C8BA;
+    --aw-text-muted: #9B8B7B;
+    --aw-primary: #FDBA74;
+    --aw-primary-strong: #FDBA74;
+    --aw-primary-soft: rgba(251, 207, 232, 0.2);
+    --aw-primary-secondary: rgba(251, 207, 232, 0.15);
+    --aw-primary-secondary-soft: rgba(253, 230, 138, 0.15);
+    --aw-accent: #FDE68A;
+    --aw-success: #4ADE80;
+    --aw-warning: #FDE68A;
+    --aw-danger: #F87171;
+    --aw-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+    --aw-shadow-soft: 0 2px 12px rgba(0, 0, 0, 0.2);
+    --aw-shadow-md: 0 4px 24px rgba(0, 0, 0, 0.25);
+    --aw-chart-primary: #FDBA74;
+    --aw-chart-secondary: rgba(251, 207, 232, 0.5);
+    --aw-chart-positive: #4ADE80;
+    --aw-chart-negative: #F87171;
+    --aw-chart-grid: #4A3F34;
+    color-scheme: dark;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;

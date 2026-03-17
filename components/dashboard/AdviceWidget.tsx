@@ -22,8 +22,8 @@ export function AdviceWidget(props: DashboardWidgetProps & { dragHandleProps?: H
 
   return (
     <WidgetContainer
-      title="Advice"
-      subtitle="Actionable guidance stays modular so it can swap from placeholder to AI-driven recommendations later."
+      title="What Calico Noticed"
+      subtitle="Tips, alerts, and ideas to help you with your money."
       dragHandleProps={props.dragHandleProps}
     >
       {cards.length === 0 ? (
@@ -32,8 +32,8 @@ export function AdviceWidget(props: DashboardWidgetProps & { dragHandleProps?: H
             <div className="inline-flex h-11 w-11 items-center justify-center rounded-[20px] bg-[rgba(253,186,116,0.2)] text-[var(--calico-primary)]">
               <Sparkles size={20} />
             </div>
-            <p className="mt-4 text-lg font-semibold text-[var(--calico-text)]">Get personalized advice</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">Answer a few questions and Calico can turn this space into a focused advice feed.</p>
+            <p className="mt-4 text-lg font-semibold text-[var(--calico-text)]">Calico has tips for you</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">Answer a few questions and Calico will start noticing things about your money and share helpful ideas.</p>
           </div>
           <Link
             href="/insights"
@@ -65,15 +65,15 @@ export function AdviceWidget(props: DashboardWidgetProps & { dragHandleProps?: H
           ))}
           {automation ? (
             <div className="rounded-[20px] border border-[var(--calico-border)] bg-[var(--calico-hover)] px-4 py-3">
-              <p className="text-sm font-semibold text-[var(--calico-text)]">Task Center</p>
+              <p className="text-sm font-semibold text-[var(--calico-text)]">Your To-Do List</p>
               <p className="mt-1 text-sm text-[var(--calico-text-muted)]">
-                {automation.pendingConfirmCount} pending confirm · {automation.activeCount} active actions.
+                {automation.pendingConfirmCount} need your OK · {automation.activeCount} in progress.
               </p>
             </div>
           ) : null}
           {advanced ? (
             <div className="rounded-[20px] border border-[var(--calico-border)] bg-[rgba(59,130,246,0.08)] px-4 py-3">
-              <p className="text-sm font-semibold text-[var(--calico-text)]">Advanced intelligence</p>
+              <p className="text-sm font-semibold text-[var(--calico-text)]">Money Checkup</p>
               <p className="mt-1 text-sm text-[var(--calico-text-muted)]">
                 Risk {advanced.financialRiskScoring.riskBand} ({Math.round(advanced.financialRiskScoring.overallRiskScore)}) · Stress {advanced.financialStressDetection.status}.
               </p>
@@ -83,11 +83,11 @@ export function AdviceWidget(props: DashboardWidgetProps & { dragHandleProps?: H
             </div>
           ) : null}
           <Link href="/insights" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
-            View more advice
+            See more from Calico
           </Link>
           {automation ? (
             <Link href="/tasks" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
-              Open Task Center
+              Open your to-do list
             </Link>
           ) : null}
         </div>

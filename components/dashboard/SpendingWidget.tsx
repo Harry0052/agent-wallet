@@ -16,8 +16,8 @@ export function SpendingWidget(props: DashboardWidgetProps & { dragHandleProps?:
     <WidgetContainer
       title="Spending"
       subtitle={money
-        ? `True spend ${toCurrency(money.statement.trueSpendAmount)}. Predicted next 7 days: ${toCurrency(money.weeklyPrediction.predictedSpendNext7d)}.`
-        : "This month vs last month across days 1 to 30."}
+        ? `You've spent ${toCurrency(money.statement.trueSpendAmount)} so far. Next 7 days looks like ${toCurrency(money.weeklyPrediction.predictedSpendNext7d)}.`
+        : "How your spending this month compares to last month"}
       dragHandleProps={props.dragHandleProps}
     >
       <div className="space-y-5">

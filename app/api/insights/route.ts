@@ -3,20 +3,19 @@ import { z } from 'zod';
 import { isAuthError } from '@/lib/server/auth';
 import { query } from '@/lib/server/db';
 import { apiError, logServerEvent } from '@/lib/server/observability';
-import { enforceApiAuth } from '@/security/authGuard';
-import { enforceRateLimit } from '@/security/rateLimiter';
+import { enforceEntitlement } from '@/security/entitlementGuard';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'insights' });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'basic_insights',
+    rateLimitScope: 'insights',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
-    const userId = auth.auth.walletUserId;
+    const userId = guard.ctx.auth.walletUserId;
     const result = await query(
       `SELECT * FROM insights WHERE user_id = $1 AND status = 'active' ORDER BY generated_at DESC LIMIT 50`,
       [userId],
@@ -54,14 +53,14 @@ const PatchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'insights' });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'basic_insights',
+    rateLimitScope: 'insights',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
-    const userId = auth.auth.walletUserId;
+    const userId = guard.ctx.auth.walletUserId;
     const body = PatchSchema.parse(await req.json());
 
     const newStatus = body.action === 'dismiss' ? 'dismissed' : 'acted_on';

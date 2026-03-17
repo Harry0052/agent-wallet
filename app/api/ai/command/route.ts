@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { enforceApiAuth } from '@/security/authGuard';
-import { enforceRateLimit } from '@/security/rateLimiter';
+import { enforceEntitlement } from '@/security/entitlementGuard';
 import { processCommand } from '@/lib/server/engines/commandEngine';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 
@@ -8,11 +7,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'ai_command' });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'ai_research',
+    rateLimitScope: 'ai_command',
+  });
+  if (!guard.ok) return guard.response;
 
   let body: { input?: unknown };
   try {
@@ -33,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await processCommand(auth.auth.walletUserId, input);
+    const result = await processCommand(guard.ctx.auth.walletUserId, input);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const message =

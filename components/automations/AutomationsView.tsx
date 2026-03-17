@@ -1,0 +1,256 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  DollarSign,
+  Lock,
+  PiggyBank,
+  RefreshCw,
+  Shield,
+  Zap,
+} from "lucide-react";
+import { WorkspaceHeader } from "@/components/finance/WorkspacePrimitives";
+
+type PlanTier = "starter" | "pro" | "autonomous" | null;
+
+interface AutomationCard {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  status: "available" | "active" | "completed";
+  category: "savings" | "bills" | "subscriptions" | "debt";
+}
+
+const AUTOMATIONS: AutomationCard[] = [
+  {
+    id: "auto-emergency-fund",
+    title: "Auto-fund emergency savings",
+    description: "Calico moves a set amount to your emergency fund every payday.",
+    icon: <Shield size={20} />,
+    status: "available",
+    category: "savings",
+  },
+  {
+    id: "auto-goal-funding",
+    title: "Auto-fund your goals",
+    description: "Calico splits extra money across your goals based on priority.",
+    icon: <PiggyBank size={20} />,
+    status: "available",
+    category: "savings",
+  },
+  {
+    id: "bill-monitor",
+    title: "Bill increase alerts",
+    description: "Calico watches for bills that go up and lets you know right away.",
+    icon: <DollarSign size={20} />,
+    status: "active",
+    category: "bills",
+  },
+  {
+    id: "bill-negotiate",
+    title: "Bill negotiation help",
+    description: "Calico helps you negotiate lower rates on your biggest bills.",
+    icon: <Zap size={20} />,
+    status: "available",
+    category: "bills",
+  },
+  {
+    id: "sub-review",
+    title: "Subscription review",
+    description: "Calico finds subscriptions you might not need and helps you cancel them.",
+    icon: <RefreshCw size={20} />,
+    status: "available",
+    category: "subscriptions",
+  },
+  {
+    id: "debt-optimizer",
+    title: "Smart debt payoff",
+    description: "Calico figures out the best order to pay off what you owe to save the most on interest.",
+    icon: <Bot size={20} />,
+    status: "available",
+    category: "debt",
+  },
+];
+
+const STATUS_CONFIG = {
+  available: { label: "Set up", color: "text-[var(--calico-primary,#FDBA74)]", bg: "bg-orange-50" },
+  active: { label: "Running", color: "text-green-600", bg: "bg-green-50" },
+  completed: { label: "Done", color: "text-blue-600", bg: "bg-blue-50" },
+};
+
+export function AutomationsView() {
+  const [tier, setTier] = useState<PlanTier>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/billing/status", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok && data.plan) setTier(data.plan as PlanTier);
+        else setTier("starter");
+      })
+      .catch(() => setTier("starter"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--calico-primary,#FDBA74)] border-t-transparent" />
+      </div>
+    );
+  }
+
+  const isAutonomous = tier === "autonomous";
+
+  return (
+    <div className="flex h-full min-h-screen flex-col gap-8 bg-[var(--aw-surface-subtle)] p-6">
+      <WorkspaceHeader
+        title="Automations"
+        subtitle={isAutonomous ? "Calico handles these for you" : "Let Calico handle your money tasks"}
+      />
+
+      {!isAutonomous && (
+        <div className="rounded-2xl border border-[var(--aw-border)] bg-white p-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50">
+            <Lock size={24} className="text-[var(--calico-primary,#FDBA74)]" />
+          </div>
+          <h2 className="text-xl font-semibold text-[var(--aw-text)]">
+            Unlock Automations
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-[var(--aw-text-muted)]">
+            With the Fully Autonomous plan, Calico can move money for you, auto-fund your goals, help cancel subscriptions, negotiate bills, and optimize your debt payoff.
+          </p>
+          <p className="mt-3 text-xs italic text-[var(--aw-text-muted)]">
+            &ldquo;Help me handle it.&rdquo;
+          </p>
+          <Link
+            href="/plans"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
+          >
+            Upgrade to Fully Autonomous
+            <ArrowRight size={16} />
+          </Link>
+
+          {/* Show blurred preview */}
+          <div className="mt-8 pointer-events-none select-none" style={{ filter: "blur(3px)", opacity: 0.4 }}>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {AUTOMATIONS.slice(0, 4).map((auto) => (
+                <div key={auto.id} className="rounded-xl border border-[var(--aw-border)] bg-white p-4 text-left">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 text-[var(--calico-primary,#FDBA74)]">
+                      {auto.icon}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--aw-text)]">{auto.title}</p>
+                      <p className="text-xs text-[var(--aw-text-muted)]">{auto.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAutonomous && (
+        <>
+          {/* Active automations */}
+          {AUTOMATIONS.filter((a) => a.status === "active").length > 0 && (
+            <div>
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--aw-text-muted)]">
+                Running now
+              </h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {AUTOMATIONS.filter((a) => a.status === "active").map((auto) => {
+                  const config = STATUS_CONFIG[auto.status];
+                  return (
+                    <div key={auto.id} className="rounded-xl border border-green-200 bg-white p-5 hover:shadow-md transition-shadow">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-green-50 text-green-600">
+                          {auto.icon}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-semibold text-[var(--aw-text)]">{auto.title}</h4>
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${config.bg} ${config.color}`}>
+                              <CheckCircle2 size={10} />
+                              {config.label}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-[var(--aw-text-muted)]">{auto.description}</p>
+                          <button className="mt-3 text-xs font-medium text-[var(--calico-primary,#FDBA74)] hover:underline">
+                            Manage
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Available automations */}
+          <div>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--aw-text-muted)]">
+              Available to set up
+            </h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {AUTOMATIONS.filter((a) => a.status === "available").map((auto) => (
+                <div key={auto.id} className="rounded-xl border border-[var(--aw-border)] bg-white p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-[var(--calico-primary,#FDBA74)]">
+                      {auto.icon}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-[var(--aw-text)]">{auto.title}</h4>
+                      <p className="mt-1 text-xs text-[var(--aw-text-muted)]">{auto.description}</p>
+                      <button className="mt-3 inline-flex items-center gap-1 rounded-lg bg-[var(--calico-primary,#FDBA74)] px-3 py-1.5 text-xs font-medium text-[var(--aw-text)] hover:opacity-90 transition">
+                        <Zap size={12} />
+                        Set it up
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* How it works */}
+          <div className="rounded-2xl border border-[var(--aw-border)] bg-white p-6">
+            <h3 className="text-lg font-semibold text-[var(--aw-text)]">How automations work</h3>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="flex gap-3">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">1</div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--aw-text)]">Choose an action</p>
+                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Pick what you want Calico to handle.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">2</div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--aw-text)]">Set your rules</p>
+                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Tell Calico how much, how often, and your limits.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">3</div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--aw-text)]">Calico handles it</p>
+                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Calico runs the action and checks in with you when needed.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

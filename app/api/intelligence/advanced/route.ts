@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { enforceApiAuth } from "@/security/authGuard";
-import { enforceRateLimit } from "@/security/rateLimiter";
+import { enforceEntitlement } from "@/security/entitlementGuard";
 import { apiError, classifyTaskError, logServerEvent } from "@/lib/server/observability";
 import { isAuthError } from "@/lib/server/auth";
 import {
@@ -39,14 +38,14 @@ async function loadBaseline(userId: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: "general", scope: "advanced_intelligence" });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'premium_intelligence',
+    rateLimitScope: 'advanced_intelligence',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
-    const baseline = await loadBaseline(auth.auth.walletUserId);
+    const baseline = await loadBaseline(guard.ctx.auth.walletUserId);
     return NextResponse.json({
       ok: true,
       advancedIntelligence: baseline.money.advancedIntelligence,
@@ -72,15 +71,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: "general", scope: "advanced_intelligence_simulation" });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'premium_intelligence',
+    rateLimitScope: 'advanced_intelligence_simulation',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
     const parsed = scenarioSchema.parse(await req.json());
-    const baseline = await loadBaseline(auth.auth.walletUserId);
+    const baseline = await loadBaseline(guard.ctx.auth.walletUserId);
     const assumptions: MoneyScenarioAssumptions = {
       id: parsed.id || "custom",
       label: parsed.label || "Custom scenario",

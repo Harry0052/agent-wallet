@@ -3,6 +3,7 @@ import { z } from "zod";
 import { query } from "@/lib/server/db";
 import { isAuthError } from "@/lib/server/auth";
 import { getWalletUserId } from "@/lib/server/ledger";
+import { enforceEntitlement } from "@/security/entitlementGuard";
 import {
   apiError,
   classifyTaskError,
@@ -116,6 +117,12 @@ async function loadNormalizedTransactions(input: {
 }
 
 export async function POST(req: NextRequest) {
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'spending_trends',
+    rateLimitScope: 'ai_spending_analysis',
+  });
+  if (!guard.ok) return guard.response;
+
   try {
     const userId = await getWalletUserId();
     const body = BodySchema.parse(await req.json().catch(() => ({})));

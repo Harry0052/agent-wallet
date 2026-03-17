@@ -1,13 +1,14 @@
 "use client";
 
 import {
-  CalendarClock,
+  CheckCircle2,
+  ChevronRight,
   Loader2,
   PencilLine,
   Plus,
   Target,
   Trash2,
-  Wallet,
+  AlertCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fmt } from "@/lib/utils";
@@ -16,13 +17,6 @@ import {
   type StatementTransaction,
 } from "@/services/statements";
 import {
-  ToolbarButton,
-  WorkspaceHeader,
-  WorkspaceEmpty,
-  WorkspacePanel,
-} from "@/components/finance/WorkspacePrimitives";
-import {
-  ManualEntryButton,
   ManualEntryModal,
 } from "@/components/finance/ManualDataControls";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
@@ -50,6 +44,8 @@ interface GoalRecord {
   recurringContribution?: number;
   icon?: string;
   notes?: string;
+  goalType?: "save-up" | "pay-down";
+  image?: string;
   manualContributionTotal: number;
   sourceType: GoalSource;
   createdAt: string;
@@ -137,6 +133,28 @@ function estimateCompletion(goal: GoalRecord, remaining: number, monthlyPace: nu
   return formatCompletionDate(completionDate);
 }
 
+function getGoalStatus(goal: GoalWithMetrics): "on-track" | "at-risk" | "completed" {
+  if (goal.progress >= 100) return "completed";
+
+  if (!goal.recurringContribution && goal.transactionContributionCurrentMonth === 0) {
+    return "at-risk";
+  }
+
+  if (goal.targetDate) {
+    const targetDate = new Date(`${goal.targetDate}T12:00:00.000Z`);
+    const now = new Date();
+    const monthsUntilTarget = (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
+    const monthlyPace = (goal.recurringContribution ?? 0) + goal.transactionContributionCurrentMonth;
+    const monthsNeeded = monthlyPace > 0 ? Math.ceil(goal.remaining / monthlyPace) : Infinity;
+
+    if (monthsNeeded > monthsUntilTarget) {
+      return "at-risk";
+    }
+  }
+
+  return "on-track";
+}
+
 export function GoalsView() {
   const [loading, setLoading] = useState(true);
   const [connectedTransactions, setConnectedTransactions] = useState<StatementTransaction[]>([]);
@@ -149,8 +167,11 @@ export function GoalsView() {
     [],
   );
 
+  const [activeTab, setActiveTab] = useState<"save-up" | "pay-down">("save-up");
   const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [modalStep, setModalStep] = useState<"select" | "targets" | "contribution" | "budget">("select");
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [goalType, setGoalType] = useState<"save-up" | "pay-down">("save-up");
   const [goalName, setGoalName] = useState("");
   const [goalTargetAmount, setGoalTargetAmount] = useState("");
   const [goalCurrentSavedAmount, setGoalCurrentSavedAmount] = useState("");
@@ -159,6 +180,7 @@ export function GoalsView() {
   const [goalRecurringContribution, setGoalRecurringContribution] = useState("");
   const [goalIcon, setGoalIcon] = useState("");
   const [goalNotes, setGoalNotes] = useState("");
+  const [goalImage, setGoalImage] = useState("");
   const [goalError, setGoalError] = useState<string | null>(null);
 
   const [contributionModalGoalId, setContributionModalGoalId] = useState<string | null>(null);
@@ -167,7 +189,24 @@ export function GoalsView() {
 
   const goals = useMemo(() => {
     const local = storedGoals.map((goal) => toGoalRecord(goal));
-    return local.sort((a, b) => a.name.localeCompare(b.name));
+    const priorityOrder: Record<string, number> = {
+      "emergency fund": 1,
+      "emergency": 1,
+      "rainy day": 1,
+      "bills": 2,
+      "essentials": 2,
+      "rent": 2,
+      "mortgage": 2,
+      "utilities": 2,
+    };
+    return local.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      const aPriority = Object.entries(priorityOrder).find(([key]) => aName.includes(key))?.[1] ?? (a.goalType === "pay-down" ? 3 : 5);
+      const bPriority = Object.entries(priorityOrder).find(([key]) => bName.includes(key))?.[1] ?? (b.goalType === "pay-down" ? 3 : 5);
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return a.name.localeCompare(b.name);
+    });
   }, [storedGoals]);
 
   useEffect(() => {
@@ -244,27 +283,14 @@ export function GoalsView() {
     });
   }, [contributions.monthMap, contributions.totalMap, goals]);
 
-  const totals = useMemo(() => {
-    const target = goalCards.reduce((sum, goal) => sum + goal.targetAmount, 0);
-    const saved = goalCards.reduce((sum, goal) => sum + goal.totalSaved, 0);
-    const remaining = Math.max(target - saved, 0);
-    const progress = target > 0 ? Math.round((saved / target) * 100) : 0;
+  const filteredGoals = useMemo(() => {
+    return goalCards.filter((goal) => (goal.goalType ?? "save-up") === activeTab);
+  }, [goalCards, activeTab]);
 
-    const manualContributions = goalCards.reduce((sum, goal) => sum + goal.manualContributionTotal, 0);
-    const syncedAndManualTx = goalCards.reduce((sum, goal) => sum + goal.transactionContributionTotal, 0);
-
-    return {
-      target,
-      saved,
-      remaining,
-      progress,
-      manualContributions,
-      syncedAndManualTx,
-    };
-  }, [goalCards]);
-
-  const openCreateGoal = () => {
+  const openCreateGoal = (type: "save-up" | "pay-down" = activeTab) => {
     setEditingGoalId(null);
+    setGoalType(type);
+    setModalStep("select");
     setGoalName("");
     setGoalTargetAmount("");
     setGoalCurrentSavedAmount("");
@@ -272,6 +298,7 @@ export function GoalsView() {
     setGoalLinkedAccount("");
     setGoalRecurringContribution("");
     setGoalIcon("🎯");
+    setGoalImage("");
     setGoalNotes("");
     setGoalError(null);
     setGoalModalOpen(true);
@@ -279,6 +306,8 @@ export function GoalsView() {
 
   const openEditGoal = (goal: GoalRecord) => {
     setEditingGoalId(goal.id);
+    setGoalType(goal.goalType ?? "save-up");
+    setModalStep("select");
     setGoalName(goal.name);
     setGoalTargetAmount(String(goal.targetAmount));
     setGoalCurrentSavedAmount(String(goal.currentSavedAmount));
@@ -286,6 +315,7 @@ export function GoalsView() {
     setGoalLinkedAccount(goal.linkedAccount ?? "");
     setGoalRecurringContribution(goal.recurringContribution ? String(goal.recurringContribution) : "");
     setGoalIcon(goal.icon ?? "");
+    setGoalImage(goal.image ?? "");
     setGoalNotes(goal.notes ?? "");
     setGoalError(null);
     setGoalModalOpen(true);
@@ -330,10 +360,12 @@ export function GoalsView() {
         name,
         targetAmount,
         currentSavedAmount,
+        goalType,
         targetDate: goalTargetDate || undefined,
         linkedAccount: goalLinkedAccount.trim() || undefined,
         recurringContribution: recurringContribution > 0 ? recurringContribution : undefined,
         icon: goalIcon.trim() || undefined,
+        image: goalImage.trim() || undefined,
         notes: goalNotes.trim() || undefined,
         manualContributionTotal: existing?.manualContributionTotal ?? 0,
         sourceType: "manual",
@@ -349,6 +381,7 @@ export function GoalsView() {
 
     setGoalModalOpen(false);
     setEditingGoalId(null);
+    setModalStep("select");
   };
 
   const deleteGoal = () => {
@@ -391,313 +424,406 @@ export function GoalsView() {
 
   if (loading) {
     return (
-      <div className="aw-workspace-page flex items-center justify-center py-32">
-        <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
+      <div className="aw-page flex items-center justify-center py-32">
+        <Loader2 size={20} className="animate-spin text-[var(--calico-primary, #FDBA74)]" />
       </div>
     );
   }
 
   return (
-    <div className="aw-workspace-page">
-      <WorkspaceHeader
-        title="Goals"
-        tabs={[
-          { label: "Goals", active: true },
-          { label: "Milestones" },
-        ]}
-        actions={(
-          <>
-            <ToolbarButton icon={<Wallet size={14} />}>Goal accounts</ToolbarButton>
-            <ToolbarButton icon={<CalendarClock size={14} />}>Timeline</ToolbarButton>
-            <button
-              type="button"
-              onClick={openCreateGoal}
-              className="aw-button-primary inline-flex h-[38px] items-center gap-1.5 rounded-xl px-4 text-sm"
-            >
-              <Plus size={14} />
-              Add goal
-            </button>
-            <ManualEntryButton onClick={openCreateGoal}>Add goal</ManualEntryButton>
-          </>
-        )}
-      />
+    <div className="aw-page">
+      <div className="px-4 py-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-[var(--aw-text)]">Money Goals</h1>
+          <p className="mt-1 text-[var(--aw-text-muted)]">What you're saving for and paying off, sorted by what matters most</p>
+        </div>
 
-      <div className="aw-workspace-grid" data-columns="2-1">
-        <WorkspacePanel title="Goals list">
-          {goalCards.length === 0 ? (
-            <WorkspaceEmpty
-              icon={<Target size={22} />}
-              title="No goals yet"
-              description="Connect an account for automatic funding signals, or continue manually with contributions and transactions."
-              action={(
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.href = "/connect";
-                    }}
-                    className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm"
-                  >
-                    Connect an account
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openCreateGoal}
-                    className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm"
-                  >
-                    Start goal
-                  </button>
-                </div>
-              )}
-              className="min-h-[340px]"
-            />
-          ) : (
-            <div className="space-y-4">
-              {goalCards.map((goal) => (
-                <div key={goal.id} className="aw-card aw-card-interactive !p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg" aria-hidden>
-                          {goal.icon || "🎯"}
-                        </span>
-                        <p className="truncate text-lg font-semibold text-[var(--aw-text)]">{goal.name}</p>
-                        {goal.sourceType === "manual" ? <span className="aw-pill">Manual</span> : null}
-                      </div>
-                      <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-                        {goal.linkedAccount ? `Linked: ${goal.linkedAccount}` : "No linked account"}
-                        {goal.targetDate ? ` • Target ${goal.targetDate}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openContributionModal(goal.id)}
-                        className="aw-button-secondary inline-flex h-9 items-center rounded-[10px] px-3 text-xs"
-                      >
-                        Add contribution
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEditGoal(goal)}
-                        className="aw-button-secondary inline-flex h-9 items-center gap-1.5 rounded-[10px] px-3 text-xs"
-                      >
-                        <PencilLine size={12} />
-                        Edit
-                      </button>
-                    </div>
-                  </div>
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => openCreateGoal()}
+            className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+          >
+            <Plus size={16} />
+            Add a goal
+          </button>
+        </div>
 
-                  <div className="mt-4 h-2 rounded-full bg-[var(--aw-border)]">
-                    <div className="h-full rounded-full bg-[var(--aw-primary)]" style={{ width: `${goal.progress}%` }} />
-                  </div>
+        <div className="mb-6 flex gap-3 border-b border-[var(--aw-border)]">
+          <button
+            type="button"
+            onClick={() => setActiveTab("save-up")}
+            className={`pb-3 text-sm font-medium transition-colors ${
+              activeTab === "save-up"
+                ? "border-b-2 border-[var(--calico-primary, #FDBA74)] text-[var(--aw-text)]"
+                : "text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
+            }`}
+          >
+            Saving up
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("pay-down")}
+            className={`pb-3 text-sm font-medium transition-colors ${
+              activeTab === "pay-down"
+                ? "border-b-2 border-[var(--calico-primary, #FDBA74)] text-[var(--aw-text)]"
+                : "text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
+            }`}
+          >
+            Paying off
+          </button>
+        </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2">
-                      <p className="text-xs uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Saved so far</p>
-                      <p className="aw-number mt-1 text-sm text-[var(--aw-text)]">{fmt(goal.totalSaved)}</p>
-                    </div>
-                    <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2">
-                      <p className="text-xs uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Amount remaining</p>
-                      <p className="aw-number mt-1 text-sm text-[var(--aw-text)]">{fmt(goal.remaining)}</p>
-                    </div>
-                    <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2">
-                      <p className="text-xs uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Estimated completion</p>
-                      <p className="aw-number mt-1 text-sm text-[var(--aw-text)]">{goal.estimatedCompletion}</p>
-                    </div>
-                    <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2">
-                      <p className="text-xs uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Monthly contributions</p>
-                      <p className="aw-number mt-1 text-sm text-[var(--aw-text)]">
-                        {fmt((goal.recurringContribution ?? 0) + goal.transactionContributionCurrentMonth)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {goal.notes ? (
-                    <p className="mt-3 text-sm text-[var(--aw-text-muted)]">{goal.notes}</p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
-        </WorkspacePanel>
-
-        <WorkspacePanel title="Goal cards" heading={`${totals.progress}%`} action={<span className="aw-pill">Portfolio progress</span>}>
-          <div className="space-y-4">
-            {goalCards.length === 0 ? (
-              <WorkspaceEmpty
-                title="No goal cards yet"
-                description="Start your first goal manually, or connect an account for automatic funding signals."
-                action={(
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        window.location.href = "/connect";
-                      }}
-                      className="aw-button-secondary inline-flex h-10 items-center rounded-xl px-4 text-sm"
-                    >
-                      Connect an account
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openCreateGoal}
-                      className="aw-button-primary inline-flex h-10 items-center rounded-xl px-4 text-sm"
-                    >
-                      Start goal
-                    </button>
-                  </div>
-                )}
-                className="min-h-[210px]"
-              />
-            ) : (
-              goalCards.map((goal) => (
-                <div key={`mini-${goal.id}`} className="aw-card aw-card-compact">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-semibold text-[var(--aw-text)]">
-                      {goal.icon || "🎯"} {goal.name}
-                    </p>
-                    <span className="text-sm font-semibold text-[var(--aw-primary)]">{goal.progress}%</span>
-                  </div>
-                  <div className="mt-3 h-2 rounded-full bg-[var(--aw-border)]">
-                    <div className="h-full rounded-full bg-[var(--aw-primary)]" style={{ width: `${goal.progress}%` }} />
-                  </div>
-                  <div className="mt-3 space-y-1 text-xs text-[var(--aw-text-muted)]">
-                    <p className="aw-number">Saved {fmt(goal.totalSaved)}</p>
-                    <p className="aw-number">Remaining {fmt(goal.remaining)}</p>
-                    <p>Estimated completion {goal.estimatedCompletion}</p>
-                  </div>
-                </div>
-              ))
-            )}
-
-            <div className="aw-card !p-4">
-              <p className="text-sm font-semibold text-[var(--aw-text)]">Funding sources</p>
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Synced + manual transactions</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(totals.syncedAndManualTx)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Manual contributions</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(totals.manualContributions)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Total saved across goals</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(totals.saved)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Total target</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(totals.target)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Remaining</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(totals.remaining)}</span>
-                </div>
+        {activeTab === "save-up" && !goals.some((g) => {
+          const n = g.name.toLowerCase();
+          return n.includes("emergency") || n.includes("rainy day") || n.includes("safety");
+        }) && filteredGoals.length > 0 && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 text-xl">🐱</span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-amber-900">Calico suggests: Start an emergency fund</p>
+                <p className="mt-1 text-xs text-amber-700">
+                  An emergency fund is the most important goal you can have. It helps when life gets expensive unexpectedly — car repairs, medical bills, or a surprise expense. Calico recommends building this before fun goals.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoalType("save-up");
+                    setModalStep("targets");
+                    setGoalName("Emergency Fund");
+                    setGoalTargetAmount("1000");
+                    setGoalCurrentSavedAmount("");
+                    setGoalTargetDate("");
+                    setGoalLinkedAccount("");
+                    setGoalRecurringContribution("");
+                    setGoalIcon("🛡️");
+                    setGoalImage("");
+                    setGoalNotes("Safety cushion for unexpected expenses");
+                    setGoalError(null);
+                    setEditingGoalId(null);
+                    setGoalModalOpen(true);
+                  }}
+                  className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-3 text-xs font-medium text-white hover:bg-amber-700"
+                >
+                  <Plus size={14} />
+                  Create Emergency Fund
+                </button>
               </div>
             </div>
           </div>
-        </WorkspacePanel>
+        )}
+
+        {filteredGoals.length === 0 ? (
+          <div className="aw-card !p-8 text-center">
+            <Target size={32} className="mx-auto mb-3 text-[var(--aw-text-muted)]" />
+            <p className="text-[var(--aw-text)]">No {activeTab === "save-up" ? "savings" : "payoff"} goals yet</p>
+            <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
+              {activeTab === "save-up"
+                ? "Start with an emergency fund — it's the most important goal to have."
+                : "Add what you owe so Calico can help you pay it off faster."}
+            </p>
+            <button
+              type="button"
+              onClick={() => openCreateGoal()}
+              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+            >
+              <Plus size={16} />
+              Add a goal
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3 mb-8">
+            {filteredGoals.map((goal) => {
+              const status = getGoalStatus(goal);
+              const statusColor = status === "completed" ? "text-green-600" : status === "at-risk" ? "text-orange-500" : "text-green-600";
+              const statusBg = status === "completed" ? "bg-green-50" : status === "at-risk" ? "bg-orange-50" : "bg-green-50";
+              const statusText = status === "completed" ? "Done!" : status === "at-risk" ? "Needs attention" : "Looking good";
+
+              const goalNameLower = goal.name.toLowerCase();
+              const isEmergency = goalNameLower.includes("emergency") || goalNameLower.includes("rainy day");
+              const isBills = goalNameLower.includes("bills") || goalNameLower.includes("essentials") || goalNameLower.includes("rent") || goalNameLower.includes("mortgage") || goalNameLower.includes("utilities");
+              const isDebt = goal.goalType === "pay-down";
+              const priorityLabel = isEmergency ? "Top Priority" : isBills ? "Important" : isDebt ? "Pay This Off" : "Nice to Have";
+              const priorityColor = isEmergency ? "text-red-600 bg-red-50" : isBills ? "text-amber-600 bg-amber-50" : isDebt ? "text-blue-600 bg-blue-50" : "text-violet-600 bg-violet-50";
+              const priorityHint = isEmergency
+                ? "Helps if life gets expensive unexpectedly."
+                : isBills
+                  ? "Keeps the important stuff covered."
+                  : isDebt
+                    ? "Paying this off saves you money on interest."
+                    : "Fun to save for — build your safety cushion first.";
+
+              return (
+                <div key={goal.id} className="aw-card !p-0 overflow-hidden hover:shadow-md transition-shadow">
+                  <div className="flex gap-4 p-4">
+                    {goal.image && (
+                      <div className="h-24 w-24 flex-shrink-0 rounded-lg bg-[var(--aw-surface-subtle)] overflow-hidden">
+                        <img src={goal.image} alt={goal.name} className="h-full w-full object-cover" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {goal.icon && <span className="text-lg">{goal.icon}</span>}
+                            <h3 className="truncate text-base font-semibold text-[var(--aw-text)]">{goal.name}</h3>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${priorityColor}`}>
+                              {priorityLabel}
+                            </span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusBg} ${statusColor}`}>
+                              {status === "completed" ? <CheckCircle2 size={12} /> : status === "at-risk" ? <AlertCircle size={12} /> : null}
+                              {statusText}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
+                            {priorityHint}
+                            {goal.targetDate ? ` • Finish by ${goal.targetDate}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => openEditGoal(goal)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[var(--aw-surface-subtle)] text-[var(--aw-text-muted)]"
+                            title="Edit goal"
+                          >
+                            <PencilLine size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openContributionModal(goal.id)}
+                            className="inline-flex h-8 items-center px-2 rounded-lg hover:bg-[var(--aw-surface-subtle)] text-xs text-[var(--aw-text-muted)]"
+                            title="Add contribution"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <div className="flex justify-between gap-2 mb-1">
+                            <span className="text-xs text-[var(--aw-text-muted)]">{fmt(goal.totalSaved)} of {fmt(goal.targetAmount)}</span>
+                            <span className="text-xs font-medium text-[var(--aw-text)]">{goal.progress}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-[var(--aw-border)]">
+                            <div
+                              className="h-full rounded-full bg-[var(--calico-primary, #FDBA74)]"
+                              style={{ width: `${goal.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-4 text-xs text-[var(--aw-text-muted)]">
+                          <span>{fmt(goal.remaining)} left to go</span>
+                          <span>{fmt((goal.recurringContribution ?? 0) + goal.transactionContributionCurrentMonth)}/month</span>
+                          <span>Done by {goal.estimatedCompletion}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {filteredGoals.length > 0 && (
+          <div className="mt-12 aw-card !p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-[var(--aw-text)]">
+                  {activeTab === "save-up" ? "Keep going!" : "You're making progress"}
+                </h3>
+                <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
+                  {activeTab === "save-up"
+                    ? "Add more goals as you go. Calico suggests starting with safety, then fun."
+                    : "Add everything you owe so Calico can help you plan the best payoff order."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => openCreateGoal()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+              >
+                <Plus size={16} />
+                Add another goal
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <ManualEntryModal
         open={goalModalOpen}
         onClose={() => setGoalModalOpen(false)}
-        title={editingGoalId ? "Edit goal" : "Add goal"}
-        description="Create goals manually from day one, with optional recurring contributions and linked accounts."
+        title={editingGoalId ? "Edit goal" : "New money goal"}
+        description={
+          modalStep === "select"
+            ? "What kind of goal is this?"
+            : modalStep === "targets"
+              ? "How much do you need?"
+              : modalStep === "contribution"
+                ? "How will you save for it?"
+                : "Connect it to an account (optional)"
+        }
       >
         <div className="space-y-4">
-          <label className="space-y-1">
-            <span className="text-xs text-[var(--aw-text-muted)]">Goal name</span>
-            <input
-              value={goalName}
-              onChange={(event) => setGoalName(event.target.value)}
-              className="aw-input h-10 text-sm"
-              placeholder="Emergency fund"
-            />
-          </label>
+          {modalStep === "select" && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setGoalType("save-up");
+                  setModalStep("targets");
+                }}
+                className="aw-card aw-card-interactive !p-4 w-full text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold text-[var(--aw-text)]">Save up for something</h4>
+                    <p className="mt-1 text-sm text-[var(--aw-text-muted)]">Emergency fund, vacation, new car, anything</p>
+                  </div>
+                  <ChevronRight size={20} className="text-[var(--aw-text-muted)]" />
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGoalType("pay-down");
+                  setModalStep("targets");
+                }}
+                className="aw-card aw-card-interactive !p-4 w-full text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold text-[var(--aw-text)]">Pay off something you owe</h4>
+                    <p className="mt-1 text-sm text-[var(--aw-text-muted)]">Credit card, student loan, car payment, etc.</p>
+                  </div>
+                  <ChevronRight size={20} className="text-[var(--aw-text-muted)]" />
+                </div>
+              </button>
+            </div>
+          )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Target amount</span>
-              <input
-                value={goalTargetAmount}
-                onChange={(event) => setGoalTargetAmount(event.target.value)}
-                className="aw-input h-10 text-sm"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Current saved amount</span>
-              <input
-                value={goalCurrentSavedAmount}
-                onChange={(event) => setGoalCurrentSavedAmount(event.target.value)}
-                className="aw-input h-10 text-sm"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-              />
-            </label>
-          </div>
+          {modalStep === "targets" && (
+            <div className="space-y-4">
+              <label className="space-y-1">
+                <span className="text-xs text-[var(--aw-text-muted)]">Goal name</span>
+                <input
+                  value={goalName}
+                  onChange={(event) => setGoalName(event.target.value)}
+                  className="aw-input h-10 text-sm"
+                  placeholder={goalType === "save-up" ? "Emergency fund" : "Credit card debt"}
+                />
+              </label>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Target date (optional)</span>
-              <input
-                value={goalTargetDate}
-                onChange={(event) => setGoalTargetDate(event.target.value)}
-                className="aw-input h-10 text-sm"
-                type="date"
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Linked account (optional)</span>
-              <input
-                value={goalLinkedAccount}
-                onChange={(event) => setGoalLinkedAccount(event.target.value)}
-                className="aw-input h-10 text-sm"
-                placeholder="Savings account"
-              />
-            </label>
-          </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs text-[var(--aw-text-muted)]">Target amount</span>
+                  <input
+                    value={goalTargetAmount}
+                    onChange={(event) => setGoalTargetAmount(event.target.value)}
+                    className="aw-input h-10 text-sm"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-[var(--aw-text-muted)]">Current amount</span>
+                  <input
+                    value={goalCurrentSavedAmount}
+                    onChange={(event) => setGoalCurrentSavedAmount(event.target.value)}
+                    className="aw-input h-10 text-sm"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </label>
+              </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Recurring contribution (optional)</span>
-              <input
-                value={goalRecurringContribution}
-                onChange={(event) => setGoalRecurringContribution(event.target.value)}
-                className="aw-input h-10 text-sm"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Emoji or icon (optional)</span>
-              <input
-                value={goalIcon}
-                onChange={(event) => setGoalIcon(event.target.value)}
-                className="aw-input h-10 text-sm"
-                placeholder="🏡"
-              />
-            </label>
-          </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-xs text-[var(--aw-text-muted)]">Target date (optional)</span>
+                  <input
+                    value={goalTargetDate}
+                    onChange={(event) => setGoalTargetDate(event.target.value)}
+                    className="aw-input h-10 text-sm"
+                    type="date"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs text-[var(--aw-text-muted)]">Icon (optional)</span>
+                  <input
+                    value={goalIcon}
+                    onChange={(event) => setGoalIcon(event.target.value)}
+                    className="aw-input h-10 text-sm"
+                    placeholder="🏡"
+                  />
+                </label>
+              </div>
 
-          <label className="space-y-1">
-            <span className="text-xs text-[var(--aw-text-muted)]">Notes (optional)</span>
-            <textarea
-              value={goalNotes}
-              onChange={(event) => setGoalNotes(event.target.value)}
-              className="aw-input min-h-[92px] py-2 text-sm"
-              placeholder="Optional notes"
-            />
-          </label>
+              <label className="space-y-1">
+                <span className="text-xs text-[var(--aw-text-muted)]">Photo URL (optional)</span>
+                <input
+                  value={goalImage}
+                  onChange={(event) => setGoalImage(event.target.value)}
+                  className="aw-input h-10 text-sm"
+                  placeholder="https://example.com/image.jpg"
+                />
+              </label>
+            </div>
+          )}
+
+          {modalStep === "contribution" && (
+            <div className="space-y-4">
+              <label className="space-y-1">
+                <span className="text-xs text-[var(--aw-text-muted)]">Monthly contribution (optional)</span>
+                <input
+                  value={goalRecurringContribution}
+                  onChange={(event) => setGoalRecurringContribution(event.target.value)}
+                  className="aw-input h-10 text-sm"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                />
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-xs text-[var(--aw-text-muted)]">Notes (optional)</span>
+                <textarea
+                  value={goalNotes}
+                  onChange={(event) => setGoalNotes(event.target.value)}
+                  className="aw-input min-h-[92px] py-2 text-sm"
+                  placeholder="Optional notes about this goal"
+                />
+              </label>
+            </div>
+          )}
+
+          {modalStep === "budget" && (
+            <div className="space-y-4">
+              <label className="space-y-1">
+                <span className="text-xs text-[var(--aw-text-muted)]">Linked account (optional)</span>
+                <input
+                  value={goalLinkedAccount}
+                  onChange={(event) => setGoalLinkedAccount(event.target.value)}
+                  className="aw-input h-10 text-sm"
+                  placeholder="Savings account, credit card, etc."
+                />
+              </label>
+
+              <div className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-3">
+                <p className="text-sm text-[var(--aw-text-muted)]">
+                  You can link this goal to a budget or account later for automatic tracking.
+                </p>
+              </div>
+            </div>
+          )}
 
           {goalError ? (
             <p className="rounded-lg border border-[var(--aw-danger)]/25 bg-[var(--aw-danger)]/10 px-3 py-2 text-xs text-[var(--aw-danger)]">
@@ -706,32 +832,62 @@ export function GoalsView() {
           ) : null}
 
           <div className="flex items-center justify-between gap-2">
-            {editingGoalId ? (
+            {editingGoalId && modalStep === "select" ? (
               <button
                 type="button"
                 onClick={deleteGoal}
-                className="aw-button-danger inline-flex h-10 items-center gap-1.5 px-4 text-sm"
+                className="inline-flex h-10 items-center gap-1.5 px-4 text-sm text-[var(--aw-danger)]"
               >
                 <Trash2 size={14} />
                 Delete goal
               </button>
-            ) : <span />}
+            ) : (
+              <span />
+            )}
 
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setGoalModalOpen(false)}
-                className="aw-button-secondary h-10 px-4 text-sm"
+                onClick={() => {
+                  if (modalStep === "select") {
+                    setGoalModalOpen(false);
+                  } else if (modalStep === "targets") {
+                    setModalStep("select");
+                  } else if (modalStep === "contribution") {
+                    setModalStep("targets");
+                  } else {
+                    setModalStep("contribution");
+                  }
+                }}
+                className="h-10 px-4 text-sm text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
               >
-                Cancel
+                {modalStep === "select" ? "Cancel" : "Back"}
               </button>
-              <button
-                type="button"
-                onClick={saveGoal}
-                className="aw-button-primary h-10 px-4 text-sm"
-              >
-                {editingGoalId ? "Save changes" : "Save goal"}
-              </button>
+              {modalStep !== "budget" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (modalStep === "targets") {
+                      setModalStep("contribution");
+                    } else if (modalStep === "contribution") {
+                      setModalStep("budget");
+                    }
+                  }}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+                >
+                  Next
+                  <ChevronRight size={14} />
+                </button>
+              )}
+              {modalStep === "budget" && (
+                <button
+                  type="button"
+                  onClick={saveGoal}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+                >
+                  {editingGoalId ? "Save changes" : "Create goal"}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -740,12 +896,12 @@ export function GoalsView() {
       <ManualEntryModal
         open={Boolean(contributionModalGoalId)}
         onClose={() => setContributionModalGoalId(null)}
-        title="Add manual contribution"
-        description="Record a manual contribution toward this goal."
+        title="Add money to this goal"
+        description="How much did you put toward this goal?"
       >
         <div className="space-y-4">
           <label className="space-y-1">
-            <span className="text-xs text-[var(--aw-text-muted)]">Contribution amount</span>
+            <span className="text-xs text-[var(--aw-text-muted)]">Amount</span>
             <input
               value={contributionAmountInput}
               onChange={(event) => setContributionAmountInput(event.target.value)}
@@ -776,7 +932,7 @@ export function GoalsView() {
               onClick={saveManualContribution}
               className="aw-button-primary h-10 px-4 text-sm"
             >
-              Add contribution
+              Add it
             </button>
           </div>
         </div>

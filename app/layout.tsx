@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { DM_Sans } from 'next/font/google';
+import { ThemeProvider } from '@/components/ThemeProvider';
 import './globals.css';
 
 const bodyFont = DM_Sans({
@@ -17,9 +18,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${bodyFont.variable} aw-body antialiased min-h-screen overflow-x-hidden`}>
-        {children}
+    <html lang="en" data-theme="system" suppressHydrationWarning>
+      <body className={`${bodyFont.variable} aw-body antialiased min-h-screen overflow-x-hidden bg-[var(--aw-bg)] text-[var(--aw-text)]`}>
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -18,16 +18,16 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
 
   return (
     <WidgetContainer
-      title="Recurring"
-      subtitle="Upcoming recurring transactions and subscriptions."
+      title="Repeating Payments"
+      subtitle="Bills and subscriptions coming up soon."
       dragHandleProps={props.dragHandleProps}
     >
       {recurring.length === 0 ? (
         <div style={dashboardDashedStyle} className="flex h-full flex-col justify-between rounded-[20px] p-4">
           <div>
-            <p className="text-lg font-semibold text-[var(--calico-text)]">No upcoming transactions</p>
+            <p className="text-lg font-semibold text-[var(--calico-text)]">No repeating payments yet</p>
             <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
-              Connect an account for auto-detected recurring items, or add recurring items manually right away.
+              Connect an account and Calico will find your bills and subscriptions, or add them yourself.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -43,7 +43,7 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
               style={dashboardPrimaryButtonStyle}
               className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-primary-hover)]"
             >
-              Add recurring item
+              Add a payment
             </Link>
           </div>
         </div>
@@ -61,7 +61,7 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
             </div>
           ))}
           <Link href="/recurring" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
-            Manage recurring items
+            See all repeating payments
             <ArrowRight size={15} />
           </Link>
         </div>

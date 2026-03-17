@@ -11,6 +11,7 @@ const plans: {
   price: string;
   period: string;
   desc: string;
+  promise: string;
   badge?: string;
   icon: typeof Sparkles;
   iconColor: string;
@@ -22,15 +23,17 @@ const plans: {
     name: "Starter",
     price: "$8.99",
     period: "/month",
-    desc: "14-day free trial. The essentials to understand your money.",
+    desc: "14-day free trial included.",
+    promise: "Help me see what's going on.",
     icon: Sparkles,
     iconColor: "#FDBA74",
     features: [
       "Connect up to 3 accounts",
-      "See all transactions",
-      "Basic spending insights",
-      "Recurring bill detection",
-      "Monthly summaries",
+      "See all your money moves",
+      "Simple spending plan",
+      "Find repeating payments",
+      "Weekly & monthly recaps",
+      "Ask Calico basic questions",
     ],
     highlight: false,
   },
@@ -40,35 +43,38 @@ const plans: {
     price: "$29.99",
     period: "/month",
     badge: "Most Popular",
-    desc: "Smarter money management with deeper intelligence.",
+    desc: "Calico gets smarter about your money.",
+    promise: "Help me understand what to do next.",
     icon: Zap,
     iconColor: "#FDBA74",
     features: [
       "Everything in Starter",
       "Unlimited accounts",
-      "Smart savings suggestions",
-      "Spending trend analysis",
-      "Cash flow forecasting",
-      "Custom categories",
+      "Smarter money tips & trends",
+      '"Can I afford this?" feature',
+      "What's Coming predictions",
+      "Custom spending groups",
       "Priority support",
     ],
     highlight: true,
   },
   {
     id: "autonomous",
-    name: "Autonomous",
+    name: "Fully Autonomous",
     price: "$89.99",
     period: "/month",
-    desc: "Full AI-powered automation. Calico does it for you.",
+    desc: "Calico takes action for you.",
+    promise: "Help me handle it.",
     icon: Crown,
     iconColor: "#FDBA74",
     features: [
       "Everything in Pro",
-      "AI-powered automation",
-      "Autonomous bill negotiation",
-      "Advanced cash flow forecasting",
-      "Financial memory",
-      "Custom integrations",
+      "Calico moves money for you",
+      "Auto-fund your goals",
+      "Bill negotiation help",
+      "Subscription cancel workflows",
+      "Smart debt payoff plans",
+      "Action center & automations",
       "API access",
     ],
     highlight: false,
@@ -137,7 +143,7 @@ export function PlanSelection() {
         className="mb-3 text-center"
         style={{ fontSize: "clamp(1.6rem, 4vw, 2.2rem)", fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.15 }}
       >
-        Choose your plan
+        Pick how Calico helps you
       </motion.h1>
       <motion.p
         initial={{ opacity: 0 }}
@@ -146,7 +152,7 @@ export function PlanSelection() {
         className="mb-10 max-w-md text-center"
         style={{ fontSize: 15, color: "#3A332E", lineHeight: 1.65 }}
       >
-        Pick the plan that fits your financial life. You can upgrade or change anytime.
+        Start simple or go all-in. You can change your plan anytime.
       </motion.p>
 
       {error && (
@@ -213,8 +219,11 @@ export function PlanSelection() {
                 </span>
                 <span style={{ fontSize: 14, color: "#6B5B4B" }}>{plan.period}</span>
               </div>
-              <p className="mb-5" style={{ fontSize: 13, color: "#6B5B4B", lineHeight: 1.5 }}>
+              <p className="mb-2" style={{ fontSize: 13, color: "#6B5B4B", lineHeight: 1.5 }}>
                 {plan.desc}
+              </p>
+              <p className="mb-5" style={{ fontSize: 12, fontStyle: "italic", color: "#9B8B7B", lineHeight: 1.5 }}>
+                &ldquo;{plan.promise}&rdquo;
               </p>
 
               <ul className="flex-1" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>

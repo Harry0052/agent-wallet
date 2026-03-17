@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from "react";
 import Link from "next/link";
-import { CheckCircle2, Circle } from "lucide-react";
+import { CheckCircle2, Circle, X } from "lucide-react";
 import { WidgetContainer } from "@/components/dashboard/WidgetContainer";
 import { buildBudgetCategories, getCategoryCompletion } from "@/components/dashboard/dashboardData";
 import { dashboardInsetStyle } from "@/components/dashboard/dashboardStyles";
@@ -9,11 +9,11 @@ import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes
 export function GettingStartedWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
   const budgetCategories = buildBudgetCategories(props.wallet, props.dataSource.transactions, props.useLiveData && props.accountsConnected);
   const steps = [
-    { label: "Add account manually", complete: props.dataSource.accounts.length > 0, href: "/accounts" },
-    { label: "Invite partner", complete: false, href: "/settings" },
-    { label: "Customize categories", complete: getCategoryCompletion(props.dataSource.transactions), href: "/transactions" },
-    { label: "Create a goal", complete: false, href: "/goals" },
-    { label: "Create a budget", complete: budgetCategories.length > 0, href: "/budgets" },
+    { label: "Connect an account", complete: props.dataSource.accounts.length > 0, href: "/accounts" },
+    { label: "Invite someone you share money with", complete: false, href: "/settings" },
+    { label: "Set up your spending groups", complete: getCategoryCompletion(props.dataSource.transactions), href: "/transactions" },
+    { label: "Set your first money goal", complete: false, href: "/goals" },
+    { label: "Create a spending plan", complete: budgetCategories.length > 0, href: "/budgets" },
   ];
   const completed = steps.filter((step) => step.complete).length;
   const progress = Math.round((completed / steps.length) * 100);
@@ -21,20 +21,28 @@ export function GettingStartedWidget(props: DashboardWidgetProps & { dragHandleP
   return (
     <WidgetContainer
       title="Getting Started"
-      subtitle="A lightweight checklist for turning the dashboard into a live command center."
+      subtitle="A few quick steps to get Calico working for you."
       dragHandleProps={props.dragHandleProps}
     >
-      <div className="space-y-4">
-        <div>
-          <div className="h-2 rounded-full bg-[var(--calico-border)]">
+      <div className="space-y-5">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--calico-text-muted)]">
+              Setup Progress
+            </p>
+            <span className="text-sm font-semibold text-[var(--calico-text)]">
+              {completed}/{steps.length}
+            </span>
+          </div>
+          <div className="h-3 rounded-full bg-[var(--calico-border)]">
             <div
-              className="h-full rounded-full bg-[var(--calico-primary)]"
+              className="h-full rounded-full bg-gradient-to-r from-[var(--calico-primary)] to-[var(--calico-success)] transition-all duration-500"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="mt-3 text-sm text-[var(--calico-text-muted)]">{completed} of {steps.length} complete</p>
         </div>
-        <div className="space-y-2">
+
+        <div className="space-y-3">
           {steps.map((step) => {
             const Icon = step.complete ? CheckCircle2 : Circle;
             return (
@@ -42,13 +50,31 @@ export function GettingStartedWidget(props: DashboardWidgetProps & { dragHandleP
                 key={step.label}
                 href={step.href}
                 style={dashboardInsetStyle}
-                className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-[var(--calico-text)] transition hover:bg-[var(--calico-card)]"
+                className="group flex items-center gap-3 rounded-[16px] px-4 py-3 text-sm transition-all hover:bg-[var(--calico-card)] hover:shadow-sm"
               >
-                <Icon size={16} className={step.complete ? "text-[var(--calico-success)]" : "text-[var(--calico-text-muted)]"} />
-                <span>{step.label}</span>
+                <Icon
+                  size={20}
+                  className={step.complete
+                    ? "shrink-0 text-[var(--calico-success)]"
+                    : "shrink-0 text-[var(--calico-text-muted)] group-hover:text-[var(--calico-primary)]"
+                  }
+                />
+                <span className={step.complete ? "text-[var(--calico-text-muted)] line-through" : "text-[var(--calico-text)]"}>
+                  {step.label}
+                </span>
               </Link>
             );
           })}
+        </div>
+
+        <div className="border-t border-[var(--calico-border)] pt-3">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--calico-text-muted)] transition hover:text-[var(--calico-primary)]"
+          >
+            <X size={14} />
+            Hide this widget
+          </button>
         </div>
       </div>
     </WidgetContainer>

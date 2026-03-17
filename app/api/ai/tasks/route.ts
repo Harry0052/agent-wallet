@@ -7,8 +7,7 @@ import {
   listSurfacedTasks,
 } from '@/lib/server/engines/taskEngine';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
-import { enforceApiAuth } from '@/security/authGuard';
-import { enforceRateLimit } from '@/security/rateLimiter';
+import { enforceEntitlement } from '@/security/entitlementGuard';
 
 export const runtime = 'nodejs';
 
@@ -16,14 +15,14 @@ const MAX_SURFACED = 5;
 const MAX_CRITICAL = 1;
 
 export async function GET(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'ai_tasks' });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'ai_automation',
+    rateLimitScope: 'ai_tasks',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
-    const userId = auth.auth.walletUserId;
+    const userId = guard.ctx.auth.walletUserId;
     const allTasks = await listSurfacedTasks(userId);
 
     let criticalCount = 0;
@@ -58,14 +57,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'ai_tasks_generate' });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'ai_automation',
+    rateLimitScope: 'ai_tasks_generate',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
-    const userId = auth.auth.walletUserId;
+    const userId = guard.ctx.auth.walletUserId;
     const result = await generateTasks(userId);
 
     logServerEvent('info', 'ai.tasks.generate.success', {
@@ -98,14 +97,14 @@ const PatchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'ai_tasks_update' });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'ai_automation',
+    rateLimitScope: 'ai_tasks_update',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
-    const userId = auth.auth.walletUserId;
+    const userId = guard.ctx.auth.walletUserId;
     const body = PatchSchema.parse(await req.json());
 
     await updateTaskStatus({

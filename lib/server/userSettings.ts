@@ -43,6 +43,20 @@ function toModel(row: UserSettingsRow): AppUserSettings {
 }
 
 export async function ensureUserSettingsRow(appUserId: string): Promise<void> {
+  // Verify the parent app_users row exists before inserting to prevent FK violation.
+  // This is a safety net for cases where downstream code passes the wrong ID type
+  // (e.g., walletUserId instead of appUserId).
+  const parentCheck = await query<{ id: string }>(
+    `SELECT id FROM app_users WHERE id = $1 LIMIT 1`,
+    [appUserId],
+  );
+  if (parentCheck.rows.length === 0) {
+    // The parent row doesn't exist — this ID is not an app_users.id.
+    // Silently skip to prevent FK violation. The caller is likely using a
+    // walletUserId or other non-app-user identifier.
+    return;
+  }
+
   await query(
     `
       INSERT INTO app_user_settings (

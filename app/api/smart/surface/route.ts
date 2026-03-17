@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { enforceApiAuth } from '@/security/authGuard';
-import { enforceRateLimit } from '@/security/rateLimiter';
+import { enforceEntitlement } from '@/security/entitlementGuard';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 import { routeSmartSurfaceIntent } from '@/lib/server/smartSurface/intentRouter';
 import { assembleSmartSurfaceContext } from '@/lib/server/smartSurface/contextAssembly';
@@ -15,16 +14,16 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'smart_surface' });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'ai_research',
+    rateLimitScope: 'smart_surface',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
     const body = BodySchema.parse(await req.json());
     const intent = routeSmartSurfaceIntent(body.prompt);
-    const context = await assembleSmartSurfaceContext(auth.auth.walletUserId);
+    const context = await assembleSmartSurfaceContext(guard.ctx.auth.walletUserId);
     const result = composeSmartSurfaceResult({ intent, context });
 
     if (isInternalActionsRuntimeEnabled()) {

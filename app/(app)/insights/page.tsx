@@ -1,7 +1,17 @@
 "use client";
 
 import { InsightsView } from "@/components/insights/InsightsView";
+import { EntitlementGatedPage } from "@/components/plans/EntitlementGatedPage";
 
 export default function InsightsPage() {
-  return <InsightsView />;
+  return (
+    <EntitlementGatedPage
+      requiredFeature="advanced_insights"
+      featureLabel="What Calico Noticed"
+      featureDescription="Get smarter tips and deeper explanations about your spending patterns and money habits."
+      requiredPlan="pro"
+    >
+      <InsightsView />
+    </EntitlementGatedPage>
+  );
 }

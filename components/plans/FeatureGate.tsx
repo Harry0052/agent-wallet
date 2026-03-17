@@ -13,7 +13,7 @@ interface FeatureGateProps {
 const PLAN_NAMES: Record<PlanId, string> = {
   starter: "Starter",
   pro: "Pro",
-  autonomous: "Autonomous",
+  autonomous: "Fully Autonomous",
 };
 
 export function FeatureGate({ children, hasAccess, featureLabel, requiredPlan }: FeatureGateProps) {
@@ -41,7 +41,7 @@ export function FeatureGate({ children, hasAccess, featureLabel, requiredPlan }:
           {featureLabel}
         </p>
         <p className="mt-1" style={{ fontSize: 13, color: "#6B5B4B", lineHeight: 1.5 }}>
-          Upgrade to {PLAN_NAMES[requiredPlan]} to unlock this feature.
+          This is part of the {PLAN_NAMES[requiredPlan]} plan.
         </p>
         <button
           type="button"

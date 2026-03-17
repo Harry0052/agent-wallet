@@ -496,31 +496,15 @@ export function CashFlowView() {
   return (
     <div className="aw-workspace-page">
       <WorkspaceHeader
-        title="Cash Flow"
+        title="Money In & Out"
         actions={(
-          <>
-            <button
-              type="button"
-              onClick={() => openManualEntry("income")}
-              className="aw-button-secondary inline-flex h-[38px] items-center gap-1.5 rounded-xl px-4 text-sm"
-            >
-              Add income manually
-            </button>
-            <button
-              type="button"
-              onClick={() => openManualEntry("expense")}
-              className="aw-button-secondary inline-flex h-[38px] items-center gap-1.5 rounded-xl px-4 text-sm"
-            >
-              Add expense manually
-            </button>
-            <button
-              type="button"
-              onClick={() => openManualEntry()}
-              className="aw-button-primary inline-flex h-[38px] items-center gap-1.5 rounded-xl px-4 text-sm"
-            >
-              Add transaction manually
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => openManualEntry()}
+            className="aw-button-primary inline-flex h-[38px] items-center gap-1.5 rounded-xl px-4 text-sm"
+          >
+            Add Transaction
+          </button>
         )}
       />
 

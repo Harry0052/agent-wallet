@@ -12,7 +12,7 @@ export function InvestmentsWidget(props: DashboardWidgetProps & { dragHandleProp
   return (
     <WidgetContainer
       title="Investments"
-      subtitle="Ready for holdings, positions, and long-term tracking."
+      subtitle="Your investments and how they're doing."
       dragHandleProps={props.dragHandleProps}
     >
       {holdings.length === 0 ? (
@@ -21,9 +21,9 @@ export function InvestmentsWidget(props: DashboardWidgetProps & { dragHandleProp
             <div className="inline-flex h-11 w-11 items-center justify-center rounded-[20px] bg-[rgba(253,230,138,0.3)] text-[var(--calico-primary)]">
               <BarChart3 size={20} />
             </div>
-            <p className="mt-4 text-lg font-semibold text-[var(--calico-text)]">No investment holdings</p>
+            <p className="mt-4 text-lg font-semibold text-[var(--calico-text)]">No investments yet</p>
             <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
-              Connect an investment account when you are ready, or add holdings manually now.
+              Connect an investment account or add what you own by hand.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">

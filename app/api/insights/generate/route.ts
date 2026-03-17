@@ -2,20 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAuthError } from '@/lib/server/auth';
 import { generateInsights } from '@/lib/server/engines/insightEngine';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
-import { enforceApiAuth } from '@/security/authGuard';
-import { enforceRateLimit } from '@/security/rateLimiter';
+import { enforceEntitlement } from '@/security/entitlementGuard';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
-  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'insights_generate' });
-  if (rateLimited) return rateLimited;
-
-  const auth = await enforceApiAuth(req);
-  if (!auth.ok) return auth.response;
+  const guard = await enforceEntitlement(req, {
+    requiredFeature: 'advanced_insights',
+    rateLimitScope: 'insights_generate',
+  });
+  if (!guard.ok) return guard.response;
 
   try {
-    const userId = auth.auth.walletUserId;
+    const userId = guard.ctx.auth.walletUserId;
     const result = await generateInsights(userId);
 
     logServerEvent('info', 'insights.generate.success', {
