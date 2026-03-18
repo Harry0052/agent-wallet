@@ -14,8 +14,6 @@ import {
   Menu,
   X,
   Plus,
-  Moon,
-  Sun,
   Monitor,
   Users,
   Settings,
@@ -306,7 +304,6 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
 }
 
 function DisplaySection() {
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [currency, setCurrency] = useState("USD");
   const [dateFormat, setDateFormat] = useState("MM/DD/YYYY");
   const [numberFormat, setNumberFormat] = useState("1,000.00");
@@ -323,34 +320,6 @@ function DisplaySection() {
       </div>
 
       <div className="space-y-4">
-        {/* Theme */}
-        <div>
-          <label className="text-sm font-medium text-[var(--aw-text)]">
-            Theme
-          </label>
-          <div className="mt-2 flex gap-2">
-            {[
-              { value: "light" as const, label: "Light", icon: Sun },
-              { value: "dark" as const, label: "Dark", icon: Moon },
-              { value: "system" as const, label: "System", icon: Monitor },
-            ].map(({ value, label, icon: Icon }) => (
-              <button
-                key={value}
-                onClick={() => setTheme(value)}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  theme === value
-                    ? "bg-[var(--calico-primary)] text-[var(--calico-text)]"
-                    : "border border-[var(--aw-border)] text-[var(--aw-text)] hover:bg-[var(--aw-surface)]"
-                }`}
-                type="button"
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Currency */}
         <div>
           <label className="text-sm font-medium text-[var(--aw-text)]">

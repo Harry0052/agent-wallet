@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" data-theme="system" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={`${bodyFont.variable} aw-body antialiased min-h-screen overflow-x-hidden bg-[var(--aw-bg)] text-[var(--aw-text)]`}>
         <ThemeProvider>
           {children}
