@@ -117,16 +117,16 @@ function FlowVisualization(props: { income: number; expenses: number; net: numbe
     : "";
 
   const nodes: Array<{ key: string; label: string; value: string; color: string; x: number; y: number; height: number }> = [
-    { key: "income", label: "Income", value: fmt(props.income), color: "#86EFAC", x: 40, y: incomeY, height: incomeH },
+    { key: "income", label: "Income", value: fmt(props.income), color: "var(--aw-chart-positive-fill)", x: 40, y: incomeY, height: incomeH },
     { key: "center", label: "Cash flow", value: fmt(props.net), color: "var(--aw-chart-primary)", x: 438, y: centerY, height: centerH },
-    { key: "expenses", label: "Expenses", value: fmt(props.expenses), color: "#FCA5A5", x: 840, y: expenseY, height: expenseH },
+    { key: "expenses", label: "Expenses", value: fmt(props.expenses), color: "var(--aw-chart-negative-fill)", x: 840, y: expenseY, height: expenseH },
   ];
 
   if (savedH > 0) {
-    nodes.push({ key: "saved", label: "Saved", value: fmt(saved), color: "#86EFAC", x: 840, y: savedY, height: savedH });
+    nodes.push({ key: "saved", label: "Saved", value: fmt(saved), color: "var(--aw-chart-positive-fill)", x: 840, y: savedY, height: savedH });
   }
   if (overspentH > 0) {
-    nodes.push({ key: "overspent", label: "Overspent", value: fmt(overspent), color: "#FCA5A5", x: 840, y: savedY, height: overspentH });
+    nodes.push({ key: "overspent", label: "Overspent", value: fmt(overspent), color: "var(--aw-chart-negative-fill)", x: 840, y: savedY, height: overspentH });
   }
 
   return (
@@ -146,16 +146,16 @@ function FlowVisualization(props: { income: number; expenses: number; net: numbe
         <svg viewBox={`0 0 940 ${viewH}`} className="w-full" style={{ minHeight: 200, maxHeight: 360 }}>
           <defs>
             <linearGradient id="rpt-income-flow" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="rgba(134,239,172,0.3)" />
+              <stop offset="0%" stopColor="rgba(187,247,208,0.3)" />
               <stop offset="100%" stopColor="rgba(253,186,116,0.2)" />
             </linearGradient>
             <linearGradient id="rpt-expense-flow" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="rgba(253,186,116,0.2)" />
-              <stop offset="100%" stopColor="rgba(252,165,165,0.3)" />
+              <stop offset="100%" stopColor="rgba(254,205,211,0.3)" />
             </linearGradient>
             <linearGradient id="rpt-saved-flow" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="rgba(253,186,116,0.2)" />
-              <stop offset="100%" stopColor="rgba(134,239,172,0.25)" />
+              <stop offset="100%" stopColor="rgba(187,247,208,0.25)" />
             </linearGradient>
           </defs>
 
@@ -291,7 +291,7 @@ export function ReportsView() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="aw-card aw-card-compact">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Income</p>
-          <p className="aw-number mt-3 text-2xl text-[#16A34A]">{fmt(totals.income)}</p>
+          <p className="aw-number mt-3 text-2xl text-[var(--aw-success)]">{fmt(totals.income)}</p>
         </div>
         <div className="aw-card aw-card-compact">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Expenses</p>
@@ -333,7 +333,7 @@ export function ReportsView() {
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-[var(--aw-border)]">
                   <div
-                    className="h-full rounded-full bg-[#FCA5A5]"
+                    className="h-full rounded-full bg-[var(--aw-chart-negative-fill)]"
                     style={{ width: `${Math.max(3, cat.percent)}%` }}
                   />
                 </div>

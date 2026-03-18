@@ -173,7 +173,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                 className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl"
                 style={{ background: "rgba(22, 163, 74, 0.12)" }}
               >
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--aw-success, #16A34A)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </motion.div>

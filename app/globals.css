@@ -44,6 +44,8 @@
   --aw-chart-positive: #16A34A;
   --aw-chart-negative: #DC2626;
   --aw-chart-grid: #F2DECC;
+  --aw-chart-positive-fill: #BBF7D0;
+  --aw-chart-negative-fill: #FECDD3;
 }
 
 /* ── Dark mode via [data-theme="dark"] on <html> ── */

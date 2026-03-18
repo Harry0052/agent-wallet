@@ -57,8 +57,8 @@ function allocationColor(index: number): string {
     "var(--aw-chart-secondary)",
     "var(--aw-chart-positive)",
     "var(--aw-text-muted)",
-    "#86EFAC",
-    "#FCA5A5",
+    "var(--aw-chart-positive-fill)",
+    "var(--aw-chart-negative-fill)",
   ];
   return palette[index % palette.length];
 }
@@ -288,7 +288,7 @@ export function InvestmentsView() {
         </div>
         <div className="aw-card aw-card-compact">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Gain / Loss</p>
-          <p className={`aw-number mt-3 text-2xl ${totals.gainLoss >= 0 ? "text-[#16A34A]" : "text-[var(--aw-danger)]"}`}>
+          <p className={`aw-number mt-3 text-2xl ${totals.gainLoss >= 0 ? "text-[var(--aw-success)]" : "text-[var(--aw-danger)]"}`}>
             {totals.gainLoss >= 0 ? "+" : ""}{fmt(totals.gainLoss)}
           </p>
           <p className="mt-1 text-xs text-[var(--aw-text-muted)]">

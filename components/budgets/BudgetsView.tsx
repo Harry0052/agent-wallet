@@ -165,9 +165,9 @@ function BudgetRow(props: {
   const isIncome = props.row.group === "income";
   const overBudget = !isIncome && props.row.remaining < 0;
   const barColor = isIncome
-    ? "bg-[#86EFAC]"
+    ? "bg-[var(--aw-chart-positive-fill)]"
     : overBudget
-      ? "bg-[#FCA5A5]"
+      ? "bg-[var(--aw-chart-negative-fill)]"
       : "bg-[var(--aw-primary)]";
 
   return (
@@ -624,7 +624,7 @@ export function BudgetsView() {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[var(--aw-text-muted)]">Income received</span>
-                <span className="aw-number text-[#16A34A]">{fmt(summary.incomeActual)}</span>
+                <span className="aw-number text-[var(--aw-success)]">{fmt(summary.incomeActual)}</span>
               </div>
               <div className="my-2 border-t border-[var(--aw-border)]" />
               <div className="flex items-center justify-between gap-3">

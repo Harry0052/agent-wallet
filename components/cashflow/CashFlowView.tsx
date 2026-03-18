@@ -527,11 +527,11 @@ export function CashFlowView() {
           <>
             <div className="mb-3 flex items-center gap-5">
               <div className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#86EFAC" }} />
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aw-chart-positive-fill)" }} />
                 <span className="text-xs text-[var(--aw-text-muted)]">Income</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#FCA5A5" }} />
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aw-chart-negative-fill)" }} />
                 <span className="text-xs text-[var(--aw-text-muted)]">Expenses</span>
               </div>
             </div>
@@ -552,8 +552,8 @@ export function CashFlowView() {
                       boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
                     }}
                   />
-                  <Bar dataKey="income" fill="#86EFAC" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expense" fill="#FCA5A5" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="income" fill="var(--aw-chart-positive-fill)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expense" fill="var(--aw-chart-negative-fill)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
