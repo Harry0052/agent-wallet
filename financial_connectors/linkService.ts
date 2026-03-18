@@ -76,10 +76,14 @@ export async function createUserLinkToken(userId: string): Promise<{
 }> {
   assertNoAiFinancialConnectorAccess("/financial_connectors/linkService.ts");
   const plaid = getPlaidClient();
+  const webhookUrl = process.env.PLAID_WEBHOOK_URL?.trim() || undefined;
+  const redirectUri = process.env.PLAID_REDIRECT_URI?.trim() || undefined;
   const created = await plaid.createLinkToken({
     userId,
     clientName: "Calico",
-    products: ["auth"],
+    products: ["auth", "transactions"],
+    webhook: webhookUrl,
+    redirectUri,
   });
 
   return {

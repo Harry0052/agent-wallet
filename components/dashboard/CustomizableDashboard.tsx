@@ -51,9 +51,10 @@ interface CustomizableDashboardProps extends DashboardWidgetProps {
 interface SortableWidgetProps {
   id: DashboardWidgetId;
   widgetProps: DashboardWidgetProps;
+  onHideWidget?: (id: DashboardWidgetId) => void;
 }
 
-function SortableWidget({ id, widgetProps }: SortableWidgetProps) {
+function SortableWidget({ id, widgetProps, onHideWidget }: SortableWidgetProps) {
   const {
     attributes,
     listeners,
@@ -69,10 +70,14 @@ function SortableWidget({ id, widgetProps }: SortableWidgetProps) {
     transition,
   };
 
+  const extraProps = id === "gettingStarted" && onHideWidget
+    ? { onHide: () => onHideWidget("gettingStarted") }
+    : {};
+
   return (
     <div ref={setNodeRef} style={style} className={cn(isDragging ? "z-30" : "")}>
       <motion.div layout className={cn(isDragging ? "scale-[1.01] opacity-90" : "opacity-100")}>
-        <Widget {...widgetProps} dragHandleProps={{ ...attributes, ...listeners }} />
+        <Widget {...widgetProps} {...extraProps} dragHandleProps={{ ...attributes, ...listeners }} />
       </motion.div>
     </div>
   );
@@ -195,7 +200,7 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
                     transition={{ delay: 0.04 * Math.min(index, 8), duration: 0.22, ease: "easeOut" }}
                     className={widgetSpanClass(widgetId)}
                   >
-                    <SortableWidget id={widgetId} widgetProps={effectiveWidgetProps} />
+                    <SortableWidget id={widgetId} widgetProps={effectiveWidgetProps} onHideWidget={handleToggleWidget} />
                   </motion.div>
                 ))}
               </div>

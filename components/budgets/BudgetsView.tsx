@@ -158,15 +158,16 @@ function toBudgetLineItem(row: StoredBudgetRow, fallbackMonth: string): BudgetLi
 function BudgetRow(props: {
   row: ComputedBudgetLineItem;
   onEdit: (row: BudgetLineItem) => void;
-  onToggleSpending: (row: BudgetLineItem) => void;
 }) {
   const progress = props.row.plannedAmount > 0
     ? Math.min(Math.round((props.row.combinedActual / props.row.plannedAmount) * 100), 100)
     : 0;
-  const barClassName = props.row.group === "income"
-    ? "bg-[var(--aw-success)]"
-    : props.row.remaining < 0
-      ? "bg-[var(--aw-danger)]"
+  const isIncome = props.row.group === "income";
+  const overBudget = !isIncome && props.row.remaining < 0;
+  const barColor = isIncome
+    ? "bg-[#86EFAC]"
+    : overBudget
+      ? "bg-[#FCA5A5]"
       : "bg-[var(--aw-primary)]";
 
   return (
@@ -176,30 +177,18 @@ function BudgetRow(props: {
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate text-sm font-semibold text-[var(--aw-text)]">{props.row.category}</p>
             {props.row.rollover ? <span className="aw-pill">Rollover</span> : null}
-            <span className="aw-pill">{props.row.group}</span>
-            {props.row.group !== "income" ? (
-              <button
-                type="button"
-                className="aw-pill transition hover:border-[var(--aw-border-strong)] hover:bg-[var(--aw-surface-subtle)]"
-                onClick={() => props.onToggleSpending(props.row)}
-                title="Manually mark spending category"
-              >
-                {props.row.isSpendingCategory ? "Spending" : "Not spending"}
-              </button>
-            ) : null}
           </div>
           <div className="mt-3 h-2 rounded-full bg-[var(--aw-border)]">
-            <div className={`h-full rounded-full ${barClassName}`} style={{ width: `${progress}%` }} />
+            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${progress}%` }} />
           </div>
-          <p className="mt-2 truncate text-xs text-[var(--aw-text-muted)]">
-            Manual actuals {fmt(props.row.manualActual)} + transactions {fmt(props.row.transactionActual)}
-            {props.row.notes ? ` • ${props.row.notes}` : ""}
-          </p>
+          {props.row.notes ? (
+            <p className="mt-2 truncate text-xs text-[var(--aw-text-muted)]">{props.row.notes}</p>
+          ) : null}
         </div>
         <span className="aw-number text-sm text-[var(--aw-text-muted)]">{fmt(props.row.plannedAmount)}</span>
         <span className="aw-number text-sm text-[var(--aw-text-muted)]">{fmt(props.row.combinedActual)}</span>
         <span
-          className={`aw-number text-sm font-semibold ${props.row.remaining < 0 ? "text-[var(--aw-danger)]" : "text-[var(--aw-text)]"}`}
+          className={`aw-number text-sm font-semibold ${overBudget ? "text-[var(--aw-danger)]" : "text-[var(--aw-text)]"}`}
         >
           {fmt(props.row.remaining)}
         </span>
@@ -222,16 +211,10 @@ function BudgetSection(props: {
   title: string;
   rows: ComputedBudgetLineItem[];
   onEdit: (row: BudgetLineItem) => void;
-  onToggleSpending: (row: BudgetLineItem) => void;
 }) {
   return (
     <section>
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <p className="text-sm font-semibold text-[var(--aw-text)]">{props.title}</p>
-        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-          Category budget rows
-        </span>
-      </div>
+      <p className="mb-4 text-sm font-semibold text-[var(--aw-text)]">{props.title}</p>
       <div className="space-y-3">
         {props.rows.length === 0 ? (
           <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-4 py-3 text-sm text-[var(--aw-text-muted)]">
@@ -239,12 +222,7 @@ function BudgetSection(props: {
           </div>
         ) : (
           props.rows.map((row) => (
-            <BudgetRow
-              key={row.id}
-              row={row}
-              onEdit={props.onEdit}
-              onToggleSpending={props.onToggleSpending}
-            />
+            <BudgetRow key={row.id} row={row} onEdit={props.onEdit} />
           ))
         )}
       </div>
@@ -488,19 +466,6 @@ export function BudgetsView() {
     setBudgetModalOpen(true);
   };
 
-  const toggleSpendingCategory = (row: BudgetLineItem) => {
-    if (row.group === "income") return;
-    setStoredRows((prev) =>
-      prev
-        .map((item) => toBudgetLineItem(item, currentMonthKey))
-        .map((item) =>
-          item.id === row.id
-            ? { ...item, isSpendingCategory: !item.isSpendingCategory }
-            : item,
-        ),
-    );
-  };
-
   const saveBudgetRow = () => {
     setManualError(null);
     const month = formMonth.trim();
@@ -576,11 +541,7 @@ export function BudgetsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title={formatMonthTitle(activeMonth)}
-        subtitle="Manual-first budgeting. Connect accounts later whenever you're ready."
-        tabs={[
-          { label: "Budget", active: true },
-          { label: "Forecast" },
-        ]}
+        subtitle="Plan your spending by category. Calico tracks what you actually spend."
         actions={(
           <>
             <ToolbarButton icon={<ChevronLeft size={14} />} onClick={() => setActiveMonth((prev) => shiftMonth(prev, -1))} />
@@ -594,34 +555,19 @@ export function BudgetsView() {
       />
 
       <div className="aw-workspace-grid" data-columns="2-1">
-        <WorkspacePanel title="Budget vs actual">
+        <WorkspacePanel title="Spending plan">
           <div className="grid grid-cols-[minmax(220px,1.4fr)_repeat(3,minmax(92px,0.6fr))_auto] gap-4 border-b border-[var(--aw-border)] px-2 pb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-            <span>Category name</span>
+            <span>Category</span>
             <span>Planned</span>
-            <span>Actual</span>
-            <span>Remaining</span>
-            <span className="text-right">Edit</span>
+            <span>Spent</span>
+            <span>Left</span>
+            <span className="text-right" />
           </div>
 
           <div className="space-y-8 pt-5">
-            <BudgetSection
-              title="Income"
-              rows={grouped.income}
-              onEdit={openEditModal}
-              onToggleSpending={toggleSpendingCategory}
-            />
-            <BudgetSection
-              title="Fixed"
-              rows={grouped.fixed}
-              onEdit={openEditModal}
-              onToggleSpending={toggleSpendingCategory}
-            />
-            <BudgetSection
-              title="Variable"
-              rows={grouped.variable}
-              onEdit={openEditModal}
-              onToggleSpending={toggleSpendingCategory}
-            />
+            <BudgetSection title="Income" rows={grouped.income} onEdit={openEditModal} />
+            <BudgetSection title="Fixed expenses" rows={grouped.fixed} onEdit={openEditModal} />
+            <BudgetSection title="Variable expenses" rows={grouped.variable} onEdit={openEditModal} />
           </div>
 
           {computedRows.length === 0 ? (
@@ -659,126 +605,44 @@ export function BudgetsView() {
           ) : null}
         </WorkspacePanel>
 
-        <WorkspacePanel title="Summary" heading={fmt(summary.remaining)} action={<span className="aw-pill">Left to budget</span>}>
-          <div className="space-y-6">
-            <div className="aw-card">
-              <div className="mb-3 flex items-center justify-between gap-3 text-sm">
-                <span className="text-[var(--aw-text-muted)]">Month totals</span>
-                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.totalPlanned)} planned</span>
-              </div>
-              <div className="h-2 rounded-full bg-[var(--aw-border)]">
-                <div
-                  className="h-full rounded-full bg-[var(--aw-primary)]"
-                  style={{
-                    width: summary.totalPlanned > 0
-                      ? `${Math.min((summary.totalActual / summary.totalPlanned) * 100, 100)}%`
-                      : "0%",
-                  }}
-                />
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.totalActual)} actual</span>
-                <span className="aw-number font-semibold text-[var(--aw-text)]">
-                  {fmt(summary.totalPlanned - summary.totalActual)} variance
-                </span>
-              </div>
+        <WorkspacePanel title="Summary">
+          <div className="space-y-5">
+            <div className="rounded-[16px] border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Left to spend</p>
+              <p className={`aw-number mt-2 text-3xl font-semibold ${summary.remaining < 0 ? "text-[var(--aw-danger)]" : "text-[var(--aw-text)]"}`}>
+                {fmt(summary.remaining)}
+              </p>
+              <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
+                {fmt(summary.incomeActual)} earned · {fmt(summary.expensesActual)} spent
+              </p>
             </div>
 
-            <div className="aw-card">
-              <div className="mb-3 flex items-center justify-between gap-3 text-sm text-[var(--aw-text-muted)]">
-                <span>Fixed</span>
-                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.fixedBudget)} planned</span>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[var(--aw-text-muted)]">Income planned</span>
+                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.incomeBudget)}</span>
               </div>
-              <div className="h-2 rounded-full bg-[var(--aw-border)]">
-                <div
-                  className="h-full rounded-full bg-[var(--aw-primary)]"
-                  style={{
-                    width:
-                      summary.fixedBudget > 0
-                        ? `${Math.min((summary.fixedActual / summary.fixedBudget) * 100, 100)}%`
-                        : "0%",
-                  }}
-                />
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[var(--aw-text-muted)]">Income received</span>
+                <span className="aw-number text-[#16A34A]">{fmt(summary.incomeActual)}</span>
               </div>
-              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.fixedActual)} actual</span>
-                <span className="aw-number font-semibold text-[var(--aw-text)]">
-                  {fmt(summary.fixedBudget - summary.fixedActual)} remaining
+              <div className="my-2 border-t border-[var(--aw-border)]" />
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[var(--aw-text-muted)]">Expenses planned</span>
+                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.expensesBudget)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[var(--aw-text-muted)]">Expenses spent</span>
+                <span className={`aw-number ${summary.expensesActual > summary.expensesBudget ? "text-[var(--aw-danger)]" : "text-[var(--aw-text)]"}`}>
+                  {fmt(summary.expensesActual)}
                 </span>
               </div>
-            </div>
-
-            <div className="aw-card">
-              <div className="mb-3 flex items-center justify-between gap-3 text-sm text-[var(--aw-text-muted)]">
-                <span>Variable</span>
-                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.variableBudget)} planned</span>
-              </div>
-              <div className="h-2 rounded-full bg-[var(--aw-border)]">
-                <div
-                  className="h-full rounded-full bg-[var(--aw-primary)]"
-                  style={{
-                    width:
-                      summary.variableBudget > 0
-                        ? `${Math.min((summary.variableActual / summary.variableBudget) * 100, 100)}%`
-                        : "0%",
-                  }}
-                />
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                <span className="aw-number text-[var(--aw-text)]">{fmt(summary.variableActual)} actual</span>
-                <span className="aw-number font-semibold text-[var(--aw-text)]">
-                  {fmt(summary.variableBudget - summary.variableActual)} remaining
+              <div className="my-2 border-t border-[var(--aw-border)]" />
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-[var(--aw-text)]">Saved this month</span>
+                <span className={`aw-number font-semibold ${summary.actualSavings >= 0 ? "text-[var(--aw-text)]" : "text-[var(--aw-danger)]"}`}>
+                  {fmt(summary.actualSavings)}
                 </span>
-              </div>
-            </div>
-
-            <div className="aw-card !p-4">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Expenses planned</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.expensesBudget)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Expenses actual</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.expensesActual)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Manual actuals entered</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.manualActual)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Actuals from transactions</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.transactionActual)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 pt-1">
-                  <span className="text-[var(--aw-text-muted)]">Planned savings</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.plannedSavings)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Actual savings</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.actualSavings)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Rollover categories</span>
-                  <span className="aw-number text-[var(--aw-text)]">{summary.rolloverCount}</span>
-                </div>
-                <div className="mt-1 border-t border-[var(--aw-border)] pt-2" />
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Recurring expected income</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.recurringExpectedIncome)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Recurring expected expenses</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.recurringExpectedExpense)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Recurring transfers</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.recurringExpectedTransfer)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[var(--aw-text-muted)]">Expected recurring net</span>
-                  <span className="aw-number text-[var(--aw-text)]">{fmt(summary.recurringExpectedNet)}</span>
-                </div>
               </div>
             </div>
           </div>
@@ -788,13 +652,13 @@ export function BudgetsView() {
       <ManualEntryModal
         open={budgetModalOpen}
         onClose={() => setBudgetModalOpen(false)}
-        title={editingRowId ? "Edit budget line item" : "Create budget"}
-        description="Create manual budgets from day one. Import transactions later if you connect accounts."
+        title={editingRowId ? "Edit category" : "Add a budget category"}
+        description="Set how much you plan to spend or earn in this category."
       >
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Budget month</span>
+              <span className="text-xs text-[var(--aw-text-muted)]">Month</span>
               <input
                 value={formMonth}
                 onChange={(event) => setFormMonth(event.target.value)}
@@ -803,7 +667,7 @@ export function BudgetsView() {
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Category group</span>
+              <span className="text-xs text-[var(--aw-text-muted)]">Type</span>
               <select
                 value={formGroup}
                 onChange={(event) => {
@@ -845,7 +709,7 @@ export function BudgetsView() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Planned amount</span>
+              <span className="text-xs text-[var(--aw-text-muted)]">Planned</span>
               <input
                 value={formPlannedAmount}
                 onChange={(event) => setFormPlannedAmount(event.target.value)}
@@ -857,7 +721,7 @@ export function BudgetsView() {
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-[var(--aw-text-muted)]">Manual actual (optional)</span>
+              <span className="text-xs text-[var(--aw-text-muted)]">Already spent (optional)</span>
               <input
                 value={formManualActual}
                 onChange={(event) => setFormManualActual(event.target.value)}
@@ -877,20 +741,8 @@ export function BudgetsView() {
               type="checkbox"
               className="h-4 w-4 rounded border-[var(--aw-border)] text-[var(--aw-primary)] focus:ring-[var(--aw-primary)]"
             />
-            Enable rollover (optional)
+            Roll unused budget to next month
           </label>
-
-          {formGroup !== "income" ? (
-            <label className="flex items-center gap-2 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2.5 text-sm text-[var(--aw-text)]">
-              <input
-                checked={formSpendingCategory}
-                onChange={(event) => setFormSpendingCategory(event.target.checked)}
-                type="checkbox"
-                className="h-4 w-4 rounded border-[var(--aw-border)] text-[var(--aw-primary)] focus:ring-[var(--aw-primary)]"
-              />
-              Manually mark spending category
-            </label>
-          ) : null}
 
           <label className="space-y-1">
             <span className="text-xs text-[var(--aw-text-muted)]">Notes (optional)</span>

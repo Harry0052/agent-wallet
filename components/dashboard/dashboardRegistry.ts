@@ -17,7 +17,8 @@ export const dashboardWidgets: DashboardWidgetDefinition[] = [
 ];
 
 const defaultVisibility = dashboardWidgets.reduce<Record<DashboardWidgetId, boolean>>((acc, widget) => {
-  acc[widget.id] = true;
+  // Credit score is not yet functional — hide by default.
+  acc[widget.id] = widget.id !== "creditScore";
   return acc;
 }, {} as Record<DashboardWidgetId, boolean>);
 

@@ -3,26 +3,13 @@
 import Link from "next/link";
 import { Loader2, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { fmt } from "@/lib/utils";
 import {
-  ToolbarButton,
   WorkspaceEmpty,
   WorkspaceHeader,
   WorkspacePanel,
 } from "@/components/finance/WorkspacePrimitives";
-import {
-  ManualEntryButton,
-  ManualEntryModal,
-} from "@/components/finance/ManualDataControls";
+import { ManualEntryModal } from "@/components/finance/ManualDataControls";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import {
   MANUAL_STORAGE_KEYS,
@@ -30,17 +17,7 @@ import {
   type ManualNetWorthItem,
 } from "@/lib/manualMode";
 
-type InvestmentsTab = "holdings" | "allocation";
-
 type HoldingRow = ManualInvestmentHolding;
-
-interface ChartPoint {
-  label: string;
-  portfolio: number;
-  benchmark: number;
-}
-
-const BENCHMARK_SERIES = [100, 101, 99, 103, 102, 105, 104, 106];
 
 function toHolding(holding: HoldingRow): HoldingRow {
   const quantity = Number.isFinite(holding.quantity)
@@ -74,58 +51,20 @@ function toHolding(holding: HoldingRow): HoldingRow {
   };
 }
 
-function buildPortfolioSeries(totalValue: number, totalCostBasis: number): ChartPoint[] {
-  const labels = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Now"];
-  const startValue = Math.max(totalCostBasis || totalValue * 0.92, 1);
-  const endValue = Math.max(totalValue, 1);
-
-  return labels.map((label, index) => {
-    const progress = labels.length === 1 ? 1 : index / (labels.length - 1);
-    const smoothed = progress < 0.5
-      ? 2 * progress * progress
-      : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-
-    const portfolio = startValue + (endValue - startValue) * smoothed;
-    const benchmark = startValue * (BENCHMARK_SERIES[index] / 100);
-
-    return {
-      label,
-      portfolio: Math.round(portfolio),
-      benchmark: Math.round(benchmark),
-    };
-  });
-}
-
 function allocationColor(index: number): string {
   const palette = [
     "var(--aw-chart-primary)",
-    "var(--aw-primary-secondary)",
     "var(--aw-chart-secondary)",
-    "var(--aw-primary-secondary-soft)",
     "var(--aw-chart-positive)",
     "var(--aw-text-muted)",
+    "#86EFAC",
+    "#FCA5A5",
   ];
   return palette[index % palette.length];
 }
 
-function MetricCard(props: { label: string; value: string; meta: string; tone: string }) {
-  return (
-    <div className="aw-card aw-card-compact">
-      <div className="mb-4 h-1.5 rounded-full bg-[var(--aw-primary-soft)]">
-        <div className="h-full rounded-full" style={{ width: "100%", background: props.tone }} />
-      </div>
-      <p className="text-sm font-semibold text-[var(--aw-text)]">{props.label}</p>
-      <p className="aw-number mt-3 text-[28px] leading-none text-[var(--aw-text)]">{props.value}</p>
-      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-        {props.meta}
-      </p>
-    </div>
-  );
-}
-
 export function InvestmentsView() {
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<InvestmentsTab>("holdings");
 
   const [manualHoldings, setManualHoldings] = useLocalStorageState<HoldingRow[]>(
     MANUAL_STORAGE_KEYS.investments,
@@ -179,14 +118,7 @@ export function InvestmentsView() {
     const gainLoss = totalValue - totalCostBasis;
     const gainLossPct = totalCostBasis > 0 ? (gainLoss / totalCostBasis) * 100 : 0;
 
-    return {
-      totalValue,
-      totalCostBasis,
-      gainLoss,
-      gainLossPct,
-      count: holdings.length,
-      avgPosition: holdings.length > 0 ? totalValue / holdings.length : 0,
-    };
+    return { totalValue, totalCostBasis, gainLoss, gainLossPct, count: holdings.length };
   }, [holdings]);
 
   const allocationRows = useMemo(() => {
@@ -208,50 +140,7 @@ export function InvestmentsView() {
       .sort((a, b) => b.value - a.value);
   }, [holdings, totals.totalValue]);
 
-  const chartData = useMemo(() => {
-    if (holdings.length === 0) {
-      return [
-        { label: "Sep", portfolio: 100, benchmark: 100 },
-        { label: "Oct", portfolio: 101, benchmark: 101 },
-        { label: "Nov", portfolio: 102, benchmark: 99 },
-        { label: "Dec", portfolio: 103, benchmark: 103 },
-        { label: "Jan", portfolio: 104, benchmark: 102 },
-        { label: "Feb", portfolio: 105, benchmark: 105 },
-        { label: "Mar", portfolio: 106, benchmark: 104 },
-        { label: "Now", portfolio: 107, benchmark: 106 },
-      ];
-    }
-
-    return buildPortfolioSeries(totals.totalValue, totals.totalCostBasis);
-  }, [holdings.length, totals.totalCostBasis, totals.totalValue]);
-
-  const metricCards = [
-    {
-      label: "Portfolio value",
-      value: fmt(totals.totalValue),
-      meta: "Manual + connected holdings",
-      tone: "var(--aw-chart-primary)",
-    },
-    {
-      label: "Cost basis",
-      value: fmt(totals.totalCostBasis),
-      meta: "Estimated invested principal",
-      tone: "var(--aw-chart-secondary)",
-    },
-    {
-      label: "Unrealized P/L",
-      value: fmt(totals.gainLoss),
-      meta: `${totals.gainLossPct >= 0 ? "+" : ""}${totals.gainLossPct.toFixed(2)}% vs cost basis`,
-      tone: totals.gainLoss >= 0 ? "var(--aw-chart-positive)" : "var(--aw-chart-negative)",
-    },
-    {
-      label: "Holdings",
-      value: String(totals.count),
-      meta: totals.count > 0 ? `Avg ${fmt(totals.avgPosition)}` : "No holdings yet",
-      tone: "var(--aw-primary-secondary)",
-    },
-  ];
-
+  // Sync investment total to net worth
   useEffect(() => {
     const aggregateId = "manual-investments-aggregate";
     const nextAmount = Math.max(0, totals.totalValue);
@@ -372,135 +261,71 @@ export function InvestmentsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title="Investments"
-        tabs={[
-          { label: "Holdings", active: activeTab === "holdings" },
-          { label: "Allocation", active: activeTab === "allocation" },
-        ]}
         actions={(
-          <>
-            <ToolbarButton onClick={() => setActiveTab("holdings")}>Holdings</ToolbarButton>
-            <ToolbarButton onClick={() => setActiveTab("allocation")}>Allocation</ToolbarButton>
-            <ToolbarButton variant="primary" icon={<Plus size={14} />} onClick={openManualHolding}>
-              Add holding
-            </ToolbarButton>
-            <ManualEntryButton onClick={openManualHolding}>
-              Add holding
-            </ManualEntryButton>
-          </>
+          <button
+            type="button"
+            onClick={openManualHolding}
+            className="aw-button-primary inline-flex h-[38px] items-center gap-1.5 rounded-xl px-4 text-sm"
+          >
+            <Plus size={14} />
+            Add holding
+          </button>
         )}
       />
 
-      <div className="aw-workspace-grid" data-columns="4">
-        {metricCards.map((card) => (
-          <MetricCard key={card.label} {...card} />
-        ))}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="aw-card aw-card-compact">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Portfolio value</p>
+          <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(totals.totalValue)}</p>
+          <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
+            {totals.count} holding{totals.count === 1 ? "" : "s"} · Manually tracked
+          </p>
+        </div>
+        <div className="aw-card aw-card-compact">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Cost basis</p>
+          <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(totals.totalCostBasis)}</p>
+          <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Total invested</p>
+        </div>
+        <div className="aw-card aw-card-compact">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Gain / Loss</p>
+          <p className={`aw-number mt-3 text-2xl ${totals.gainLoss >= 0 ? "text-[#16A34A]" : "text-[var(--aw-danger)]"}`}>
+            {totals.gainLoss >= 0 ? "+" : ""}{fmt(totals.gainLoss)}
+          </p>
+          <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
+            {totals.gainLossPct >= 0 ? "+" : ""}{totals.gainLossPct.toFixed(1)}% vs cost basis
+          </p>
+        </div>
       </div>
 
-      <WorkspacePanel className="mt-4" title="Performance chart">
-        <div className="aw-card !p-4">
-          <div className="mb-5 flex flex-wrap items-center gap-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-                Portfolio performance
-              </p>
-              <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[var(--aw-text)]">
-                Portfolio vs benchmark
-              </p>
-            </div>
-            <div className="flex items-center gap-5 text-sm text-[var(--aw-text-muted)]">
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-[var(--aw-primary)]" />
-                Portfolio
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-[var(--aw-chart-secondary)]" />
-                Benchmark
-              </span>
-            </div>
-          </div>
-
-          <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 12, right: 12, left: 4, bottom: 4 }}>
-                <CartesianGrid stroke="var(--aw-chart-grid)" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  minTickGap={24}
-                />
-                <YAxis
-                  tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={52}
-                  tickFormatter={(value: number) => fmt(value)}
-                />
-                <Tooltip
-                  formatter={(value, name) => [fmt(Number(value ?? 0)), name === "portfolio" ? "Portfolio" : "Benchmark"]}
-                  labelStyle={{ color: "var(--aw-text-muted)" }}
-                  itemStyle={{ color: "var(--aw-text)" }}
-                  contentStyle={{
-                    background: "var(--aw-surface-1)",
-                    border: "1px solid var(--aw-border)",
-                    borderRadius: 12,
-                    boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="benchmark"
-                  stroke="var(--aw-chart-secondary)"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 4, fill: "var(--aw-chart-secondary)", stroke: "#FFFFFF", strokeWidth: 2 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="portfolio"
-                  stroke="var(--aw-chart-primary)"
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={{ r: 4, fill: "var(--aw-chart-primary)", stroke: "#FFFFFF", strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </WorkspacePanel>
-
-      <WorkspacePanel className="mt-4" title="Holdings section">
+      <WorkspacePanel className="mt-4" title="Holdings">
         {holdings.length === 0 ? (
-          <div className="aw-card-table">
-            <WorkspaceEmpty
-              title="No holdings yet"
-              description="Track investments even without a brokerage connection."
-              action={(
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link href="/connect" className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm">
-                    Connect an investment account
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={openManualHolding}
-                    className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm"
-                  >
-                    Add holding
-                  </button>
-                </div>
-              )}
-              className="min-h-[280px]"
-            />
-          </div>
-        ) : activeTab === "holdings" ? (
+          <WorkspaceEmpty
+            title="No holdings yet"
+            description="Add your investments manually to track them alongside the rest of your money."
+            action={(
+              <div className="flex flex-wrap items-center gap-2">
+                <Link href="/connect" className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm">
+                  Connect an account
+                </Link>
+                <button
+                  type="button"
+                  onClick={openManualHolding}
+                  className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm"
+                >
+                  Add holding
+                </button>
+              </div>
+            )}
+            className="min-h-[280px]"
+          />
+        ) : (
           <div className="aw-card-table">
             <div className="grid grid-cols-[minmax(0,1.4fr)_100px_110px_140px_140px] gap-4 border-b border-[var(--aw-border)] px-5 py-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
               <span>Asset</span>
               <span>Qty</span>
               <span>Avg cost</span>
               <span>Account</span>
-              <span className="text-right">Current value</span>
+              <span className="text-right">Value</span>
             </div>
             {holdings.map((holding) => (
               <div
@@ -527,37 +352,40 @@ export function InvestmentsView() {
               </div>
             ))}
           </div>
-        ) : (
+        )}
+      </WorkspacePanel>
+
+      {allocationRows.length > 0 ? (
+        <WorkspacePanel className="mt-4" title="Allocation">
           <div className="space-y-3">
             {allocationRows.map((row) => (
-              <div key={row.id} className="aw-card aw-card-compact !p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
+              <div key={row.id} className="flex items-center gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-semibold text-[var(--aw-text)]">{row.label}</p>
-                    <p className="truncate text-xs text-[var(--aw-text-muted)]">{row.subLabel}</p>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="aw-number text-[var(--aw-text-muted)]">{fmt(row.value)}</span>
+                      <span className="aw-number w-12 text-right font-semibold text-[var(--aw-text)]">{row.weight.toFixed(1)}%</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="aw-number text-sm text-[var(--aw-text)]">{fmt(row.value)}</p>
-                    <p className="text-xs text-[var(--aw-text-muted)]">{row.weight.toFixed(1)}%</p>
+                  <div className="mt-2 h-2 rounded-full bg-[var(--aw-border)]">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${Math.max(3, row.weight)}%`, background: row.color }}
+                    />
                   </div>
-                </div>
-                <div className="mt-3 h-2 rounded-full bg-[var(--aw-border)]">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${Math.max(3, row.weight)}%`, background: row.color }}
-                  />
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </WorkspacePanel>
+        </WorkspacePanel>
+      ) : null}
 
       <ManualEntryModal
         open={manualModalOpen}
         onClose={() => setManualModalOpen(false)}
         title="Add holding"
-        description="Add a manual holding to include it in portfolio totals, allocation, and net worth."
+        description="Track an investment alongside the rest of your money."
       >
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">

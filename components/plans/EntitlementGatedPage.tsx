@@ -35,7 +35,7 @@ export function EntitlementGatedPage({
   featureDescription,
   requiredPlan,
 }: EntitlementGatedPageProps) {
-  const { loading, can } = useEntitlements();
+  const { loading, error, can, refresh } = useEntitlements();
 
   if (loading) {
     return (
@@ -47,6 +47,27 @@ export function EntitlementGatedPage({
 
   if (can(requiredFeature)) {
     return <>{children}</>;
+  }
+
+  // If the entitlement check failed due to a network/server error, show
+  // a retry prompt instead of the paywall — the user may actually have access.
+  if (error) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-6">
+        <div className="w-full max-w-md text-center">
+          <p className="text-sm text-[var(--aw-text-muted)]">
+            Could not verify your plan. This is usually temporary.
+          </p>
+          <button
+            type="button"
+            onClick={() => { void refresh(); }}
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -14,21 +14,15 @@ import {
   Menu,
   X,
   Plus,
-  Edit2,
-  Trash,
   Moon,
   Sun,
   Monitor,
   Users,
   Settings,
-  Database,
   Gift,
-  Tag,
-  Zap,
   Eye,
 } from "lucide-react";
 import { EditProfileModal } from "@/modals/EditProfileModal";
-import { NotificationSettingsModal } from "@/modals/NotificationSettingsModal";
 import { SecuritySettingsModal } from "@/modals/SecuritySettingsModal";
 import {
   fetchAuthenticatedAccount,
@@ -53,25 +47,8 @@ type SettingsSection =
   | "members"
   | "preferences"
   | "institutions"
-  | "categories"
-  | "merchants"
-  | "rules"
-  | "tags"
-  | "data"
   | "billing"
   | "referrals";
-
-interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface Institution {
-  id: string;
-  name: string;
-  accounts: number;
-}
 
 // ============================================================================
 // SIDEBAR NAVIGATION
@@ -121,16 +98,6 @@ function Sidebar({
       icon: Cable,
       group: "household",
     },
-    { id: "categories", label: "Spending Groups", icon: Tag, group: "household" },
-    {
-      id: "merchants",
-      label: "Stores & Services",
-      icon: Zap,
-      group: "household",
-    },
-    { id: "rules", label: "Auto-Rules", icon: Zap, group: "household" },
-    { id: "tags", label: "Labels", icon: Tag, group: "household" },
-    { id: "data", label: "Your Data", icon: Database, group: "household" },
     { id: "billing", label: "Plan & Billing", icon: CreditCard, group: "household" },
     { id: "referrals", label: "Invite Friends", icon: Gift, group: "household" },
   ];
@@ -243,6 +210,28 @@ function Sidebar({
 
 function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
   const [openModal, setOpenModal] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [savedName, setSavedName] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("calico.display-name");
+      if (stored) setDisplayName(stored);
+    } catch { /* ignore */ }
+  }, []);
+
+  const saveDisplayName = () => {
+    const name = displayName.trim();
+    try {
+      if (name) {
+        localStorage.setItem("calico.display-name", name);
+      } else {
+        localStorage.removeItem("calico.display-name");
+      }
+      setSavedName(true);
+      setTimeout(() => setSavedName(false), 2000);
+    } catch { /* ignore */ }
+  };
 
   return (
     <div className="aw-card space-y-6 !p-6">
@@ -251,7 +240,7 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
           Profile
         </h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Edit your personal information
+          Your personal information
         </p>
       </div>
 
@@ -277,6 +266,30 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
           >
             Edit
           </button>
+        </div>
+
+        <div className="rounded-lg border border-[var(--aw-border)] p-4">
+          <p className="mb-2 text-xs text-[var(--aw-text-muted)]">Display name</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="How should Calico call you?"
+              className="aw-input flex-1 h-9 text-sm"
+            />
+            <button
+              type="button"
+              onClick={saveDisplayName}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+              style={{
+                background: "var(--calico-primary, #FDBA74)",
+                color: "var(--calico-text, #111)",
+              }}
+            >
+              {savedName ? "Saved" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -392,7 +405,30 @@ function DisplaySection() {
 }
 
 function NotificationsSection() {
-  const [openModal, setOpenModal] = useState(false);
+  const [emailWeekly, setEmailWeekly] = useState(true);
+  const [emailAlerts, setEmailAlerts] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("calico.notification-prefs");
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        if (typeof prefs.emailWeekly === "boolean") setEmailWeekly(prefs.emailWeekly);
+        if (typeof prefs.emailAlerts === "boolean") setEmailAlerts(prefs.emailAlerts);
+        if (typeof prefs.pushEnabled === "boolean") setPushEnabled(prefs.pushEnabled);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const savePrefs = () => {
+    try {
+      localStorage.setItem("calico.notification-prefs", JSON.stringify({ emailWeekly, emailAlerts, pushEnabled }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { /* ignore */ }
+  };
 
   return (
     <div className="aw-card space-y-6 !p-6">
@@ -401,26 +437,62 @@ function NotificationsSection() {
           Notifications
         </h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Control when and how we notify you
+          Choose what Calico tells you about and how
         </p>
       </div>
 
+      <div className="space-y-4">
+        <label className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4">
+          <div>
+            <p className="text-sm font-medium text-[var(--aw-text)]">Weekly money recap</p>
+            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">Get a summary of your spending every week by email</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={emailWeekly}
+            onChange={(e) => setEmailWeekly(e.target.checked)}
+            className="h-4 w-4 rounded border-[var(--aw-border)] text-[var(--aw-primary)] focus:ring-[var(--aw-primary)]"
+          />
+        </label>
+
+        <label className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4">
+          <div>
+            <p className="text-sm font-medium text-[var(--aw-text)]">Important alerts</p>
+            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">Unusual spending, bill increases, and payment failures</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={emailAlerts}
+            onChange={(e) => setEmailAlerts(e.target.checked)}
+            className="h-4 w-4 rounded border-[var(--aw-border)] text-[var(--aw-primary)] focus:ring-[var(--aw-primary)]"
+          />
+        </label>
+
+        <label className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4">
+          <div>
+            <p className="text-sm font-medium text-[var(--aw-text)]">In-app notifications</p>
+            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">Show alerts inside Calico when something needs attention</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={pushEnabled}
+            onChange={(e) => setPushEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-[var(--aw-border)] text-[var(--aw-primary)] focus:ring-[var(--aw-primary)]"
+          />
+        </label>
+      </div>
+
       <button
-        onClick={() => setOpenModal(true)}
+        type="button"
+        onClick={savePrefs}
         className="rounded-lg px-4 py-2 text-sm font-medium transition"
         style={{
           background: "var(--calico-primary, #FDBA74)",
           color: "var(--calico-text, #111)",
         }}
-        type="button"
       >
-        Manage notification preferences
+        {saved ? "Saved" : "Save preferences"}
       </button>
-
-      <NotificationSettingsModal
-        open={openModal}
-        onClose={() => setOpenModal(false)}
-      />
     </div>
   );
 }
@@ -473,21 +545,12 @@ function SecuritySection({
               Two-factor authentication
             </p>
             <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
-              Not enabled
+              Authenticator app and email 2FA are coming soon
             </p>
           </div>
-          <button
-            onClick={() => setOpenModal(true)}
-            className="rounded-lg px-3 py-2 text-xs font-medium transition"
-            style={{
-              background: "var(--calico-card, #FFFCF8)",
-              border: "1px solid var(--calico-border, #F2DECC)",
-              color: "var(--aw-text)",
-            }}
-            type="button"
-          >
-            Enable
-          </button>
+          <span className="rounded-lg border border-[var(--aw-border)] px-3 py-2 text-xs font-medium text-[var(--aw-text-muted)]">
+            Coming soon
+          </span>
         </div>
       </div>
 
@@ -566,68 +629,44 @@ function GeneralSection() {
   );
 }
 
-function MembersSection() {
-  const [members] = useState([
-    { id: "1", email: "you@example.com", role: "Owner" },
-  ]);
-  const [inviteEmail, setInviteEmail] = useState("");
+function MembersSection({ account, billing }: { account: AuthenticatedAccount | null; billing: BillingStatus | null }) {
+  const plan = billing?.plan ?? null;
+  const maxMembers = plan === "autonomous" ? 5 : 2;
+  const memberCount = 1; // Owner is always 1 member
 
   return (
     <div className="aw-card space-y-6 !p-6">
       <div>
         <h3 className="text-lg font-semibold text-[var(--aw-text)]">Members</h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Manage household members
+          Share your household with up to {maxMembers} people{plan === "autonomous" ? " on the Autonomous plan" : ""}
         </p>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex gap-2">
-          <input
-            type="email"
-            placeholder="Enter email to invite"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            className="aw-input flex-1"
-          />
-          <button
-            type="button"
-            className="rounded-lg px-4 py-2 font-medium transition"
-            style={{
-              background: "var(--calico-primary, #FDBA74)",
-              color: "var(--calico-text, #111)",
-            }}
-          >
-            Invite
-          </button>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-3">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-[var(--calico-primary)] text-center leading-8 text-[var(--calico-text)] text-sm font-semibold">
+              {(account?.email ?? "?").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[var(--aw-text)]">
+                {account?.email ?? "Loading..."}
+              </p>
+              <p className="text-xs text-[var(--aw-text-muted)]">Owner</p>
+            </div>
+          </div>
         </div>
 
-        <div className="border-t border-[var(--aw-border)] pt-4">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--aw-text-muted)]">
-            Members
-          </h4>
-          <div className="mt-3 space-y-2">
-            {members.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-[var(--calico-primary)] text-center leading-8 text-[var(--calico-text)] text-sm font-semibold">
-                    {member.email.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--aw-text)]">
-                      {member.email}
-                    </p>
-                    <p className="text-xs text-[var(--aw-text-muted)]">
-                      {member.role}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
+          <p className="text-sm text-[var(--aw-text-muted)]">
+            Household invitations are coming soon. Your plan supports up to {maxMembers} members ({memberCount}/{maxMembers} used).
+          </p>
+          {plan !== "autonomous" && (
+            <p className="mt-2 text-xs text-[var(--aw-text-muted)]">
+              Upgrade to the Autonomous plan for up to 5 household members.
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -701,24 +740,22 @@ function PreferencesSection() {
 }
 
 function InstitutionsSection() {
-  const [institutions] = useState<Institution[]>([
-    { id: "1", name: "Chase Bank", accounts: 2 },
-    { id: "2", name: "Fidelity", accounts: 1 },
-  ]);
+  const router = useRouter();
 
   return (
     <div className="aw-card space-y-6 !p-6">
       <div>
         <h3 className="text-lg font-semibold text-[var(--aw-text)]">
-          Institutions
+          Connected Banks
         </h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Manage connected financial institutions
+          Manage your connected financial accounts
         </p>
       </div>
 
       <button
         type="button"
+        onClick={() => router.push("/connect")}
         className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition"
         style={{
           background: "var(--calico-primary, #FDBA74)",
@@ -726,502 +763,13 @@ function InstitutionsSection() {
         }}
       >
         <Plus size={16} />
-        Add institution
+        Connect an account
       </button>
 
-      <div className="space-y-2">
-        {institutions.map((inst) => (
-          <div
-            key={inst.id}
-            className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4"
-          >
-            <div>
-              <p className="text-sm font-medium text-[var(--aw-text)]">
-                {inst.name}
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
-                {inst.accounts} account{inst.accounts !== 1 ? "s" : ""}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="rounded-lg px-3 py-2 text-xs font-medium transition"
-              style={{
-                background: "var(--calico-card, #FFFCF8)",
-                border: "1px solid var(--calico-border, #F2DECC)",
-                color: "var(--aw-text)",
-              }}
-            >
-              Refresh
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CategoriesSection() {
-  const categoryGroups = useMemo(() => {
-    const income = [
-      { id: "1", name: "Paychecks", emoji: "💰" },
-      { id: "2", name: "Interest", emoji: "📈" },
-      { id: "3", name: "Business Income", emoji: "💼" },
-      { id: "4", name: "Other Income", emoji: "🎁" },
-    ];
-
-    const expenses: Record<string, { id: string; name: string; emoji: string }[]> = {
-      "Gifts & Donations": [
-        { id: "101", name: "Charity", emoji: "🤝" },
-        { id: "102", name: "Gifts", emoji: "🎁" },
-      ],
-      "Auto & Transport": [
-        { id: "201", name: "Auto Payment", emoji: "🚗" },
-        { id: "202", name: "Public Transit", emoji: "🚇" },
-      ],
-      Children: [
-        { id: "301", name: "Child Care", emoji: "👶" },
-        { id: "302", name: "Child Activities", emoji: "🎨" },
-      ],
-      Education: [
-        { id: "401", name: "Student Loans", emoji: "📚" },
-        { id: "402", name: "Education", emoji: "🎓" },
-      ],
-      "Health & Wellness": [
-        { id: "501", name: "Medical", emoji: "🏥" },
-        { id: "502", name: "Dentist", emoji: "🦷" },
-        { id: "503", name: "Fitness", emoji: "💪" },
-      ],
-      Financial: [{ id: "601", name: "Loan Repayment", emoji: "💳" }],
-      "Food & Drink": [
-        { id: "701", name: "Groceries", emoji: "🛒" },
-        { id: "702", name: "Restaurants", emoji: "🍽️" },
-      ],
-      Entertainment: [
-        { id: "801", name: "Movies", emoji: "🎬" },
-        { id: "802", name: "Games", emoji: "🎮" },
-      ],
-      Home: [
-        { id: "901", name: "Rent", emoji: "🏠" },
-        { id: "902", name: "Utilities", emoji: "⚡" },
-      ],
-      Personal: [
-        { id: "1001", name: "Clothing", emoji: "👕" },
-        { id: "1002", name: "Personal Care", emoji: "💇" },
-      ],
-      Shopping: [{ id: "1101", name: "Shopping", emoji: "🛍️" }],
-      Travel: [
-        { id: "1201", name: "Flights", emoji: "✈️" },
-        { id: "1202", name: "Hotels", emoji: "🏨" },
-      ],
-    };
-
-    return { income, expenses };
-  }, []);
-
-  return (
-    <div className="aw-card space-y-6 !p-6">
-      <div>
-        <h3 className="text-lg font-semibold text-[var(--aw-text)]">
-          Categories
-        </h3>
-        <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Organize your transactions
+      <div className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
+        <p className="text-sm text-[var(--aw-text-muted)]">
+          Your connected accounts are managed in the Accounts page. Use the button above to connect a new bank or card.
         </p>
-      </div>
-
-      {/* Income */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-[var(--aw-text)]">
-            Income
-          </h4>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--calico-primary)]"
-          >
-            <Plus size={14} />
-            New group
-          </button>
-        </div>
-        <div className="space-y-2">
-          {categoryGroups.income.map((cat) => (
-            <div
-              key={cat.id}
-              className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-3"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{cat.emoji}</span>
-                <p className="text-sm font-medium text-[var(--aw-text)]">
-                  {cat.name}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="rounded text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
-              >
-                <Edit2 size={14} />
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            className="w-full rounded-lg border border-dashed border-[var(--aw-border)] py-2 text-sm font-medium text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-surface)]"
-          >
-            <Plus size={14} className="inline mr-1" />
-            Add category
-          </button>
-        </div>
-      </div>
-
-      {/* Expenses */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-[var(--aw-text)]">
-            Expenses
-          </h4>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 text-xs font-medium text-[var(--calico-primary)]"
-          >
-            <Plus size={14} />
-            New group
-          </button>
-        </div>
-        <div className="space-y-4">
-          {Object.entries(categoryGroups.expenses).map(([group, cats]) => (
-            <div key={group}>
-              <div className="mb-2 flex items-center justify-between">
-                <h5 className="text-xs font-semibold uppercase tracking-wider text-[var(--aw-text-muted)]">
-                  {group}
-                </h5>
-                <button
-                  type="button"
-                  className="text-xs font-medium text-[var(--aw-danger)]"
-                >
-                  Delete group
-                </button>
-              </div>
-              <div className="space-y-2">
-                {cats.map((cat) => (
-                  <div
-                    key={cat.id}
-                    className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{cat.emoji}</span>
-                      <p className="text-sm font-medium text-[var(--aw-text)]">
-                        {cat.name}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="rounded text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="w-full rounded-lg border border-dashed border-[var(--aw-border)] py-2 text-sm font-medium text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-surface)]"
-                >
-                  <Plus size={14} className="inline mr-1" />
-                  Add category
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MerchantsSection() {
-  const [merchants] = useState([
-    { id: "1", name: "Starbucks", category: "Coffee" },
-    { id: "2", name: "Whole Foods", category: "Groceries" },
-  ]);
-
-  return (
-    <div className="aw-card space-y-6 !p-6">
-      <div>
-        <h3 className="text-lg font-semibold text-[var(--aw-text)]">
-          Merchants
-        </h3>
-        <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Manage merchant rules and mappings
-        </p>
-      </div>
-
-      <button
-        type="button"
-        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition"
-        style={{
-          background: "var(--calico-primary, #FDBA74)",
-          color: "var(--calico-text, #111)",
-        }}
-      >
-        <Plus size={16} />
-        Add merchant
-      </button>
-
-      <div className="space-y-2">
-        {merchants.map((m) => (
-          <div
-            key={m.id}
-            className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4"
-          >
-            <div>
-              <p className="text-sm font-medium text-[var(--aw-text)]">
-                {m.name}
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
-                {m.category}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="rounded-lg px-3 py-2 text-xs font-medium transition"
-              style={{
-                background: "var(--calico-card, #FFFCF8)",
-                border: "1px solid var(--calico-border, #F2DECC)",
-                color: "var(--aw-text)",
-              }}
-            >
-              Edit
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RulesSection() {
-  const [rules] = useState([
-    {
-      id: "1",
-      condition: "Merchant contains 'STARBUCKS'",
-      action: "Set category to Coffee",
-    },
-    {
-      id: "2",
-      condition: "Amount > $100",
-      action: "Add tag 'Splurge'",
-    },
-  ]);
-
-  return (
-    <div className="aw-card space-y-6 !p-6">
-      <div>
-        <h3 className="text-lg font-semibold text-[var(--aw-text)]">Rules</h3>
-        <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Auto-categorization and tagging rules
-        </p>
-      </div>
-
-      <button
-        type="button"
-        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition"
-        style={{
-          background: "var(--calico-primary, #FDBA74)",
-          color: "var(--calico-text, #111)",
-        }}
-      >
-        <Plus size={16} />
-        Create rule
-      </button>
-
-      <div className="space-y-2">
-        {rules.map((rule) => (
-          <div
-            key={rule.id}
-            className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4"
-          >
-            <div>
-              <p className="text-sm font-medium text-[var(--aw-text)]">
-                {rule.condition}
-              </p>
-              <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
-                {rule.action}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="rounded-lg px-3 py-2 text-xs font-medium transition"
-              style={{
-                background: "var(--calico-card, #FFFCF8)",
-                border: "1px solid var(--calico-border, #F2DECC)",
-                color: "var(--aw-text)",
-              }}
-            >
-              Edit
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TagsSection() {
-  const [tags] = useState<Tag[]>([
-    { id: "1", name: "Tax", color: "#3b82f6" },
-    { id: "2", name: "Reimburse", color: "#06b6d4" },
-    { id: "3", name: "Split", color: "#10b981" },
-    { id: "4", name: "Business", color: "#f97316" },
-    { id: "5", name: "Subscription", color: "#eab308" },
-  ]);
-
-  return (
-    <div className="aw-card space-y-6 !p-6">
-      <div>
-        <h3 className="text-lg font-semibold text-[var(--aw-text)]">Tags</h3>
-        <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Organize transactions with custom tags
-        </p>
-      </div>
-
-      <button
-        type="button"
-        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition"
-        style={{
-          background: "var(--calico-primary, #FDBA74)",
-          color: "var(--calico-text, #111)",
-        }}
-      >
-        <Plus size={16} />
-        New tag
-      </button>
-
-      <div className="space-y-2">
-        {tags.map((tag) => (
-          <div
-            key={tag.id}
-            className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4"
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className="h-3 w-3 rounded-full"
-                style={{ backgroundColor: tag.color }}
-              />
-              <p className="text-sm font-medium text-[var(--aw-text)]">
-                {tag.name}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="rounded text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
-              >
-                <Edit2 size={14} />
-              </button>
-              <button
-                type="button"
-                className="rounded text-[var(--aw-text-muted)] hover:text-[var(--aw-danger)]"
-              >
-                <Trash size={14} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DataSection() {
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteDate, setDeleteDate] = useState("");
-
-  return (
-    <div className="aw-card space-y-6 !p-6">
-      <div>
-        <h3 className="text-lg font-semibold text-[var(--aw-text)]">Data</h3>
-        <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Manage your data
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="rounded-lg border border-[var(--aw-border)] p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[var(--aw-text)]">
-                Delete transaction history
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
-                Remove transactions before a certain date
-              </p>
-            </div>
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              type="button"
-              className="rounded-lg px-3 py-2 text-xs font-medium transition"
-              style={{
-                background: "var(--aw-danger)",
-                color: "white",
-              }}
-            >
-              Delete
-            </button>
-          </div>
-
-          {showDeleteModal && (
-            <div className="mt-4 space-y-3 border-t border-[var(--aw-border)] pt-4">
-              <input
-                type="date"
-                value={deleteDate}
-                onChange={(e) => setDeleteDate(e.target.value)}
-                className="aw-input w-full"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="flex-1 rounded-lg px-3 py-2 text-sm font-medium transition"
-                  style={{
-                    background: "var(--aw-danger)",
-                    color: "white",
-                  }}
-                >
-                  Delete transactions
-                </button>
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  type="button"
-                  className="flex-1 rounded-lg border border-[var(--aw-border)] px-3 py-2 text-sm font-medium transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-lg border border-[var(--aw-border)] p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[var(--aw-text)]">
-                Delete account balance snapshots
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
-                Remove all historical balance data
-              </p>
-            </div>
-            <button
-              type="button"
-              className="rounded-lg px-3 py-2 text-xs font-medium transition"
-              style={{
-                background: "var(--aw-danger)",
-                color: "white",
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -1323,92 +871,87 @@ function BillingSection({
   );
 }
 
-function ReferralsSection() {
-  const [referralLink] = useState(
-    "https://calico.app/ref/abc123def456"
-  );
-  const [stats] = useState({
-    earned: 2,
-    pending: 1,
-    completed: 5,
-  });
+function ReferralsSection({ account }: { account: AuthenticatedAccount | null }) {
+  const [copied, setCopied] = useState(false);
+
+  // Generate a stable referral code from the user's ID
+  const referralCode = account?.appUserId
+    ? account.appUserId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toLowerCase()
+    : null;
+  const referralLink = referralCode
+    ? `https://calico.app/ref/${referralCode}`
+    : null;
 
   const copyToClipboard = () => {
-    void navigator.clipboard.writeText(referralLink);
+    if (!referralLink) return;
+    void navigator.clipboard.writeText(referralLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   return (
     <div className="aw-card space-y-6 !p-6">
       <div>
         <h3 className="text-lg font-semibold text-[var(--aw-text)]">
-          Referrals
+          Invite a friend, they get 50% off
         </h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Share Calico and earn rewards
+          Share your link and the person who signs up gets 50% off their first month on any plan.
         </p>
       </div>
 
-      <div className="space-y-4">
-        {/* Share Link */}
+      <div className="rounded-xl border border-[var(--calico-primary,#FDBA74)]/30 bg-[rgba(253,186,116,0.08)] p-4">
+        <p className="text-sm font-semibold text-[var(--aw-text)]">How it works</p>
+        <ol className="mt-2 space-y-1.5 text-sm text-[var(--aw-text-muted)]">
+          <li className="flex gap-2">
+            <span className="shrink-0 font-semibold text-[var(--calico-primary,#FDBA74)]">1.</span>
+            Share your referral link with a friend
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 font-semibold text-[var(--calico-primary,#FDBA74)]">2.</span>
+            They sign up and pick a plan
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 font-semibold text-[var(--calico-primary,#FDBA74)]">3.</span>
+            They get 50% off their first month automatically
+          </li>
+        </ol>
+      </div>
+
+      {referralLink ? (
         <div>
-          <label className="text-sm font-medium text-[var(--aw-text)]">
-            Your referral link
-          </label>
-          <div className="mt-2 flex gap-2">
+          <p className="mb-2 text-xs text-[var(--aw-text-muted)]">Your referral link</p>
+          <div className="flex gap-2">
             <input
               type="text"
               value={referralLink}
               readOnly
-              className="aw-input flex-1"
+              className="aw-input flex-1 text-sm"
             />
             <button
               onClick={copyToClipboard}
               type="button"
-              className="rounded-lg px-4 py-2 text-sm font-medium transition"
+              className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition"
               style={{
                 background: "var(--calico-primary, #FDBA74)",
                 color: "var(--calico-text, #111)",
               }}
             >
-              Copy
+              {copied ? "Copied!" : "Copy link"}
             </button>
           </div>
         </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-lg border border-[var(--aw-border)] p-3 text-center">
-            <p className="text-2xl font-bold text-[var(--calico-primary)]">
-              {stats.earned}
-            </p>
-            <p className="mt-1 text-xs font-medium text-[var(--aw-text-muted)]">
-              Earned
-            </p>
-          </div>
-          <div className="rounded-lg border border-[var(--aw-border)] p-3 text-center">
-            <p className="text-2xl font-bold text-[var(--aw-text)]">
-              {stats.pending}
-            </p>
-            <p className="mt-1 text-xs font-medium text-[var(--aw-text-muted)]">
-              Pending
-            </p>
-          </div>
-          <div className="rounded-lg border border-[var(--aw-border)] p-3 text-center">
-            <p className="text-2xl font-bold text-[var(--aw-text)]">
-              {stats.completed}
-            </p>
-            <p className="mt-1 text-xs font-medium text-[var(--aw-text-muted)]">
-              Completed
-            </p>
-          </div>
-        </div>
-      </div>
+      ) : (
+        <p className="text-sm text-[var(--aw-text-muted)]">
+          Sign in to get your referral link.
+        </p>
+      )}
     </div>
   );
 }
 
 function DeleteAccountButton() {
-  const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1420,8 +963,11 @@ function DeleteAccountButton() {
     setDeleteError(null);
     try {
       await deleteAccount(confirmText);
-      router.replace("/login");
-      router.refresh();
+      // Clear all local data before redirecting
+      try { localStorage.clear(); } catch { /* ignore */ }
+      try { sessionStorage.clear(); } catch { /* ignore */ }
+      // Full page redirect to clear all client state
+      window.location.href = "/login?accountDeleted=1";
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Deletion failed");
       setIsDeleting(false);
@@ -1595,18 +1141,13 @@ export function SettingsPage() {
               <SecuritySection account={account} />
             )}
             {activeSection === "general" && <GeneralSection />}
-            {activeSection === "members" && <MembersSection />}
+            {activeSection === "members" && <MembersSection account={account} billing={billing} />}
             {activeSection === "preferences" && <PreferencesSection />}
             {activeSection === "institutions" && <InstitutionsSection />}
-            {activeSection === "categories" && <CategoriesSection />}
-            {activeSection === "merchants" && <MerchantsSection />}
-            {activeSection === "rules" && <RulesSection />}
-            {activeSection === "tags" && <TagsSection />}
-            {activeSection === "data" && <DataSection />}
             {activeSection === "billing" && (
               <BillingSection billing={billing} onManage={handleManageBilling} />
             )}
-            {activeSection === "referrals" && <ReferralsSection />}
+            {activeSection === "referrals" && <ReferralsSection account={account} />}
 
             {/* Logout & Danger Zone - Always visible */}
             {activeSection === "profile" && (

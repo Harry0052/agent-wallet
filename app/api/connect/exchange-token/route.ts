@@ -96,22 +96,28 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const message =
+    const rawMessage =
       error instanceof z.ZodError
         ? error.issues.map((issue) => issue.message).join("; ")
         : error instanceof Error
           ? error.message
           : "Failed to exchange Plaid public token.";
-    const status = error instanceof z.ZodError ? 400 : 500;
+
+    // Sanitize internal/config errors before returning to the client.
+    const isInternalError = /plaid|access_token|item_id|secret|client_id|missing required/i.test(rawMessage);
+    const message = isInternalError
+      ? "Account linking failed. Please try again or contact support."
+      : rawMessage;
+    const status = error instanceof z.ZodError ? 400 : isInternalError ? 502 : 500;
     const errorCode = classifyTaskError({
-      message,
+      message: rawMessage,
       validation: error instanceof z.ZodError,
     });
 
     logServerEvent("error", "connect.exchange_token.failed", {
       status,
       errorCode,
-      message,
+      message: rawMessage,
     });
 
     return NextResponse.json(apiError(errorCode, message, true), { status });

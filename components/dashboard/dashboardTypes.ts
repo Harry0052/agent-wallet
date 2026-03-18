@@ -39,11 +39,20 @@ export interface DashboardInvestmentHolding {
   changePct: number;
 }
 
+export interface DashboardGoalSummary {
+  id: string;
+  name: string;
+  targetAmount: number;
+  totalSaved: number;
+  progress: number;
+}
+
 export interface DashboardDataSource {
   accounts: ConnectedAccountRecord[];
   transactions: StatementTransaction[];
   recurring: DetectedSubscription[];
   investments: DashboardInvestmentHolding[];
+  goals: DashboardGoalSummary[];
 }
 
 export interface DashboardWidgetProps {

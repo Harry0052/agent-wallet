@@ -11,7 +11,6 @@ const DEFAULT_LABELS: CustomLabelMap = {
   home: "Home",
   accounts: "Accounts",
   transactions: "Money Moves",
-  recurring: "Repeating",
   tasks: "To-Do",
   cashflow: "Money In & Out",
   budgets: "Spending Plan",
@@ -19,7 +18,6 @@ const DEFAULT_LABELS: CustomLabelMap = {
   investments: "Investments",
   reports: "Reports",
   insights: "Calico Noticed",
-  advice: "Ask Calico",
   automations: "Automations",
   settings: "Settings",
 };

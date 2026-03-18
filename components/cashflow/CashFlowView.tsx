@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -406,25 +406,6 @@ export function CashFlowView() {
 
   const monthNet = monthIncome - monthExpenses;
   const savingsRate = monthIncome > 0 ? Math.round((monthNet / monthIncome) * 100) : 0;
-  const forecast30 = useMemo(() => {
-    const now = new Date();
-    const windowEnd = new Date(now.getTime() + 30 * 86400000);
-    return recurringForecastEntries.reduce(
-      (acc, entry) => {
-        const occurred = new Date(entry.occurredAt);
-        if (Number.isNaN(occurred.getTime())) return acc;
-        if (occurred < now || occurred > windowEnd) return acc;
-
-        if (entry.type === "income") acc.income += entry.amount;
-        if (entry.type === "expense") acc.expense += entry.amount;
-        if (entry.type === "transfer") acc.transfer += entry.amount;
-        return acc;
-      },
-      { income: 0, expense: 0, transfer: 0 },
-    );
-  }, [recurringForecastEntries]);
-  const forecastNet30 = forecast30.income - forecast30.expense;
-
   const incomeEntries = rangeEntries.filter((entry) => entry.type === "income");
   const expenseEntries = rangeEntries.filter((entry) => entry.type === "expense");
   const chartData = useMemo(() => buildChartData(rangeEntries, range), [range, rangeEntries]);
@@ -509,8 +490,7 @@ export function CashFlowView() {
       />
 
       <WorkspacePanel
-        title="Cash flow chart"
-        heading={fmt(forecastNet30)}
+        title="Income vs expenses"
         action={(
           <div className="aw-toolbar">
             <div className="aw-segmented">
@@ -521,9 +501,6 @@ export function CashFlowView() {
           </div>
         )}
       >
-        <p className="mb-4 text-sm text-[var(--aw-text-muted)]">
-          Includes manual recurring forecast items when autopopulate forecast is enabled.
-        </p>
         {rangeEntries.length === 0 ? (
           <WorkspaceEmpty
             title="No cash flow data yet"
@@ -547,27 +524,40 @@ export function CashFlowView() {
             className="min-h-[240px]"
           />
         ) : (
-          <div className="aw-chart-shell min-h-[240px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 12, right: 14, left: 4, bottom: 4 }}>
-                <CartesianGrid stroke="var(--aw-chart-grid)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} width={44} />
-                <Tooltip
-                  formatter={(value, name) => [fmt(Number(value ?? 0)), name]}
-                  contentStyle={{
-                    background: "var(--aw-surface-1)",
-                    border: "1px solid var(--aw-border)",
-                    borderRadius: 12,
-                    boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
-                  }}
-                />
-                <Line type="monotone" dataKey="income" stroke="var(--aw-chart-positive)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="expense" stroke="var(--aw-chart-negative)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="net" stroke="var(--aw-chart-primary)" strokeWidth={2.5} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <>
+            <div className="mb-3 flex items-center gap-5">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#86EFAC" }} />
+                <span className="text-xs text-[var(--aw-text-muted)]">Income</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#FCA5A5" }} />
+                <span className="text-xs text-[var(--aw-text-muted)]">Expenses</span>
+              </div>
+            </div>
+            <div className="h-[280px] rounded-[16px] border border-[var(--aw-border)] bg-white px-3 py-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                  <CartesianGrid stroke="var(--aw-chart-grid)" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => `$${v}`} />
+                  <Tooltip
+                    formatter={(value, name) => [fmt(Number(value ?? 0)), name === "income" ? "Income" : "Expenses"]}
+                    labelStyle={{ color: "var(--aw-text-muted)" }}
+                    itemStyle={{ color: "var(--aw-text)" }}
+                    contentStyle={{
+                      background: "var(--aw-surface-1)",
+                      border: "1px solid var(--aw-border)",
+                      borderRadius: 12,
+                      boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
+                    }}
+                  />
+                  <Bar dataKey="income" fill="#86EFAC" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expense" fill="#FCA5A5" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </>
         )}
       </WorkspacePanel>
 
@@ -605,21 +595,6 @@ export function CashFlowView() {
           </p>
           <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{savingsRate}%</p>
           <p className="mt-2 text-sm text-[var(--aw-text-muted)]">This month</p>
-        </div>
-        <div className="aw-card aw-card-compact">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-            Forecast (next 30d)
-          </p>
-          <p
-            className={`aw-number mt-3 text-2xl ${
-              forecastNet30 >= 0 ? "text-[var(--aw-text)]" : "text-[var(--aw-danger)]"
-            }`}
-          >
-            {fmt(forecastNet30)}
-          </p>
-          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">
-            {fmt(forecast30.income)} in · {fmt(forecast30.expense)} out · {fmt(forecast30.transfer)} transfers
-          </p>
         </div>
       </div>
 

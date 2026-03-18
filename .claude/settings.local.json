@@ -35,7 +35,8 @@
       "WebFetch(domain:dribbble.com)",
       "Bash(curl:*)",
       "mcp__claude-flow__browser_open",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npx tsx:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

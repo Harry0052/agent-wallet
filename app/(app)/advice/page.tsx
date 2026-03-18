@@ -1,6 +1,5 @@
-"use client";
-import { AdviceView } from "@/components/advice/AdviceView";
+import { redirect } from "next/navigation";
 
-export default function AdvicePage() {
-  return <AdviceView />;
+export default function AdviceRedirectPage() {
+  redirect("/insights");
 }

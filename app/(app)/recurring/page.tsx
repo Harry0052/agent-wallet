@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { SubscriptionsView } from "@/components/subscriptions/SubscriptionsView";
-
-export default function RecurringPage() {
-  return <SubscriptionsView />;
+export default function RecurringRedirectPage() {
+  redirect("/transactions");
 }

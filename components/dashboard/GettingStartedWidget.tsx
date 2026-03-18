@@ -6,13 +6,18 @@ import { buildBudgetCategories, getCategoryCompletion } from "@/components/dashb
 import { dashboardInsetStyle } from "@/components/dashboard/dashboardStyles";
 import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 
-export function GettingStartedWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
+interface GettingStartedWidgetProps extends DashboardWidgetProps {
+  dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
+  onHide?: () => void;
+}
+
+export function GettingStartedWidget(props: GettingStartedWidgetProps) {
   const budgetCategories = buildBudgetCategories(props.wallet, props.dataSource.transactions, props.useLiveData && props.accountsConnected);
+  const hasGoals = props.dataSource.goals.length > 0;
   const steps = [
     { label: "Connect an account", complete: props.dataSource.accounts.length > 0, href: "/accounts" },
-    { label: "Invite someone you share money with", complete: false, href: "/settings" },
     { label: "Set up your spending groups", complete: getCategoryCompletion(props.dataSource.transactions), href: "/transactions" },
-    { label: "Set your first money goal", complete: false, href: "/goals" },
+    { label: "Set your first money goal", complete: hasGoals, href: "/goals" },
     { label: "Create a spending plan", complete: budgetCategories.length > 0, href: "/budgets" },
   ];
   const completed = steps.filter((step) => step.complete).length;
@@ -67,15 +72,18 @@ export function GettingStartedWidget(props: DashboardWidgetProps & { dragHandleP
           })}
         </div>
 
-        <div className="border-t border-[var(--calico-border)] pt-3">
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--calico-text-muted)] transition hover:text-[var(--calico-primary)]"
-          >
-            <X size={14} />
-            Hide this widget
-          </button>
-        </div>
+        {props.onHide && (
+          <div className="border-t border-[var(--calico-border)] pt-3">
+            <button
+              type="button"
+              onClick={props.onHide}
+              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--calico-text-muted)] transition hover:text-[var(--calico-primary)]"
+            >
+              <X size={14} />
+              Hide this widget
+            </button>
+          </div>
+        )}
       </div>
     </WidgetContainer>
   );

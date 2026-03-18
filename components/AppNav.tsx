@@ -11,9 +11,7 @@ import {
   Lightbulb,
   ListChecks,
   LineChart,
-  MessageCircle,
   PieChart,
-  RefreshCw,
   Settings,
   Target,
   TrendingUp,
@@ -31,7 +29,6 @@ const mainLinks: NavLink[] = [
   { href: "/home", key: "home", icon: Home },
   { href: "/accounts", key: "accounts", icon: Landmark },
   { href: "/transactions", key: "transactions", icon: ArrowLeftRight },
-  { href: "/recurring", key: "recurring", icon: RefreshCw },
   { href: "/tasks", key: "tasks", icon: ListChecks },
   { href: "/cashflow", key: "cashflow", icon: TrendingUp },
 ];
@@ -42,7 +39,6 @@ const planLinks: NavLink[] = [
   { href: "/investments", key: "investments", icon: LineChart },
   { href: "/reports", key: "reports", icon: BarChart3 },
   { href: "/insights", key: "insights", icon: Lightbulb },
-  { href: "/advice", key: "advice", icon: MessageCircle },
   { href: "/automations", key: "automations", icon: Bot },
 ];
 
@@ -91,7 +87,7 @@ export function AppNav() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--aw-border)] bg-[var(--aw-surface-1)]/90 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-around px-2 py-2">
-          {[mainLinks[0], mainLinks[2], mainLinks[3], mainLinks[4], utilLinks[0]].map((link) => {
+          {[mainLinks[0], mainLinks[2], mainLinks[3], mainLinks[4], utilLinks[0]].filter(Boolean).map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
             return (

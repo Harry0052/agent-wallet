@@ -48,7 +48,7 @@ interface NetWorthHistoryPoint {
   dayKey: string;
   label: string;
   recordedAt: string;
-  source: "connected" | "manual";
+  source?: "connected" | "manual";
   connectedTotal: number;
   manualTotal: number;
   total: number;
@@ -121,16 +121,46 @@ function formatLastUpdated(lastSyncedAt: string | null): string {
   });
 }
 
-function buildFallbackSeries(baseValue: number) {
-  const base = baseValue > 0 ? baseValue : 1;
-  return [
-    { label: "Mar 1", value: Math.max(0, Math.round(base * 0.95)) },
-    { label: "Mar 5", value: Math.max(0, Math.round(base * 0.97)) },
-    { label: "Mar 9", value: Math.max(0, Math.round(base * 0.99)) },
-    { label: "Mar 14", value: Math.max(0, Math.round(base)) },
-    { label: "Mar 19", value: Math.max(0, Math.round(base * 1.01)) },
-    { label: "Mar 24", value: Math.max(0, Math.round(base * 1.02)) },
-  ];
+function formatDayLabel(dateString: string): string {
+  const date = new Date(`${dateString}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function recordHistoryPoint(
+  prev: NetWorthHistoryPoint[],
+  dayKey: string,
+  connectedTotal: number,
+  manualTotal: number,
+): NetWorthHistoryPoint[] {
+  const total = connectedTotal + manualTotal;
+  const point: NetWorthHistoryPoint = {
+    dayKey,
+    label: formatDayLabel(dayKey),
+    recordedAt: new Date().toISOString(),
+    connectedTotal,
+    manualTotal,
+    total,
+  };
+
+  const next = [...prev];
+  const existingIndex = next.findIndex((item) => item.dayKey === dayKey);
+
+  if (existingIndex >= 0) {
+    const existing = next[existingIndex];
+    if (
+      existing.total === point.total
+      && existing.connectedTotal === point.connectedTotal
+      && existing.manualTotal === point.manualTotal
+    ) {
+      return prev;
+    }
+    next[existingIndex] = point;
+  } else {
+    next.push(point);
+  }
+
+  return next.sort((a, b) => a.dayKey.localeCompare(b.dayKey)).slice(-90);
 }
 
 export function AccountsView() {
@@ -228,66 +258,47 @@ export function AccountsView() {
 
   useEffect(() => {
     const total = connectedTotalBalance + manualTotalBalance;
-    if (!Number.isFinite(total) || total === 0) return;
+    if (!Number.isFinite(total)) return;
+    if (connectedAccounts.length === 0 && manualAccounts.length === 0) return;
 
-    const now = new Date();
-    const dayKey = now.toISOString().slice(0, 10);
-    const source: NetWorthHistoryPoint["source"] = connectedAccounts.length > 0 ? "connected" : "manual";
-    const point: NetWorthHistoryPoint = {
-      dayKey,
-      label: now.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      recordedAt: now.toISOString(),
-      source,
-      connectedTotal: connectedTotalBalance,
-      manualTotal: manualTotalBalance,
-      total,
-    };
-
-    setNetWorthHistory((prev) => {
-      const next = [...prev];
-      const existingIndex = next.findIndex((item) => item.dayKey === dayKey && item.source === source);
-
-      if (existingIndex >= 0) {
-        const existing = next[existingIndex];
-        if (
-          existing.total === point.total
-          && existing.connectedTotal === point.connectedTotal
-          && existing.manualTotal === point.manualTotal
-        ) {
-          return prev;
-        }
-        next[existingIndex] = point;
-      } else {
-        next.push(point);
-      }
-
-      return next.slice(-90);
-    });
-  }, [connectedAccounts.length, connectedTotalBalance, manualTotalBalance, setNetWorthHistory]);
+    const dayKey = new Date().toISOString().slice(0, 10);
+    setNetWorthHistory((prev) =>
+      recordHistoryPoint(prev, dayKey, connectedTotalBalance, manualTotalBalance),
+    );
+  }, [connectedAccounts.length, connectedTotalBalance, manualAccounts.length, manualTotalBalance, setNetWorthHistory]);
 
   const chartData = useMemo(() => {
     const latestByDay = new Map<string, NetWorthHistoryPoint>();
     for (const point of netWorthHistory) {
       const existing = latestByDay.get(point.dayKey);
-      if (!existing || Date.parse(point.recordedAt) >= Date.parse(existing.recordedAt)) {
+      if (!existing || point.dayKey > existing.dayKey || Date.parse(point.recordedAt) >= Date.parse(existing.recordedAt)) {
         latestByDay.set(point.dayKey, point);
       }
     }
 
     const history = [...latestByDay.values()]
-      .sort((a, b) => Date.parse(a.recordedAt) - Date.parse(b.recordedAt))
+      .sort((a, b) => a.dayKey.localeCompare(b.dayKey))
       .slice(-8)
       .map((item) => ({
         label: item.label,
         value: item.total,
       }));
 
-    if (history.length >= 2) {
+    if (history.length > 0) {
       return history;
     }
 
-    return buildFallbackSeries(combinedNetWorth);
-  }, [combinedNetWorth, connectedAccounts.length, netWorthHistory]);
+    // No history yet — show current state as a single point.
+    if (connectedAccounts.length > 0 || manualAccounts.length > 0) {
+      const today = new Date();
+      return [{
+        label: today.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        value: combinedNetWorth,
+      }];
+    }
+
+    return [];
+  }, [combinedNetWorth, connectedAccounts.length, manualAccounts.length, netWorthHistory]);
 
   const accountRows = useMemo<AccountRow[]>(() => {
     const connectedRows = connectedAccounts.map((account) => ({
@@ -343,12 +354,14 @@ export function AccountsView() {
 
     const updatedAt = new Date(`${manualLastUpdated}T12:00:00.000Z`).toISOString();
 
+    const normalizedBalance = normalizeManualBalance(manualType, balance);
+
     setManualAccounts((prev) => [
       {
         id: `manual-${Date.now()}`,
         name,
         type: manualType,
-        balance: normalizeManualBalance(manualType, balance),
+        balance: normalizedBalance,
         institutionName: manualInstitution.trim() || undefined,
         notes: manualNotes.trim() || undefined,
         updatedAt,
@@ -357,6 +370,14 @@ export function AccountsView() {
       },
       ...prev,
     ]);
+
+    // Record a net worth history point on the account's actual date so the
+    // graph reflects the change at the right point in time.
+    const accountDayKey = manualLastUpdated;
+    const newManualTotal = manualTotalBalance + normalizedBalance;
+    setNetWorthHistory((prev) =>
+      recordHistoryPoint(prev, accountDayKey, connectedTotalBalance, newManualTotal),
+    );
 
     setManualName("");
     setManualType("checking");
@@ -502,44 +523,52 @@ export function AccountsView() {
         </div>
 
         <div className="h-[280px] rounded-[16px] border border-[var(--aw-border)] bg-white px-3 py-4">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
-              <CartesianGrid stroke="var(--aw-chart-grid)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                minTickGap={28}
-              />
-              <YAxis
-                tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                width={44}
-                tickFormatter={(value: number) => `$${value}`}
-              />
-              <Tooltip
-                formatter={(value) => [fmt(Number(value ?? 0)), "Net worth"]}
-                labelStyle={{ color: "var(--aw-text-muted)" }}
-                itemStyle={{ color: "var(--aw-text)" }}
-                contentStyle={{
-                  background: "var(--aw-surface-1)",
-                  border: "1px solid var(--aw-border)",
-                  borderRadius: 12,
-                  boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="var(--aw-chart-primary)"
-                strokeWidth={2.5}
-                dot={false}
-                activeDot={{ r: 4, fill: "var(--aw-chart-primary)", stroke: "#FFFFFF", strokeWidth: 2 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {chartData.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <p className="text-sm text-[var(--aw-text-muted)]">
+                Add an account to start tracking your net worth over time.
+              </p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                <CartesianGrid stroke="var(--aw-chart-grid)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={28}
+                />
+                <YAxis
+                  tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={44}
+                  tickFormatter={(value: number) => `$${value}`}
+                />
+                <Tooltip
+                  formatter={(value) => [fmt(Number(value ?? 0)), "Net worth"]}
+                  labelStyle={{ color: "var(--aw-text-muted)" }}
+                  itemStyle={{ color: "var(--aw-text)" }}
+                  contentStyle={{
+                    background: "var(--aw-surface-1)",
+                    border: "1px solid var(--aw-border)",
+                    borderRadius: 12,
+                    boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="var(--aw-chart-primary)"
+                  strokeWidth={2.5}
+                  dot={chartData.length <= 3}
+                  activeDot={{ r: 4, fill: "var(--aw-chart-primary)", stroke: "#FFFFFF", strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </WorkspacePanel>
 

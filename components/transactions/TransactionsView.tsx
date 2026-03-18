@@ -341,22 +341,22 @@ export function TransactionsView() {
       {moneyIntelligence ? (
         <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-4">
           <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Safe today</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Okay to spend today</p>
             <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendToday)}</p>
-            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">Confidence {Math.round(moneyIntelligence.affordability.confidence * 100)}%</p>
+            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">After bills and essentials</p>
           </article>
           <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Safe this week</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Okay to spend this week</p>
             <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendThisWeek)}</p>
             <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">Predicted spend {fmt(moneyIntelligence.weeklyPrediction.predictedSpendNext7d)}</p>
           </article>
           <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Safe this month</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Okay to spend this month</p>
             <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendThisMonth)}</p>
             <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">{moneyIntelligence.monthlySurvivalForecast.status.toUpperCase()} forecast</p>
           </article>
           <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Until next income</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Okay to spend until payday</p>
             <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">
               {moneyIntelligence.affordability.safeToSpendUntilNextIncome === null
                 ? "Unavailable"
@@ -364,8 +364,8 @@ export function TransactionsView() {
             </p>
             <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
               {moneyIntelligence.affordability.incomeCadenceReliable
-                ? "Income cadence reliable"
-                : "Cadence unreliable"}
+                ? "Based on your income pattern"
+                : "Income pattern still learning"}
             </p>
           </article>
         </div>
@@ -375,7 +375,7 @@ export function TransactionsView() {
         <div className="mb-4 rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
           <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">{tonightCard.title}</p>
           <p className="mt-1 text-sm font-semibold text-[var(--aw-text)]">
-            {tonightCard.amount === null ? "Unavailable" : fmt(tonightCard.amount)} safe cap
+            {tonightCard.amount === null ? "Unavailable" : fmt(tonightCard.amount)} spending limit
           </p>
           <p className="mt-1 text-xs text-[var(--aw-text-soft)]">{tonightCard.summary}</p>
         </div>

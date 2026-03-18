@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -14,8 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 import { WorkspaceHeader } from "@/components/finance/WorkspacePrimitives";
-
-type PlanTier = "starter" | "pro" | "autonomous" | null;
+import { useEntitlements } from "@/lib/useEntitlements";
 
 interface AutomationCard {
   id: string;
@@ -84,19 +82,7 @@ const STATUS_CONFIG = {
 };
 
 export function AutomationsView() {
-  const [tier, setTier] = useState<PlanTier>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/billing/status", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.ok && data.plan) setTier(data.plan as PlanTier);
-        else setTier("starter");
-      })
-      .catch(() => setTier("starter"))
-      .finally(() => setLoading(false));
-  }, []);
+  const { loading, can } = useEntitlements();
 
   if (loading) {
     return (
@@ -106,7 +92,7 @@ export function AutomationsView() {
     );
   }
 
-  const isAutonomous = tier === "autonomous";
+  const isAutonomous = can("ai_automation");
 
   return (
     <div className="flex h-full min-h-screen flex-col gap-8 bg-[var(--aw-surface-subtle)] p-6">

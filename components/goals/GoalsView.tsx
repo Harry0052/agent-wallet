@@ -24,6 +24,15 @@ import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
 import { contributionAmount, parseGoalContributionTarget } from "@/lib/manualTransactions";
 
 type GoalSource = "manual" | "connected";
+type GoalPriority = "high" | "medium" | "low";
+
+const PRIORITY_SORT_ORDER: Record<GoalPriority, number> = { high: 0, medium: 1, low: 2 };
+const PRIORITY_LABELS: Record<GoalPriority, string> = { high: "High", medium: "Medium", low: "Low" };
+const PRIORITY_COLORS: Record<GoalPriority, string> = {
+  high: "text-red-600 bg-red-50",
+  medium: "text-amber-600 bg-amber-50",
+  low: "text-violet-600 bg-violet-50",
+};
 
 interface LegacyGoalItem {
   id: string;
@@ -45,6 +54,7 @@ interface GoalRecord {
   icon?: string;
   notes?: string;
   goalType?: "save-up" | "pay-down";
+  priority?: GoalPriority;
   image?: string;
   manualContributionTotal: number;
   sourceType: GoalSource;
@@ -82,6 +92,11 @@ function isGoalRecord(goal: StoredGoal): goal is GoalRecord {
   );
 }
 
+function normalizePriority(value: unknown): GoalPriority {
+  if (value === "high" || value === "medium" || value === "low") return value;
+  return "medium";
+}
+
 function toGoalRecord(goal: StoredGoal): GoalRecord {
   if (isGoalRecord(goal)) {
     return {
@@ -92,6 +107,7 @@ function toGoalRecord(goal: StoredGoal): GoalRecord {
         ? Math.max(0, Number(goal.recurringContribution) || 0)
         : undefined,
       manualContributionTotal: Math.max(0, Number(goal.manualContributionTotal) || 0),
+      priority: normalizePriority(goal.priority),
       sourceType: goal.sourceType || "manual",
       createdAt: goal.createdAt || new Date().toISOString(),
       notes: goal.notes?.trim() || undefined,
@@ -106,6 +122,7 @@ function toGoalRecord(goal: StoredGoal): GoalRecord {
     targetAmount: Math.max(0, Number(goal.target) || 0),
     currentSavedAmount: Math.max(0, Number(goal.saved) || 0),
     manualContributionTotal: 0,
+    priority: "medium",
     sourceType: "manual",
     createdAt: new Date().toISOString(),
     icon: "🎯",
@@ -179,6 +196,7 @@ export function GoalsView() {
   const [goalLinkedAccount, setGoalLinkedAccount] = useState("");
   const [goalRecurringContribution, setGoalRecurringContribution] = useState("");
   const [goalIcon, setGoalIcon] = useState("");
+  const [goalPriority, setGoalPriority] = useState<GoalPriority>("medium");
   const [goalNotes, setGoalNotes] = useState("");
   const [goalImage, setGoalImage] = useState("");
   const [goalError, setGoalError] = useState<string | null>(null);
@@ -189,21 +207,9 @@ export function GoalsView() {
 
   const goals = useMemo(() => {
     const local = storedGoals.map((goal) => toGoalRecord(goal));
-    const priorityOrder: Record<string, number> = {
-      "emergency fund": 1,
-      "emergency": 1,
-      "rainy day": 1,
-      "bills": 2,
-      "essentials": 2,
-      "rent": 2,
-      "mortgage": 2,
-      "utilities": 2,
-    };
     return local.sort((a, b) => {
-      const aName = a.name.toLowerCase();
-      const bName = b.name.toLowerCase();
-      const aPriority = Object.entries(priorityOrder).find(([key]) => aName.includes(key))?.[1] ?? (a.goalType === "pay-down" ? 3 : 5);
-      const bPriority = Object.entries(priorityOrder).find(([key]) => bName.includes(key))?.[1] ?? (b.goalType === "pay-down" ? 3 : 5);
+      const aPriority = PRIORITY_SORT_ORDER[a.priority ?? "medium"];
+      const bPriority = PRIORITY_SORT_ORDER[b.priority ?? "medium"];
       if (aPriority !== bPriority) return aPriority - bPriority;
       return a.name.localeCompare(b.name);
     });
@@ -298,6 +304,7 @@ export function GoalsView() {
     setGoalLinkedAccount("");
     setGoalRecurringContribution("");
     setGoalIcon("🎯");
+    setGoalPriority("medium");
     setGoalImage("");
     setGoalNotes("");
     setGoalError(null);
@@ -315,6 +322,7 @@ export function GoalsView() {
     setGoalLinkedAccount(goal.linkedAccount ?? "");
     setGoalRecurringContribution(goal.recurringContribution ? String(goal.recurringContribution) : "");
     setGoalIcon(goal.icon ?? "");
+    setGoalPriority(goal.priority ?? "medium");
     setGoalImage(goal.image ?? "");
     setGoalNotes(goal.notes ?? "");
     setGoalError(null);
@@ -361,6 +369,7 @@ export function GoalsView() {
         targetAmount,
         currentSavedAmount,
         goalType,
+        priority: goalPriority,
         targetDate: goalTargetDate || undefined,
         linkedAccount: goalLinkedAccount.trim() || undefined,
         recurringContribution: recurringContribution > 0 ? recurringContribution : undefined,
@@ -438,17 +447,6 @@ export function GoalsView() {
           <p className="mt-1 text-[var(--aw-text-muted)]">What you're saving for and paying off, sorted by what matters most</p>
         </div>
 
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => openCreateGoal()}
-            className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
-          >
-            <Plus size={16} />
-            Add a goal
-          </button>
-        </div>
-
         <div className="mb-6 flex gap-3 border-b border-[var(--aw-border)]">
           <button
             type="button"
@@ -498,6 +496,7 @@ export function GoalsView() {
                     setGoalLinkedAccount("");
                     setGoalRecurringContribution("");
                     setGoalIcon("🛡️");
+                    setGoalPriority("high");
                     setGoalImage("");
                     setGoalNotes("Safety cushion for unexpected expenses");
                     setGoalError(null);
@@ -539,20 +538,7 @@ export function GoalsView() {
               const statusColor = status === "completed" ? "text-green-600" : status === "at-risk" ? "text-orange-500" : "text-green-600";
               const statusBg = status === "completed" ? "bg-green-50" : status === "at-risk" ? "bg-orange-50" : "bg-green-50";
               const statusText = status === "completed" ? "Done!" : status === "at-risk" ? "Needs attention" : "Looking good";
-
-              const goalNameLower = goal.name.toLowerCase();
-              const isEmergency = goalNameLower.includes("emergency") || goalNameLower.includes("rainy day");
-              const isBills = goalNameLower.includes("bills") || goalNameLower.includes("essentials") || goalNameLower.includes("rent") || goalNameLower.includes("mortgage") || goalNameLower.includes("utilities");
-              const isDebt = goal.goalType === "pay-down";
-              const priorityLabel = isEmergency ? "Top Priority" : isBills ? "Important" : isDebt ? "Pay This Off" : "Nice to Have";
-              const priorityColor = isEmergency ? "text-red-600 bg-red-50" : isBills ? "text-amber-600 bg-amber-50" : isDebt ? "text-blue-600 bg-blue-50" : "text-violet-600 bg-violet-50";
-              const priorityHint = isEmergency
-                ? "Helps if life gets expensive unexpectedly."
-                : isBills
-                  ? "Keeps the important stuff covered."
-                  : isDebt
-                    ? "Paying this off saves you money on interest."
-                    : "Fun to save for — build your safety cushion first.";
+              const priority = goal.priority ?? "medium";
 
               return (
                 <div key={goal.id} className="aw-card !p-0 overflow-hidden hover:shadow-md transition-shadow">
@@ -568,18 +554,19 @@ export function GoalsView() {
                           <div className="flex items-center gap-2 flex-wrap">
                             {goal.icon && <span className="text-lg">{goal.icon}</span>}
                             <h3 className="truncate text-base font-semibold text-[var(--aw-text)]">{goal.name}</h3>
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${priorityColor}`}>
-                              {priorityLabel}
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_COLORS[priority]}`}>
+                              {PRIORITY_LABELS[priority]}
                             </span>
                             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusBg} ${statusColor}`}>
                               {status === "completed" ? <CheckCircle2 size={12} /> : status === "at-risk" ? <AlertCircle size={12} /> : null}
                               {statusText}
                             </span>
                           </div>
-                          <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
-                            {priorityHint}
-                            {goal.targetDate ? ` • Finish by ${goal.targetDate}` : ""}
-                          </p>
+                          {goal.targetDate ? (
+                            <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
+                              Finish by {goal.targetDate}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
                           <button
@@ -747,6 +734,18 @@ export function GoalsView() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-1">
+                  <span className="text-xs text-[var(--aw-text-muted)]">Priority</span>
+                  <select
+                    value={goalPriority}
+                    onChange={(event) => setGoalPriority(event.target.value as GoalPriority)}
+                    className="aw-input h-10 text-sm"
+                  >
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
                   <span className="text-xs text-[var(--aw-text-muted)]">Target date (optional)</span>
                   <input
                     value={goalTargetDate}
@@ -755,6 +754,9 @@ export function GoalsView() {
                     type="date"
                   />
                 </label>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-1">
                   <span className="text-xs text-[var(--aw-text-muted)]">Icon (optional)</span>
                   <input

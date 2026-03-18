@@ -39,7 +39,7 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
               Connect an account
             </Link>
             <Link
-              href="/recurring"
+              href="/transactions"
               style={dashboardPrimaryButtonStyle}
               className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-primary-hover)]"
             >
@@ -60,7 +60,7 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
               </div>
             </div>
           ))}
-          <Link href="/recurring" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
+          <Link href="/transactions" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
             See all repeating payments
             <ArrowRight size={15} />
           </Link>

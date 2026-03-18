@@ -20,9 +20,18 @@ function secureEqual(left: string, right: string): boolean {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+// TODO: Upgrade to Plaid's official JWT-based webhook verification using the
+// `Plaid-Verification` header and JWK from /webhook_verification_key/get.
+// The current shared-secret approach is a temporary hardening measure.
 function verifyWebhookSecret(req: NextRequest): boolean {
   const expected = getOptionalSecret("PLAID_WEBHOOK_SHARED_SECRET");
-  if (!expected) return true;
+  if (!expected) {
+    // In production, refuse to process webhooks without verification configured.
+    const plaidEnv = process.env.PLAID_ENV?.trim().toLowerCase();
+    if (plaidEnv === "production") return false;
+    // Allow unverified webhooks in sandbox/development for testing convenience.
+    return true;
+  }
   const provided = req.headers.get("x-plaid-webhook-secret")?.trim();
   return Boolean(provided && secureEqual(provided, expected));
 }

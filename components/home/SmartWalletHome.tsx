@@ -21,7 +21,7 @@ import {
   type ManualInvestmentHolding,
   type ManualNetWorthItem,
 } from "@/lib/manualMode";
-import type { DashboardInvestmentHolding } from "@/components/dashboard/dashboardTypes";
+import type { DashboardGoalSummary, DashboardInvestmentHolding } from "@/components/dashboard/dashboardTypes";
 import { normalizeRecordSourceType } from "@/lib/sourceType";
 
 function getGreeting(): string {
@@ -37,6 +37,7 @@ interface DashboardSupportData {
   transactions: StatementTransaction[];
   recurring: DetectedSubscription[];
   investments: DashboardInvestmentHolding[];
+  goals: DashboardGoalSummary[];
 }
 
 interface ManualCashflowEntry {
@@ -64,6 +65,7 @@ export function SmartWalletHome() {
     transactions: [],
     recurring: [],
     investments: [],
+    goals: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +121,30 @@ export function SmartWalletHome() {
         MANUAL_STORAGE_KEYS.netWorth,
         [],
       );
+      const storedGoals = readLocalStorageJson<Array<{
+        id: string;
+        name?: string;
+        label?: string;
+        targetAmount?: number;
+        target?: number;
+        currentSavedAmount?: number;
+        saved?: number;
+        manualContributionTotal?: number;
+      }>>(MANUAL_STORAGE_KEYS.goals, []);
+      const mappedGoals: DashboardGoalSummary[] = storedGoals.map((g) => {
+        const name = g.name ?? g.label ?? "";
+        const targetAmount = Math.max(0, Number(g.targetAmount ?? g.target) || 0);
+        const saved = Math.max(0, Number(g.currentSavedAmount ?? g.saved) || 0);
+        const manual = Math.max(0, Number(g.manualContributionTotal) || 0);
+        const totalSaved = saved + manual;
+        return {
+          id: g.id,
+          name,
+          targetAmount,
+          totalSaved,
+          progress: targetAmount > 0 ? Math.min(Math.round((totalSaved / targetAmount) * 100), 100) : 0,
+        };
+      });
 
       const mappedManualAccounts: ConnectedAccountRecord[] = manualAccounts.map((account) => ({
         id: account.id,
@@ -212,6 +238,7 @@ export function SmartWalletHome() {
           })),
         ],
         investments: mappedManualInvestments,
+        goals: mappedGoals,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load.");
@@ -252,6 +279,7 @@ export function SmartWalletHome() {
         transactions: supportData.transactions,
         recurring: supportData.recurring,
         investments: supportData.investments,
+        goals: supportData.goals,
       }}
       accountsConnected={
         supportData.accounts.length > 0

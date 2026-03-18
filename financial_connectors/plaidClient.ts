@@ -95,10 +95,12 @@ function getPlaidConfig(): PlaidConfig {
   const clientId = getRequiredSecret("PLAID_CLIENT_ID");
   const secret = getRequiredSecret("PLAID_SECRET");
   const envRaw = process.env.PLAID_ENV?.trim().toLowerCase();
-  const env: PlaidEnvironment =
-    envRaw === "production" || envRaw === "development" || envRaw === "sandbox"
-      ? envRaw
-      : "sandbox";
+  if (envRaw !== "production" && envRaw !== "development" && envRaw !== "sandbox") {
+    throw new Error(
+      `Invalid or missing PLAID_ENV: "${process.env.PLAID_ENV ?? "(unset)"}". Must be "sandbox", "development", or "production".`,
+    );
+  }
+  const env: PlaidEnvironment = envRaw;
 
   return {
     clientId,
@@ -125,22 +127,33 @@ export class PlaidClient {
     countryCodes?: string[];
     language?: string;
     products?: string[];
+    webhook?: string;
+    redirectUri?: string;
   }): Promise<{
     linkToken: string;
     expiration: string;
     requestId: string;
   }> {
+    const payload: Record<string, unknown> = {
+      user: {
+        client_user_id: input.userId,
+      },
+      client_name: input.clientName ?? "Calico",
+      language: input.language ?? "en",
+      country_codes: input.countryCodes ?? ["US"],
+      products: input.products ?? ["auth", "transactions"],
+    };
+
+    if (input.webhook) {
+      payload.webhook = input.webhook;
+    }
+    if (input.redirectUri) {
+      payload.redirect_uri = input.redirectUri;
+    }
+
     const response = await this.request<LinkTokenCreateResponse>(
       "/link/token/create",
-      {
-        user: {
-          client_user_id: input.userId,
-        },
-        client_name: input.clientName ?? "Calico",
-        language: input.language ?? "en",
-        country_codes: input.countryCodes ?? ["US"],
-        products: input.products ?? ["auth"],
-      },
+      payload,
     );
 
     return {
