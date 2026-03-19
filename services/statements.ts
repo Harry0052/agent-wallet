@@ -2,6 +2,7 @@ import type { RecordSourceType } from "@/lib/manualMode";
 import { normalizeRecordSourceType } from "@/lib/sourceType";
 import type { MoneyIntelligenceResult } from "@/lib/server/moneyIntelligence/types";
 import type { AutomationActionSummary } from "@/lib/types";
+import { safeJson } from "@/services/safeFetch";
 
 export interface StatementTransaction {
   id: string;
@@ -222,12 +223,12 @@ export async function fetchUnifiedStatement(
     cache: "no-store",
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     statement?: UnifiedStatement;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || !body.statement) {
     throw toError(body);
@@ -255,12 +256,12 @@ export async function fetchAccountStatement(input: {
     cache: "no-store",
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     statement?: AccountStatement;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || !body.statement) {
     throw toError(body);
@@ -275,12 +276,12 @@ export async function fetchConnectedAccounts(): Promise<ConnectedAccount[]> {
     cache: "no-store",
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     accounts?: ConnectedAccount[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || !Array.isArray(body.accounts)) {
     throw toError(body);
@@ -295,12 +296,12 @@ export async function fetchConnectedTransactionsList(): Promise<StatementTransac
     cache: "no-store",
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     transactions?: StatementTransaction[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || !Array.isArray(body.transactions)) {
     throw toError(body);
@@ -318,12 +319,12 @@ export async function fetchSuspectedSubscriptions(): Promise<DetectedSubscriptio
     cache: "no-store",
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     subscriptions?: DetectedSubscription[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || !Array.isArray(body.subscriptions)) {
     throw toError(body);
@@ -349,12 +350,12 @@ export async function setRecurringLifecycle(input: {
     }),
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     subscriptions?: DetectedSubscription[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || !Array.isArray(body.subscriptions)) {
     throw toError(body);
@@ -382,12 +383,12 @@ export async function addManualRecurring(input: {
     }),
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     subscriptions?: DetectedSubscription[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || !Array.isArray(body.subscriptions)) {
     throw toError(body);
@@ -407,14 +408,14 @@ export async function fetchAiSpendingAnalysis(): Promise<AiSpendingAnalysisRespo
     cache: "no-store",
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     analysis?: AiSpendingAnalysisResponse["analysis"];
     transaction_summary?: AiSpendingAnalysisResponse["transaction_summary"];
     generated_at?: string;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (
     !response.ok
@@ -444,13 +445,13 @@ export async function fetchCategoryCorrections(
     },
   );
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     rules?: StatementCategoryCorrectionsPayload["rules"];
     corrections?: StatementCategoryCorrection[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || !Array.isArray(body.rules) || !Array.isArray(body.corrections)) {
     throw toError(body);
@@ -478,14 +479,14 @@ export async function submitCategoryCorrection(input: {
     body: JSON.stringify(input),
   });
 
-  const body = (await response.json()) as {
+  const body = await safeJson<{
     ok?: boolean;
     recorded?: boolean;
     ruleStatus?: "active" | "pending";
     rule?: MoneyIntelligenceResult["categoryLearning"]["activeRules"][number] | null;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !body.ok || typeof body.recorded !== "boolean" || !body.ruleStatus) {
     throw toError(body);

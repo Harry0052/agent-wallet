@@ -1,5 +1,6 @@
 import type { MoneyIntelligenceResult } from "@/lib/server/moneyIntelligence/types";
 import type { AutomationActionSummary } from "@/lib/types";
+import { safeJson } from "@/services/safeFetch";
 
 export type SourceState = "Synced" | "Imported" | "Inferred" | "Manual";
 
@@ -148,12 +149,12 @@ export async function fetchSmartHomePayload(): Promise<SmartHomePayload> {
     cache: "no-store",
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     home?: SmartHomePayload;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok || !payload.home) {
     throw toError(payload);
@@ -169,12 +170,12 @@ export async function runSmartSurfacePrompt(prompt: string): Promise<SmartSurfac
     body: JSON.stringify({ prompt }),
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     result?: SmartSurfaceResult;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok || !payload.result) {
     throw toError(payload);
@@ -208,7 +209,7 @@ export async function fetchSmartTelemetryRecent(limit = 40): Promise<SmartTeleme
     cache: "no-store",
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     purpose?: SmartTelemetryRecentResponse["purpose"];
     authoritative?: SmartTelemetryRecentResponse["authoritative"];
@@ -216,7 +217,7 @@ export async function fetchSmartTelemetryRecent(limit = 40): Promise<SmartTeleme
     events?: SmartTelemetryRecentEvent[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (
     !response.ok

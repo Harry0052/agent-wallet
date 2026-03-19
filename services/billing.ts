@@ -1,3 +1,5 @@
+import { safeJson } from '@/services/safeFetch';
+
 export type PlanId = 'starter' | 'pro' | 'autonomous';
 
 export interface BillingStatus {
@@ -18,8 +20,8 @@ export async function fetchBillingStatus(): Promise<BillingStatus> {
     cache: 'no-store',
   });
 
-  const body = await response.json();
-  if (!response.ok || !body.ok) {
+  const body = await safeJson<{ ok?: boolean; billing?: BillingStatus; error?: string }>(response);
+  if (!response.ok || !body.ok || !body.billing) {
     throw new Error(body.error || 'Failed to fetch billing status');
   }
 
@@ -40,7 +42,7 @@ export async function startCheckout(plan: PlanId): Promise<void> {
 
   let body: Record<string, unknown>;
   try {
-    body = await response.json();
+    body = await safeJson<Record<string, unknown>>(response);
   } catch {
     throw new Error(`Server returned invalid response (HTTP ${response.status}).`);
   }
@@ -68,7 +70,7 @@ export async function openBillingPortal(): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  const body = await response.json();
+  const body = await safeJson<{ ok?: boolean; url?: string; error?: string }>(response);
 
   if (!response.ok || !body.ok) {
     if (response.status === 401) {
@@ -78,5 +80,8 @@ export async function openBillingPortal(): Promise<void> {
     throw new Error(body.error || 'Could not open billing portal');
   }
 
+  if (!body.url) {
+    throw new Error('No portal URL returned');
+  }
   window.location.href = body.url;
 }

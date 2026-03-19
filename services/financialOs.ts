@@ -4,6 +4,7 @@ import type {
   FinancialNotification,
   UnifiedFinancialAccountDashboard,
 } from "@/lib/server/financialOs/types";
+import { safeJson } from "@/services/safeFetch";
 
 function toError(payload: { error?: string; errorCode?: string }): Error {
   if (payload.errorCode && payload.error) return new Error(`${payload.errorCode}: ${payload.error}`);
@@ -22,12 +23,12 @@ export async function fetchFinancialOsDashboard(input?: {
     cache: "no-store",
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     dashboard?: UnifiedFinancialAccountDashboard;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok || !payload.dashboard) {
     throw toError(payload);
@@ -40,12 +41,12 @@ export async function fetchFinancialNotifications(limit = 30): Promise<Financial
     method: "GET",
     cache: "no-store",
   });
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     notifications?: FinancialNotification[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
   if (!response.ok || !payload.ok || !Array.isArray(payload.notifications)) {
     throw toError(payload);
   }
@@ -61,12 +62,12 @@ export async function dismissFinancialNotification(notificationId: string): Prom
       action: "dismiss",
     }),
   });
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     dismissed?: boolean;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
   if (!response.ok || !payload.ok || typeof payload.dismissed !== "boolean") {
     throw toError(payload);
   }
@@ -80,12 +81,12 @@ export async function listFinancialDocumentHooks(limit = 80): Promise<{
     method: "GET",
     cache: "no-store",
   });
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     documents?: FinancialDocumentHook[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
   if (!response.ok || !payload.ok || !Array.isArray(payload.documents)) {
     throw toError(payload);
   }
@@ -108,12 +109,12 @@ export async function createFinancialDocumentHook(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     document?: FinancialDocumentHook;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
   if (!response.ok || !payload.ok || !payload.document) {
     throw toError(payload);
   }
@@ -129,12 +130,12 @@ export async function parseReceipt(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     receipt?: DeterministicReceiptParseResult;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
   if (!response.ok || !payload.ok || !payload.receipt) {
     throw toError(payload);
   }

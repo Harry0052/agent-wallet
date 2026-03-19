@@ -1,6 +1,7 @@
 import type { SavedPaymentMethod } from "@/lib/types";
 import type { RecordSourceType } from "@/lib/manualMode";
 import { normalizeRecordSourceType } from "@/lib/sourceType";
+import { safeJson } from "@/services/safeFetch";
 
 export type SourceState = "Synced" | "Imported" | "Inferred" | "Manual";
 
@@ -191,13 +192,13 @@ export async function fetchConnectedAccountsBundle(): Promise<{
     cache: "no-store",
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     accounts?: ConnectedAccountRecord[];
     institutions?: ConnectedInstitutionRecord[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok) {
     throw toError(payload);
@@ -221,13 +222,13 @@ export async function createConnectedAccountLinkToken(): Promise<ConnectedAccoun
     body: JSON.stringify({}),
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     link_token?: string;
     expiration?: string;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok || !payload.link_token || !payload.expiration) {
     throw toError(payload);
@@ -250,13 +251,13 @@ export async function exchangeConnectedAccountPublicToken(
     }),
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     accounts?: ConnectedAccountRecord[];
     institutions?: ConnectedInstitutionRecord[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok) {
     throw toError(payload);
@@ -281,13 +282,13 @@ export async function syncConnectedTransactions(): Promise<ConnectedTransactions
     body: JSON.stringify({}),
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     sync?: ConnectedTransactionsSyncResult["sync"];
     transactions?: ConnectedTransactionsSyncResult["transactions"];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok || !Array.isArray(payload.sync) || !Array.isArray(payload.transactions)) {
     throw toError(payload);
@@ -309,13 +310,13 @@ export async function removeConnectedAccount(accountId: string): Promise<{
     body: JSON.stringify({}),
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     removed?: boolean;
     removedItem?: boolean;
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok) {
     throw toError(payload);
@@ -333,12 +334,12 @@ export async function fetchConnectedApps(): Promise<ConnectedAppRecord[]> {
     cache: "no-store",
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     apps?: ConnectedAppRecord[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok || !Array.isArray(payload.apps)) {
     throw toError(payload);
@@ -360,12 +361,12 @@ export async function fetchTrackedRecurring(): Promise<TrackedRecurringRecord[]>
     cache: "no-store",
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     subscriptions?: TrackedRecurringRecord[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok || !Array.isArray(payload.subscriptions)) {
     throw toError(payload);
@@ -380,12 +381,12 @@ export async function fetchFundingMethods(): Promise<SavedPaymentMethod[]> {
     cache: "no-store",
   });
 
-  const payload = (await response.json()) as {
+  const payload = await safeJson<{
     ok?: boolean;
     methods?: SavedPaymentMethod[];
     error?: string;
     errorCode?: string;
-  };
+  }>(response);
 
   if (!response.ok || !payload.ok || !Array.isArray(payload.methods)) {
     throw toError(payload);

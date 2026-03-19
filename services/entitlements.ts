@@ -1,3 +1,5 @@
+import { safeJson } from '@/services/safeFetch';
+
 export type PlanId = 'starter' | 'pro' | 'autonomous';
 
 export interface LockedFeature {
@@ -23,16 +25,16 @@ export interface EntitlementsResponse {
 
 export async function fetchEntitlements(): Promise<EntitlementsResponse> {
   const res = await fetch('/api/entitlements', { cache: 'no-store' });
-  const body = await res.json();
+  const body = await safeJson<{ ok?: boolean; plan?: PlanId | null; isActive?: boolean; available?: string[]; locked?: LockedFeature[]; tutorial?: EntitlementsResponse['tutorial']; error?: string }>(res);
   if (!res.ok || !body.ok) {
     throw new Error(body.error || 'Failed to fetch entitlements');
   }
   return {
-    plan: body.plan,
-    isActive: body.isActive,
-    available: body.available,
-    locked: body.locked,
-    tutorial: body.tutorial,
+    plan: body.plan ?? null,
+    isActive: body.isActive ?? false,
+    available: body.available ?? [],
+    locked: body.locked ?? [],
+    tutorial: body.tutorial ?? null,
   };
 }
 
@@ -50,7 +52,7 @@ export async function deleteAccount(input: {
       confirmText: input.confirmText,
     }),
   });
-  const body = await res.json();
+  const body = await safeJson<{ ok?: boolean; error?: string }>(res);
   if (!res.ok || !body.ok) {
     throw new Error(body.error || 'Account deletion failed');
   }

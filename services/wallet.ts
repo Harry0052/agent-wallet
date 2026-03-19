@@ -1,4 +1,5 @@
 import type { Recipient, Transaction, Wallet, WalletSettings } from '@/lib/types';
+import { safeJson } from '@/services/safeFetch';
 
 const DEFAULT_SETTINGS: WalletSettings = {
   maxTransaction: 50,
@@ -27,17 +28,16 @@ export interface SendMoneyResult {
   payoutStatus: 'succeeded' | 'pending' | 'failed';
 }
 
-function jsonOrThrow<T>(res: Response): Promise<T> {
-  return res.json().then((body) => {
-    if (!res.ok) {
-      const parsed = body as { error?: string; errorCode?: string };
-      if (parsed.errorCode && parsed.error) {
-        throw new Error(`${parsed.errorCode}: ${parsed.error}`);
-      }
-      throw new Error(parsed.error || 'Request failed');
+async function jsonOrThrow<T>(res: Response): Promise<T> {
+  const body = await safeJson<T & { error?: string; errorCode?: string }>(res);
+  if (!res.ok) {
+    const parsed = body as { error?: string; errorCode?: string };
+    if (parsed.errorCode && parsed.error) {
+      throw new Error(`${parsed.errorCode}: ${parsed.error}`);
     }
-    return body as T;
-  });
+    throw new Error(parsed.error || 'Request failed');
+  }
+  return body as T;
 }
 
 export function getDefaultWallet(): Wallet {
