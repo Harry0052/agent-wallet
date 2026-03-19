@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
-  AuthError,
   isAuthError,
   requireAuthenticatedUser,
   revokeCurrentSessionFromCookies,
-  verifyPasswordForUser,
 } from '@/lib/server/auth';
 import { clearSessionCookie } from '@/lib/server/authCookies';
 import { recordAccountAuditEvent } from '@/lib/server/accountAudit';
@@ -17,7 +15,6 @@ import { RequestValidationError, validateJsonBody } from '@/security/requestVali
 export const runtime = 'nodejs';
 
 const DeleteSchema = z.object({
-  password: z.string().min(1, 'Current password is required.'),
   confirmText: z.string().refine((value) => value.trim().toUpperCase() === 'DELETE', {
     message: 'Type DELETE to confirm account deletion.',
   }),
@@ -50,12 +47,7 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const user = await requireAuthenticatedUser();
-    const body = await validateJsonBody(req, DeleteSchema);
-
-    await verifyPasswordForUser({
-      appUserId: user.appUserId,
-      password: body.password,
-    });
+    await validateJsonBody(req, DeleteSchema);
 
     await recordAccountAuditEvent({
       userId: user.appUserId,
@@ -91,14 +83,6 @@ export async function DELETE(req: NextRequest) {
     clearSessionCookie(response);
     return response;
   } catch (error) {
-    if (
-      error instanceof AuthError
-      && error.status === 401
-      && error.message === 'Password verification failed.'
-    ) {
-      return NextResponse.json({ ok: false, error: 'Current password is incorrect.' }, { status: 401 });
-    }
-
     return NextResponse.json({
       ok: false,
       error: toErrorMessage(error),

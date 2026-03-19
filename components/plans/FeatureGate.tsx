@@ -1,7 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
-import { startCheckout, type PlanId } from "@/services/billing";
+import type { PlanId } from "@/services/billing";
 
 interface FeatureGateProps {
   children: React.ReactNode;
@@ -17,6 +18,8 @@ const PLAN_NAMES: Record<PlanId, string> = {
 };
 
 export function FeatureGate({ children, hasAccess, featureLabel, requiredPlan }: FeatureGateProps) {
+  const router = useRouter();
+
   if (hasAccess) return <>{children}</>;
 
   return (
@@ -45,7 +48,7 @@ export function FeatureGate({ children, hasAccess, featureLabel, requiredPlan }:
         </p>
         <button
           type="button"
-          onClick={() => void startCheckout(requiredPlan)}
+          onClick={() => router.push("/settings?section=billing")}
           className="mt-4 rounded-full px-5 py-2 text-sm font-semibold transition-transform active:scale-[0.98]"
           style={{ background: "#FDBA74", color: "#111", boxShadow: "0 2px 12px rgba(253,186,116,0.3)" }}
         >

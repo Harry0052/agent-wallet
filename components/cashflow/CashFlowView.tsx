@@ -446,25 +446,27 @@ export function CashFlowView() {
                 <span className="text-xs text-[var(--aw-text-muted)]">Expenses</span>
               </div>
             </div>
-            <div className="h-[280px] rounded-[16px] border border-[var(--aw-border)] bg-white px-3 py-4">
+            <div className="h-[280px] rounded-2xl bg-[var(--aw-surface-1)] px-3 py-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
-                  <CartesianGrid stroke="var(--aw-chart-grid)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => `$${v}`} />
+                <BarChart data={chartData} margin={{ top: 10, right: 12, left: 4, bottom: 4 }} barGap={2}>
+                  <CartesianGrid stroke="var(--aw-chart-grid)" strokeDasharray="3 4" strokeOpacity={0.5} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: "var(--aw-text-muted)", fontSize: 10, fontWeight: 500 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "var(--aw-text-muted)", fontSize: 10, fontWeight: 500 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => `$${v}`} />
                   <Tooltip
                     formatter={(value, name) => [fmt(Number(value ?? 0)), name === "income" ? "Income" : "Expenses"]}
-                    labelStyle={{ color: "var(--aw-text-muted)" }}
-                    itemStyle={{ color: "var(--aw-text)" }}
+                    labelStyle={{ color: "var(--aw-text-muted)", fontSize: 11 }}
+                    itemStyle={{ color: "var(--aw-text)", fontSize: 12, fontWeight: 500 }}
                     contentStyle={{
                       background: "var(--aw-surface-1)",
                       border: "1px solid var(--aw-border)",
-                      borderRadius: 12,
-                      boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
+                      borderRadius: 14,
+                      boxShadow: "0 4px 16px rgba(17,17,17,0.06)",
+                      padding: "10px 14px",
                     }}
+                    cursor={{ fill: "rgba(253,186,116,0.06)" }}
                   />
-                  <Bar dataKey="income" fill="var(--aw-chart-positive-fill)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expense" fill="var(--aw-chart-negative-fill)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="income" fill="var(--aw-chart-positive-fill)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="expense" fill="var(--aw-chart-negative-fill)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

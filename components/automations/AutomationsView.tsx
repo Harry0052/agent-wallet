@@ -122,10 +122,10 @@ export function AutomationsView() {
             Automation review lives in Task Center on the Fully Autonomous plan. This preview shows the kinds of workflows Calico can support safely.
           </p>
           <Link
-            href="/plans"
+            href="/settings?section=billing"
             className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
           >
-            Upgrade to Fully Autonomous
+            View Plans & Billing
             <ArrowRight size={16} />
           </Link>
 

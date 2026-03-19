@@ -889,6 +889,12 @@ function InstitutionsSection() {
   );
 }
 
+const PLAN_DISPLAY: Record<PlanId, { name: string; price: string; description: string }> = {
+  starter: { name: "Starter", price: "Free", description: "See where you stand" },
+  pro: { name: "Pro", price: "$9/mo", description: "Understand what to do next" },
+  autonomous: { name: "Fully Autonomous", price: "$29/mo", description: "Let Calico handle it" },
+};
+
 function BillingSection({
   billing,
   onManage,
@@ -896,91 +902,96 @@ function BillingSection({
   billing: BillingStatus | null;
   onManage: () => void;
 }) {
+  const currentPlan = billing?.plan ?? null;
+
   return (
     <div className="aw-card space-y-6 !p-6">
       <div>
-        <h3 className="text-lg font-semibold text-[var(--aw-text)]">Billing</h3>
+        <h3 className="text-lg font-semibold text-[var(--aw-text)]">Plan & Billing</h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Manage your subscription and plans
+          Manage your subscription, upgrade, or downgrade your plan
         </p>
       </div>
 
+      {/* Current plan status */}
       {billing ? (
-        <div className="space-y-4">
-          <div className="rounded-lg border border-[var(--aw-border)] p-4">
+        <div className="flex items-center gap-3 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
+          <div className="flex-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--aw-text-muted)]">
               Current plan
             </p>
-            <p className="mt-2 text-lg font-semibold text-[var(--aw-text)]">
+            <p className="mt-1 text-base font-semibold text-[var(--aw-text)]">
               {billing.planName}
             </p>
-            <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
+            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
               ${billing.priceMonthly}/month
+              {billing.status === "active" && !billing.cancelAtPeriodEnd && (
+                <span className="ml-2 text-green-600">Active</span>
+              )}
             </p>
-            <button
-              onClick={onManage}
-              type="button"
-              className="mt-4 rounded-lg px-4 py-2 text-sm font-medium transition"
-              style={{
-                background: "var(--calico-card, #FFFCF8)",
-                border: "1px solid var(--calico-border, #F2DECC)",
-                color: "var(--aw-text)",
-              }}
-            >
-              Manage billing
-            </button>
           </div>
-
-          {billing.status === "active" && !billing.cancelAtPeriodEnd && (
-            <div className="rounded-lg border border-[var(--aw-border)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--aw-text-muted)]">
-                Status
-              </p>
-              <p className="mt-2 text-sm font-medium text-green-600">
-                ✓ Active
-              </p>
-            </div>
-          )}
+          <button
+            onClick={onManage}
+            type="button"
+            className="shrink-0 rounded-lg px-4 py-2 text-xs font-medium transition"
+            style={{
+              background: "var(--calico-card, #FFFCF8)",
+              border: "1px solid var(--calico-border, #F2DECC)",
+              color: "var(--aw-text)",
+            }}
+          >
+            Manage billing
+          </button>
         </div>
-      ) : (
-        <div className="rounded-lg border border-[var(--calico-border)] bg-[var(--calico-card)] p-4">
-          <p className="text-sm font-medium text-[var(--aw-text)]">
-            No active plan
-          </p>
-          <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
-            Subscribe to unlock all features
-          </p>
-          <div className="mt-3 flex gap-2">
-            {(["starter", "pro", "autonomous"] as PlanId[]).map((plan) => (
+      ) : null}
+
+      {/* Plan options */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--aw-text-muted)]">
+          {currentPlan ? "Change plan" : "Choose a plan"}
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {(["starter", "pro", "autonomous"] as PlanId[]).map((planId) => {
+            const plan = PLAN_DISPLAY[planId];
+            const isCurrent = planId === currentPlan;
+            return (
               <button
-                key={plan}
+                key={planId}
                 type="button"
                 onClick={() => {
-                  void startCheckout(plan);
+                  if (!isCurrent) void startCheckout(planId);
                 }}
-                className="rounded-full px-3 py-1.5 text-xs font-semibold transition"
+                disabled={isCurrent}
+                className="relative flex flex-col items-start rounded-xl border p-4 text-left transition hover:border-[var(--aw-primary)] disabled:cursor-default disabled:opacity-100"
                 style={{
-                  background:
-                    plan === "pro"
-                      ? "var(--calico-primary, #FDBA74)"
-                      : "var(--calico-card, #FFFCF8)",
-                  color: "var(--calico-text, #111)",
-                  border:
-                    plan === "pro"
-                      ? "none"
-                      : "1px solid var(--calico-border, #F2DECC)",
+                  borderColor: isCurrent
+                    ? "var(--aw-primary)"
+                    : "var(--aw-border)",
+                  background: isCurrent
+                    ? "rgba(253,186,116,0.08)"
+                    : "var(--aw-surface-1)",
                 }}
               >
-                {plan === "starter"
-                  ? "Start Free Trial"
-                  : plan === "pro"
-                    ? "Subscribe Pro"
-                    : "Autonomous"}
+                {isCurrent && (
+                  <span className="absolute right-3 top-3 rounded-full bg-[var(--aw-primary)] px-2 py-0.5 text-[10px] font-semibold text-[var(--aw-text)]">
+                    Current
+                  </span>
+                )}
+                <p className="text-sm font-semibold text-[var(--aw-text)]">{plan.name}</p>
+                <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">{plan.price}</p>
+                <p className="mt-2 text-xs leading-relaxed text-[var(--aw-text-muted)]">{plan.description}</p>
+                {!isCurrent && (
+                  <span className="mt-3 text-xs font-semibold text-[var(--aw-primary)]">
+                    {currentPlan && (["starter", "pro", "autonomous"].indexOf(planId) < ["starter", "pro", "autonomous"].indexOf(currentPlan))
+                      ? "Downgrade"
+                      : "Upgrade"}
+                  </span>
+                )}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -1066,25 +1077,19 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
 }
 
 function DeleteAccountButton() {
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [step, setStep] = useState<"idle" | "warn" | "confirm">("idle");
   const [confirmText, setConfirmText] = useState("");
-  const [password, setPassword] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleDelete = async () => {
-    if (confirmText !== "DELETE MY ACCOUNT" || !password.trim()) return;
+    if (confirmText !== "DELETE") return;
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await deleteAccount({
-        password,
-        confirmText,
-      });
-      // Clear all local data before redirecting
+      await deleteAccount({ confirmText });
       try { localStorage.clear(); } catch { /* ignore */ }
       try { sessionStorage.clear(); } catch { /* ignore */ }
-      // Full page redirect to clear all client state
       window.location.href = "/login?accountDeleted=1";
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Deletion failed");
@@ -1092,11 +1097,17 @@ function DeleteAccountButton() {
     }
   };
 
-  if (!showConfirm) {
+  const reset = () => {
+    setStep("idle");
+    setConfirmText("");
+    setDeleteError(null);
+  };
+
+  if (step === "idle") {
     return (
       <button
         type="button"
-        onClick={() => setShowConfirm(true)}
+        onClick={() => setStep("warn")}
         className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-medium text-[var(--aw-danger)] transition hover:bg-[var(--aw-danger)]/10"
       >
         <Trash2 size={13} />
@@ -1105,25 +1116,49 @@ function DeleteAccountButton() {
     );
   }
 
+  if (step === "warn") {
+    return (
+      <div className="space-y-3 rounded-xl border border-[var(--aw-danger)]/20 bg-[var(--aw-danger)]/5 p-4">
+        <p className="text-sm font-semibold text-[var(--aw-danger)]">
+          Are you sure?
+        </p>
+        <p className="text-xs leading-5 text-[var(--aw-text-muted)]">
+          This will permanently delete your Calico account, all connected accounts, transactions,
+          budgets, goals, and settings. This action cannot be undone.
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setStep("confirm")}
+            className="rounded-lg px-4 py-2 text-xs font-semibold text-white transition"
+            style={{ background: "var(--aw-danger)" }}
+          >
+            I understand, continue
+          </button>
+          <button
+            type="button"
+            onClick={reset}
+            className="rounded-lg px-4 py-2 text-xs font-medium text-[var(--aw-text-muted)]"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-xl border border-[var(--aw-danger)]/20 bg-[var(--aw-danger)]/5 p-4">
       <p className="text-xs font-medium text-[var(--aw-danger)]">
-        Type <strong>DELETE MY ACCOUNT</strong> to confirm:
+        Type <strong>DELETE</strong> to permanently delete your account:
       </p>
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Current password"
-        className="aw-input h-9 w-full text-xs"
-        style={{ borderColor: "var(--aw-danger)" }}
-      />
       <input
         type="text"
         value={confirmText}
         onChange={(e) => setConfirmText(e.target.value)}
-        placeholder="DELETE MY ACCOUNT"
+        placeholder="DELETE"
         className="aw-input h-9 w-full text-xs"
+        autoComplete="off"
         style={{ borderColor: "var(--aw-danger)" }}
       />
       {deleteError && (
@@ -1133,19 +1168,15 @@ function DeleteAccountButton() {
         <button
           type="button"
           onClick={() => void handleDelete()}
-          disabled={confirmText !== "DELETE MY ACCOUNT" || !password.trim() || isDeleting}
+          disabled={confirmText !== "DELETE" || isDeleting}
           className="rounded-lg px-4 py-2 text-xs font-semibold text-white transition disabled:opacity-40"
           style={{ background: "var(--aw-danger)" }}
         >
-          {isDeleting ? "Deleting..." : "Permanently delete"}
+          {isDeleting ? "Deleting..." : "Permanently delete my account"}
         </button>
         <button
           type="button"
-          onClick={() => {
-            setShowConfirm(false);
-            setConfirmText("");
-            setPassword("");
-          }}
+          onClick={reset}
           className="rounded-lg px-4 py-2 text-xs font-medium text-[var(--aw-text-muted)]"
         >
           Cancel
@@ -1188,6 +1219,14 @@ export function SettingsPage() {
     void refreshAccount();
     void refreshBilling();
   }, [refreshAccount, refreshBilling]);
+
+  // Deep-link to a section via ?section=billing etc.
+  useEffect(() => {
+    const sectionParam = searchParams.get("section");
+    if (sectionParam && ["profile", "display", "notifications", "security", "general", "members", "preferences", "institutions", "billing", "referrals"].includes(sectionParam)) {
+      setActiveSection(sectionParam as SettingsSection);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const billingParam = searchParams.get("billing");

@@ -26,18 +26,17 @@ export function WidgetContainer({
   return (
     <motion.section
       layout
-      whileHover={{ y: -2, boxShadow: dashboardHoverShadow }}
-      transition={{ duration: 0.18, ease: "easeOut" }}
+      whileHover={{ y: -1, boxShadow: dashboardHoverShadow }}
+      transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
       style={dashboardSurfaceStyle}
       className={cn(
-        "relative overflow-hidden rounded-[20px] p-6 transition",
+        "relative overflow-hidden rounded-2xl p-5 md:p-6",
         className,
       )}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,207,232,0.12),transparent_34%)]" />
       <div className="relative z-10 flex h-full flex-col">
         <WidgetHeader title={title} subtitle={subtitle} action={action} dragHandleProps={dragHandleProps} />
-        <div className={cn("mt-5 flex-1", contentClassName)}>{children}</div>
+        <div className={cn("mt-4 flex-1", contentClassName)}>{children}</div>
       </div>
     </motion.section>
   );

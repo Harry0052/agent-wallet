@@ -154,11 +154,25 @@ function recordHistoryPoint(
   return next.sort((a, b) => a.dayKey.localeCompare(b.dayKey)).slice(-90);
 }
 
+function toSmoothPath(points: Array<{ x: number; y: number }>): string {
+  if (points.length < 2) {
+    return points.length === 1 ? `M ${points[0].x},${points[0].y}` : "";
+  }
+  let path = `M ${points[0].x},${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const curr = points[i];
+    const next = points[i + 1];
+    const midX = (curr.x + next.x) / 2;
+    path += ` C ${midX},${curr.y} ${midX},${next.y} ${next.x},${next.y}`;
+  }
+  return path;
+}
+
 function NetWorthTrendChart(props: { data: TrendPoint[] }) {
   const chartWidth = 100;
   const chartHeight = 64;
   const paddingX = 8;
-  const paddingY = 8;
+  const paddingY = 6;
   const values = props.data.map((point) => point.value);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
@@ -166,7 +180,7 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
   const domainMin = hasVariance ? minValue : minValue - Math.max(Math.abs(minValue) * 0.04, 1);
   const domainMax = hasVariance ? maxValue : maxValue + Math.max(Math.abs(maxValue) * 0.04, 1);
   const range = Math.max(domainMax - domainMin, 1);
-  const tickCount = 4;
+  const tickCount = 3;
   const ticks = Array.from({ length: tickCount }, (_, index) => {
     const ratio = index / (tickCount - 1);
     return domainMax - ratio * range;
@@ -178,17 +192,19 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
       ? chartWidth / 2
       : paddingX + (usableWidth * index) / (props.data.length - 1);
     const y = paddingY + ((domainMax - point.value) / range) * usableHeight;
-    return {
-      ...point,
-      x,
-      y,
-    };
+    return { ...point, x, y };
   });
-  const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const smoothPath = toSmoothPath(points);
+  const baselineY = chartHeight - paddingY;
+  const lastPoint = points[points.length - 1];
+  const firstPoint = points[0];
+  const areaPath = points.length >= 2
+    ? `${smoothPath} L ${lastPoint.x},${baselineY} L ${firstPoint.x},${baselineY} Z`
+    : "";
 
   return (
-    <div className="grid gap-3 md:grid-cols-[72px_minmax(0,1fr)]">
-      <div className="hidden h-[248px] flex-col justify-between py-1 text-[11px] text-[var(--aw-text-muted)] md:flex">
+    <div className="grid gap-3 md:grid-cols-[56px_minmax(0,1fr)]">
+      <div className="hidden h-[248px] flex-col justify-between py-1 text-[10px] font-medium tabular-nums text-[var(--aw-text-muted)]/70 md:flex">
         {ticks.map((tick) => (
           <span key={tick} className="aw-number">
             {fmt(tick)}
@@ -204,6 +220,12 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
           aria-label="Net worth trend"
           role="img"
         >
+          <defs>
+            <linearGradient id="nw-area-gradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--aw-chart-primary)" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="var(--aw-chart-primary)" stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
           {ticks.map((tick) => {
             const y = paddingY + ((domainMax - tick) / range) * usableHeight;
             return (
@@ -214,33 +236,37 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
                 y1={y}
                 y2={y}
                 stroke="var(--aw-chart-grid)"
-                strokeWidth="0.6"
+                strokeWidth="0.35"
+                strokeDasharray="1.5 2"
               />
             );
           })}
-          <polyline
+          {areaPath && (
+            <path d={areaPath} fill="url(#nw-area-gradient)" />
+          )}
+          <path
+            d={smoothPath}
             fill="none"
             stroke="var(--aw-chart-primary)"
-            strokeWidth="1.8"
+            strokeWidth="1.6"
             strokeLinejoin="round"
             strokeLinecap="round"
-            points={polyline}
           />
-          {points.map((point) => (
+          {[points[0], points[points.length - 1]].filter(Boolean).map((point, idx) => (
             <circle
-              key={`${point.label}-${point.value}`}
+              key={`dot-${idx}`}
               cx={point.x}
               cy={point.y}
-              r="1.9"
-              fill="var(--aw-chart-primary)"
-              stroke="#ffffff"
+              r="1.6"
+              fill="var(--aw-surface-1)"
+              stroke="var(--aw-chart-primary)"
               strokeWidth="0.9"
             />
           ))}
         </svg>
 
         <div
-          className="mt-3 grid gap-2 text-[11px] text-[var(--aw-text-muted)]"
+          className="grid gap-2 pt-2 text-[10px] font-medium text-[var(--aw-text-muted)]/60"
           style={{ gridTemplateColumns: `repeat(${props.data.length}, minmax(0, 1fr))` }}
         >
           {props.data.map((point) => (

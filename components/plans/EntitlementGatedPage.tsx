@@ -86,10 +86,10 @@ export function EntitlementGatedPage({
           Part of the {PLAN_NAMES[requiredPlan]} plan.
         </p>
         <Link
-          href="/plans"
+          href="/settings?section=billing"
           className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
         >
-          See Plans
+          View Plans & Billing
           <ArrowRight size={16} />
         </Link>
       </div>

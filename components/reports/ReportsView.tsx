@@ -133,7 +133,7 @@ function FlowVisualization(props: { income: number; expenses: number; net: numbe
   }
 
   return (
-    <div className="rounded-[16px] border border-[var(--aw-border)] bg-[linear-gradient(180deg,var(--aw-surface-1)_0%,var(--aw-surface-subtle)_100%)] p-5">
+    <div className="rounded-2xl bg-[var(--aw-surface-1)] p-5">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">
@@ -162,14 +162,14 @@ function FlowVisualization(props: { income: number; expenses: number; net: numbe
             </linearGradient>
           </defs>
 
-          <rect x="0" y="0" width="940" height={viewH} rx="16" fill="var(--aw-surface-subtle)" />
+          <rect x="0" y="0" width="940" height={viewH} rx="16" fill="var(--aw-surface-1)" />
           <path d={incomePath} fill="url(#rpt-income-flow)" />
           <path d={expensePath} fill="url(#rpt-expense-flow)" />
           {savedPath ? <path d={savedPath} fill="url(#rpt-saved-flow)" /> : null}
 
           {nodes.map((node) => (
             <g key={node.key}>
-              <rect x={node.x} y={node.y} width="20" height={node.height} rx="10" fill={node.color} />
+              <rect x={node.x} y={node.y} width="16" height={node.height} rx="8" fill={node.color} opacity="0.8" />
               <text x={node.x + 30} y={node.y + 14} fill="var(--aw-text-muted)" fontSize="11" fontWeight="600" letterSpacing="0.08em">
                 {node.label.toUpperCase()}
               </text>
