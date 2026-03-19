@@ -3,17 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
 import { fmt, fmtDate } from "@/lib/utils";
+import { SankeyDiagram } from "@/components/cashflow/SankeyDiagram";
 import {
   WorkspaceEmpty,
   WorkspaceHeader,
@@ -33,13 +24,6 @@ import type {
 } from "@/lib/financialTypes";
 
 type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
-
-interface ChartPoint {
-  label: string;
-  income: number;
-  expense: number;
-  net: number;
-}
 
 type TimeRange = "month" | "quarter" | "year";
 
@@ -158,73 +142,6 @@ function inRange(date: Date, range: TimeRange): boolean {
   return date >= yearStart;
 }
 
-function buildChartData(entries: CashFlowEntry[], range: TimeRange): ChartPoint[] {
-  const now = new Date();
-
-  if (range === "month") {
-    const weekStarts = [1, 8, 15, 22, 29];
-    const buckets = weekStarts.map((_day, index) => ({
-      key: index,
-      label: `Week ${index + 1}`,
-      income: 0,
-      expense: 0,
-    }));
-
-    for (const entry of entries) {
-      const date = new Date(entry.occurredAt);
-      if (Number.isNaN(date.getTime())) continue;
-      if (date.getMonth() !== now.getMonth() || date.getFullYear() !== now.getFullYear()) continue;
-
-      const day = date.getDate();
-      const weekIndex = day >= 29 ? 4 : day >= 22 ? 3 : day >= 15 ? 2 : day >= 8 ? 1 : 0;
-      if (entry.type === "income") {
-        buckets[weekIndex].income += entry.amount;
-      } else if (entry.type === "expense") {
-        buckets[weekIndex].expense += entry.amount;
-      }
-    }
-
-    return buckets.map((bucket) => ({
-      label: bucket.label,
-      income: Math.round(bucket.income),
-      expense: Math.round(bucket.expense),
-      net: Math.round(bucket.income - bucket.expense),
-    }));
-  }
-
-  const monthCount = range === "quarter" ? 3 : 12;
-  const months = Array.from({ length: monthCount }, (_, idx) => {
-    const date = addMonths(startOfMonth(now), -(monthCount - 1 - idx));
-    const key = `${date.getFullYear()}-${date.getMonth()}`;
-    const label = date.toLocaleDateString("en-US", { month: "short" });
-    return { key, label, income: 0, expense: 0 };
-  });
-
-  const monthMap = new Map(months.map((month) => [month.key, month]));
-
-  for (const entry of entries) {
-    const date = new Date(entry.occurredAt);
-    if (Number.isNaN(date.getTime())) continue;
-
-    const key = `${date.getFullYear()}-${date.getMonth()}`;
-    const bucket = monthMap.get(key);
-    if (!bucket) continue;
-
-    if (entry.type === "income") {
-      bucket.income += entry.amount;
-    } else if (entry.type === "expense") {
-      bucket.expense += entry.amount;
-    }
-  }
-
-  return months.map((month) => ({
-    label: month.label,
-    income: Math.round(month.income),
-    expense: Math.round(month.expense),
-    net: Math.round(month.income - month.expense),
-  }));
-}
-
 export function CashFlowView() {
   const financialData = useFinancialData();
   const [range, setRange] = useState<TimeRange>("month");
@@ -284,13 +201,6 @@ export function CashFlowView() {
     });
   }, [range, transactionEntries]);
 
-  const monthActualEntries = useMemo(() => {
-    return transactionEntries.filter((entry) => {
-      const date = new Date(entry.occurredAt);
-      return inRange(date, "month");
-    });
-  }, [transactionEntries]);
-
   const upcomingForecastEntries = useMemo(() => {
     const now = Date.now();
     return recurringForecastEntries
@@ -299,18 +209,43 @@ export function CashFlowView() {
       .slice(0, 6);
   }, [recurringForecastEntries]);
 
-  const monthIncome = monthActualEntries
-    .filter((entry) => entry.type === "income")
-    .reduce((sum, entry) => sum + entry.amount, 0);
-
-  const monthExpenses = monthActualEntries
-    .filter((entry) => entry.type === "expense")
-    .reduce((sum, entry) => sum + entry.amount, 0);
-
-  const monthNet = monthIncome - monthExpenses;
-  const savingsRate = monthIncome > 0 ? Math.round((monthNet / monthIncome) * 100) : 0;
-  const chartData = useMemo(() => buildChartData(actualRangeEntries, range), [actualRangeEntries, range]);
   const rangeLabel = range === "month" ? "this month" : range === "quarter" ? "the last 3 months" : "the last 12 months";
+
+  // Compute range-specific income/expenses for KPI cards
+  const rangeIncome = actualRangeEntries
+    .filter((e) => e.type === "income")
+    .reduce((s, e) => s + e.amount, 0);
+  const rangeExpenses = actualRangeEntries
+    .filter((e) => e.type === "expense")
+    .reduce((s, e) => s + e.amount, 0);
+  const rangeNet = rangeIncome - rangeExpenses;
+  const rangeSavingsRate = rangeIncome > 0 ? Math.round((rangeNet / rangeIncome) * 100) : 0;
+
+  // Category breakdown for Sankey diagram
+  const categoryBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of actualRangeEntries) {
+      if (entry.type !== "expense") continue;
+      const cat = entry.category || "Uncategorized";
+      map.set(cat, (map.get(cat) ?? 0) + entry.amount);
+    }
+    return [...map.entries()]
+      .map(([category, amount]) => ({ category, amount: Math.round(amount) }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [actualRangeEntries]);
+
+  // Income source breakdown for Sankey
+  const incomeBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of actualRangeEntries) {
+      if (entry.type !== "income") continue;
+      const source = entry.label || "Income";
+      map.set(source, (map.get(source) ?? 0) + entry.amount);
+    }
+    return [...map.entries()]
+      .map(([source, amount]) => ({ source, amount: Math.round(amount) }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [actualRangeEntries]);
 
   const openManualEntry = (type?: "income" | "expense") => {
     setManualType(type ?? "expense");
@@ -397,8 +332,31 @@ export function CashFlowView() {
         )}
       />
 
+      {/* KPI cards */}
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Income</p>
+          <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-success)]">{fmt(rangeIncome)}</p>
+        </div>
+        <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Expenses</p>
+          <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-text)]">{fmt(rangeExpenses)}</p>
+        </div>
+        <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Net</p>
+          <p className={`aw-number mt-2 text-xl font-semibold ${rangeNet >= 0 ? "text-[var(--aw-success)]" : "text-[var(--aw-danger)]"}`}>
+            {fmt(rangeNet)}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Savings rate</p>
+          <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-text)]">{rangeSavingsRate}%</p>
+        </div>
+      </div>
+
+      {/* Hero Sankey */}
       <WorkspacePanel
-        title="Cash flow history"
+        title="Where your money goes"
         action={(
           <div className="aw-toolbar">
             <div className="aw-segmented">
@@ -434,75 +392,19 @@ export function CashFlowView() {
         ) : (
           <>
             <p className="mb-4 text-sm text-[var(--aw-text-muted)]">
-              Showing actual income and expenses for {rangeLabel}. Savings rate this month: {savingsRate}%.
+              Showing cash flow for {rangeLabel}. Income flows left to right into your spending categories.
             </p>
-            <div className="mb-3 flex items-center gap-5">
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aw-chart-positive-fill)" }} />
-                <span className="text-xs text-[var(--aw-text-muted)]">Income</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aw-chart-negative-fill)" }} />
-                <span className="text-xs text-[var(--aw-text-muted)]">Expenses</span>
-              </div>
-            </div>
-            <div className="h-[280px] rounded-2xl bg-[var(--aw-surface-1)] px-3 py-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 12, left: 4, bottom: 4 }} barGap={2}>
-                  <CartesianGrid stroke="var(--aw-chart-grid)" strokeDasharray="3 4" strokeOpacity={0.5} vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: "var(--aw-text-muted)", fontSize: 10, fontWeight: 500 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "var(--aw-text-muted)", fontSize: 10, fontWeight: 500 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => `$${v}`} />
-                  <Tooltip
-                    formatter={(value, name) => [fmt(Number(value ?? 0)), name === "income" ? "Income" : "Expenses"]}
-                    labelStyle={{ color: "var(--aw-text-muted)", fontSize: 11 }}
-                    itemStyle={{ color: "var(--aw-text)", fontSize: 12, fontWeight: 500 }}
-                    contentStyle={{
-                      background: "var(--aw-surface-1)",
-                      border: "1px solid var(--aw-border)",
-                      borderRadius: 14,
-                      boxShadow: "0 4px 16px rgba(17,17,17,0.06)",
-                      padding: "10px 14px",
-                    }}
-                    cursor={{ fill: "rgba(253,186,116,0.06)" }}
-                  />
-                  <Bar dataKey="income" fill="var(--aw-chart-positive-fill)" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="expense" fill="var(--aw-chart-negative-fill)" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
+              <SankeyDiagram
+                income={Math.round(rangeIncome)}
+                expenses={Math.round(rangeExpenses)}
+                categoryBreakdown={categoryBreakdown}
+                incomeBreakdown={incomeBreakdown}
+              />
             </div>
           </>
         )}
       </WorkspacePanel>
-
-      <div className="aw-workspace-grid mt-4" data-columns="2">
-        <div className="aw-card aw-card-compact">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-            Income
-          </p>
-          <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(monthIncome)}</p>
-          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">This month</p>
-        </div>
-        <div className="aw-card aw-card-compact">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-            Expenses
-          </p>
-          <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(monthExpenses)}</p>
-          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">This month</p>
-        </div>
-        <div className="aw-card aw-card-compact">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-            Net cash flow
-          </p>
-          <p
-            className={`aw-number mt-3 text-2xl ${
-              monthNet >= 0 ? "text-[var(--aw-text)]" : "text-[var(--aw-danger)]"
-            }`}
-          >
-            {fmt(monthNet)}
-          </p>
-          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">This month</p>
-        </div>
-      </div>
 
       <WorkspacePanel className="mt-4" title="Upcoming recurring">
         <div className="aw-card-table">

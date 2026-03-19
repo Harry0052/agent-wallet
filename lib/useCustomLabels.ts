@@ -12,7 +12,7 @@ const DEFAULT_LABELS: CustomLabelMap = {
   accounts: "Accounts",
   transactions: "Money Moves",
   tasks: "To-Do",
-  cashflow: "Money In & Out",
+  cashflow: "Cash Flow",
   budgets: "Spending Plan",
   goals: "Money Goals",
   investments: "Investments",
