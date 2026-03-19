@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Link as LinkIcon, Receipt, RefreshCw, CalendarCheck,
   Sparkles, Infinity, TrendingUp, LineChart, HeadphonesIcon, Crown, Zap,
   Bot, Brain, Target, Code, HeartHandshake, PiggyBank, ArrowRight,
+  Settings,
 } from "lucide-react";
 
 interface TutorialStep {
@@ -22,7 +23,7 @@ interface PlanTutorialProps {
 const ICON_MAP: Record<string, typeof Sparkles> = {
   LayoutDashboard, Link: LinkIcon, Receipt, RefreshCw, CalendarCheck,
   Sparkles, Infinity, TrendingUp, LineChart, HeadphonesIcon, Crown, Zap,
-  Bot, Brain, Target, Code, HeartHandshake, PiggyBank,
+  Bot, Brain, Target, Code, HeartHandshake, PiggyBank, Settings,
 };
 
 export function PlanTutorial({ heading, steps, onComplete }: PlanTutorialProps) {

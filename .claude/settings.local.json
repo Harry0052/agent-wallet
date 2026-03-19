@@ -36,7 +36,8 @@
       "Bash(curl:*)",
       "mcp__claude-flow__browser_open",
       "Bash(grep:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(npx tsc:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

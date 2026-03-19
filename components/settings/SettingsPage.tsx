@@ -35,6 +35,7 @@ import {
   type PlanId,
 } from "@/services/billing";
 import { deleteAccount } from "@/services/entitlements";
+import { useTutorialReplay } from "@/components/plans/TutorialOrchestrator";
 
 type SettingsSection =
   | "profile"
@@ -537,6 +538,7 @@ function GeneralSection() {
   const [household, setHousehold] = useState("My Household");
   const [country, setCountry] = useState("US");
   const [currency, setCurrency] = useState("USD");
+  const { replay } = useTutorialReplay();
 
   return (
     <div className="aw-card space-y-6 !p-6">
@@ -547,6 +549,29 @@ function GeneralSection() {
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
           Household settings
         </p>
+      </div>
+
+      <div className="rounded-lg border border-[var(--aw-border)] p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-[var(--aw-text)]">Product tutorial</p>
+            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
+              Replay the guided tour of Calico and your plan features
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={replay}
+            className="rounded-lg px-3 py-2 text-xs font-medium transition"
+            style={{
+              background: "var(--calico-card, #FFFCF8)",
+              border: "1px solid var(--calico-border, #F2DECC)",
+              color: "var(--aw-text)",
+            }}
+          >
+            Replay
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4">

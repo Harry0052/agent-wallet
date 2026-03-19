@@ -30,6 +30,7 @@ import {
   WorkspacePanel,
 } from "@/components/finance/WorkspacePrimitives";
 import { ManualEntryModal } from "@/components/finance/ManualDataControls";
+import { ComboboxInput } from "@/components/finance/ComboboxInput";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import {
   MANUAL_STORAGE_KEYS,
@@ -767,15 +768,22 @@ export function AccountsView() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
+            <div className="space-y-1">
               <span className="text-xs text-[var(--aw-text-muted)]">Institution name (optional)</span>
-              <input
+              <ComboboxInput
                 value={manualInstitution}
-                onChange={(event) => setManualInstitution(event.target.value)}
-                className="aw-input h-10 text-sm"
-                placeholder="Optional"
+                onChange={setManualInstitution}
+                options={(() => {
+                  const names = manualAccounts
+                    .map((a) => (a.institutionName || "").trim())
+                    .filter((n) => n.length > 0);
+                  return [...new Set(names)].sort();
+                })()}
+                placeholder="Select or type institution"
+                allowCustom
+                customLabel="Add new institution"
               />
-            </label>
+            </div>
 
             <label className="space-y-1">
               <span className="text-xs text-[var(--aw-text-muted)]">Last updated</span>

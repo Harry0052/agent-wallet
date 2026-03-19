@@ -12,6 +12,14 @@ export type FeatureKey =
   | 'recurring_detection'
   | 'monthly_summaries'
   | 'limited_accounts'
+  | 'net_worth'
+  | 'spending_categories'
+  | 'monthly_cashflow'
+  | 'manual_entry'
+  | 'simple_goals'
+  | 'income_expense_chart'
+  | 'category_breakdowns'
+  | 'basic_alerts'
   | 'advanced_insights'
   | 'spending_trends'
   | 'smart_savings'
@@ -37,14 +45,22 @@ export interface FeatureDefinition {
 }
 
 export const FEATURES: FeatureDefinition[] = [
-  // Starter — "Help me see what's going on"
-  { key: 'core_dashboard', label: 'Your Dashboard', description: 'See your money at a glance', minimumPlan: 'starter' },
-  { key: 'basic_transactions', label: 'Money Moves', description: 'See all your spending and income', minimumPlan: 'starter' },
-  { key: 'basic_budgets', label: 'Spending Plan', description: 'Set up a simple monthly plan', minimumPlan: 'starter' },
-  { key: 'basic_insights', label: 'Basic Tips', description: 'Simple spending observations', minimumPlan: 'starter' },
-  { key: 'recurring_detection', label: 'Repeating Payments', description: 'Find your bills and subscriptions', minimumPlan: 'starter' },
-  { key: 'monthly_summaries', label: 'Weekly & Monthly Recaps', description: 'Clear summaries of where your money went', minimumPlan: 'starter' },
+  // Starter — "Help me see where I stand"
+  { key: 'core_dashboard', label: 'Your Dashboard', description: 'See your whole money picture in one calm place', minimumPlan: 'starter' },
   { key: 'limited_accounts', label: 'Up to 3 Accounts', description: 'Connect up to 3 bank or card accounts', minimumPlan: 'starter' },
+  { key: 'net_worth', label: 'Net Worth Tracking', description: 'Track your total net worth across all accounts', minimumPlan: 'starter' },
+  { key: 'basic_transactions', label: 'Transaction Feed', description: 'See all your spending and income as it happens', minimumPlan: 'starter' },
+  { key: 'spending_categories', label: 'Spending Categories', description: 'Transactions organized into clear categories automatically', minimumPlan: 'starter' },
+  { key: 'monthly_cashflow', label: 'Monthly Cash Flow', description: 'See money in vs. money out each month', minimumPlan: 'starter' },
+  { key: 'income_expense_chart', label: 'Income vs. Expense Chart', description: 'A clear visual of what you earn and what you spend', minimumPlan: 'starter' },
+  { key: 'category_breakdowns', label: 'Category Breakdowns', description: 'See exactly where your money goes by category', minimumPlan: 'starter' },
+  { key: 'basic_budgets', label: 'Simple Budgets', description: 'Set up a simple monthly spending plan', minimumPlan: 'starter' },
+  { key: 'simple_goals', label: 'Simple Money Goals', description: 'Set a savings target and track your progress', minimumPlan: 'starter' },
+  { key: 'recurring_detection', label: 'Recurring Payment Detection', description: 'Find your bills and subscriptions automatically', minimumPlan: 'starter' },
+  { key: 'monthly_summaries', label: 'Monthly Spending Summary', description: 'A clear summary of where your money went', minimumPlan: 'starter' },
+  { key: 'basic_alerts', label: 'Basic Financial Alerts', description: 'Get notified about important money changes', minimumPlan: 'starter' },
+  { key: 'basic_insights', label: 'Basic AI Summaries', description: 'Simple AI-powered observations about your spending', minimumPlan: 'starter' },
+  { key: 'manual_entry', label: 'Manual Entry', description: 'Add accounts and transactions by hand', minimumPlan: 'starter' },
 
   // Pro — "Help me understand what to do next"
   { key: 'advanced_insights', label: 'Smarter Tips', description: 'Deeper "why" explanations about your money', minimumPlan: 'pro' },
@@ -111,11 +127,12 @@ export const PLAN_TUTORIALS: Record<PlanId, { heading: string; steps: TutorialSt
   starter: {
     heading: "Welcome to Calico!",
     steps: [
-      { title: "Your dashboard", body: "See your total money, spending, and recent activity in one calm place.", icon: "LayoutDashboard" },
+      { title: "Your money dashboard", body: "See your accounts, net worth, and recent activity — all in one calm place.", icon: "LayoutDashboard" },
       { title: "Connect your accounts", body: "Link up to 3 bank accounts or cards. Calico only looks — never touches your money.", icon: "Link" },
-      { title: "See your money moves", body: "Every purchase and payment is organized automatically so you always know where your money goes.", icon: "Receipt" },
-      { title: "Find repeating payments", body: "Calico finds your bills and subscriptions so nothing sneaks up on you.", icon: "RefreshCw" },
-      { title: "Get weekly recaps", body: "A simple summary of where your money went — every week and every month.", icon: "CalendarCheck" },
+      { title: "Follow your money", body: "Every transaction is categorized automatically. See exactly where your money goes with clear breakdowns.", icon: "Receipt" },
+      { title: "Cash flow & budgets", body: "Track income vs. expenses each month, set simple budgets, and work toward savings goals.", icon: "PiggyBank" },
+      { title: "Spot recurring payments", body: "Calico finds your bills and subscriptions so nothing sneaks up on you.", icon: "RefreshCw" },
+      { title: "Monthly summaries & alerts", body: "Get a clear recap of your month plus alerts when something important changes.", icon: "CalendarCheck" },
     ],
   },
   pro: {

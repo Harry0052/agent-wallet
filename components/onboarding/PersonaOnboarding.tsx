@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Landmark, Sparkles } from "lucide-react";
 import { completePersonaOnboarding, type PersonaData } from "@/services/persona";
+import { connectAccountsViaSupportedFlow } from "@/services/connect";
 
 interface Message {
   role: "calico" | "user";
@@ -158,6 +159,12 @@ export function PersonaOnboarding() {
   const [isComplete, setIsComplete] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Post-persona: connect accounts step
+  // "connect" = show connect/skip options, "connected" = success, "skipped" = manual
+  const [connectPhase, setConnectPhase] = useState<"connect" | "connected" | "skipped" | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectedCount, setConnectedCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const userName = useRef("");
@@ -231,7 +238,8 @@ export function PersonaOnboarding() {
         await completePersonaOnboarding(persona);
         setIsTyping(false);
         setIsComplete(true);
-        const completionMsg = `Awesome \u2014 I've created your Calico profile${userName.current ? `, ${userName.current}` : ""}! \ud83c\udf89\n\nI now understand your financial situation and goals. Let's build your money dashboard.`;
+        setConnectPhase("connect");
+        const completionMsg = `Awesome \u2014 I've created your Calico profile${userName.current ? `, ${userName.current}` : ""}! \ud83c\udf89\n\nOne more thing \u2014 if you connect a bank account, I can show you your real balances, transactions, and spending patterns right away.\n\nYour data stays private and read-only. Calico never moves your money.`;
         setMessages((prev) => [...prev, { role: "calico", text: completionMsg }]);
         scrollToBottom();
       } catch (err) {
@@ -241,6 +249,39 @@ export function PersonaOnboarding() {
         setIsSaving(false);
       }
     }
+  };
+
+  const handleConnectAccounts = async () => {
+    setIsConnecting(true);
+    setError(null);
+    try {
+      const result = await connectAccountsViaSupportedFlow();
+      const count = result.accounts.length;
+      setConnectedCount(count);
+      setConnectPhase("connected");
+      const successMsg = count === 1
+        ? `Connected! I can see your account. Your dashboard will be ready with real data.`
+        : `Connected! I can see ${count} accounts. Your dashboard will be ready with real data.`;
+      setMessages((prev) => [...prev, { role: "calico", text: successMsg }]);
+      scrollToBottom();
+    } catch (err) {
+      // User cancelled Plaid Link or connection failed
+      const msg = err instanceof Error ? err.message : "";
+      if (/cancel|exit|dismiss/i.test(msg)) {
+        // User closed Plaid — stay on connect phase, don't show error
+      } else {
+        setError("Could not connect your account. You can try again later from Settings.");
+      }
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleSkipConnect = () => {
+    setConnectPhase("skipped");
+    const skipMsg = `No problem! You can always connect accounts later from Settings.\n\nIn the meantime, you can add accounts and transactions manually \u2014 everything works the same way.`;
+    setMessages((prev) => [...prev, { role: "calico", text: skipMsg }]);
+    scrollToBottom();
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -403,7 +444,48 @@ export function PersonaOnboarding() {
             background: "rgba(255, 247, 237, 0.5)",
           }}
         >
-          {isComplete ? (
+          {isComplete && connectPhase === "connect" ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.16, 0.7, 0.2, 1] }}
+              className="space-y-2.5"
+            >
+              <motion.button
+                type="button"
+                onClick={() => { void handleConnectAccounts(); }}
+                disabled={isConnecting}
+                whileHover={{ scale: 1.015 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-sm font-semibold"
+                style={{
+                  background: "#FDBA74",
+                  color: "#111",
+                  boxShadow: "0 4px 16px rgba(253,186,116,0.38)",
+                }}
+              >
+                <Landmark size={16} />
+                {isConnecting ? "Connecting..." : "Connect your accounts"}
+              </motion.button>
+              <button
+                type="button"
+                onClick={handleSkipConnect}
+                disabled={isConnecting}
+                className="w-full rounded-full py-3 text-sm font-medium transition-colors"
+                style={{ color: "#6B5B4B", background: "transparent" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(242, 222, 204, 0.3)";
+                  e.currentTarget.style.color = "#3A332E";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = "#6B5B4B";
+                }}
+              >
+                I'll add accounts manually
+              </button>
+            </motion.div>
+          ) : isComplete && (connectPhase === "connected" || connectPhase === "skipped") ? (
             <motion.button
               type="button"
               onClick={goToDashboard}
@@ -420,7 +502,9 @@ export function PersonaOnboarding() {
               }}
             >
               <Sparkles size={16} />
-              Go to my dashboard
+              {connectPhase === "connected"
+                ? `Go to my dashboard${connectedCount > 0 ? ` (${connectedCount} account${connectedCount === 1 ? "" : "s"} ready)` : ""}`
+                : "Go to my dashboard"}
             </motion.button>
           ) : (
             <div className="flex items-center gap-2">

@@ -23,6 +23,14 @@ import {
 } from "@/lib/manualMode";
 import type { DashboardGoalSummary, DashboardInvestmentHolding } from "@/components/dashboard/dashboardTypes";
 import { normalizeRecordSourceType } from "@/lib/sourceType";
+import {
+  cashflowToTransactions,
+  reportsToTransactions,
+  deduplicateTransactions,
+  manualAccountToConnected,
+  type ManualCashflowEntry,
+  type ManualReportEntry,
+} from "@/lib/financialTypes";
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -38,23 +46,6 @@ interface DashboardSupportData {
   recurring: DetectedSubscription[];
   investments: DashboardInvestmentHolding[];
   goals: DashboardGoalSummary[];
-}
-
-interface ManualCashflowEntry {
-  id: string;
-  label: string;
-  type: "income" | "expense";
-  amount: number;
-  category: string;
-  occurredAt: string;
-}
-
-interface ManualReportEntry {
-  id: string;
-  label: string;
-  type: "income" | "expense";
-  amount: number;
-  date: string;
 }
 
 export function SmartWalletHome() {
@@ -146,28 +137,7 @@ export function SmartWalletHome() {
         };
       });
 
-      const mappedManualAccounts: ConnectedAccountRecord[] = manualAccounts.map((account) => ({
-        id: account.id,
-        user_id: "manual",
-        institution_name: "Manual",
-        account_type:
-          account.type === "credit"
-            ? "credit"
-            : account.type === "loan"
-              ? "loan"
-              : account.type === "cash"
-                ? "cash"
-                : account.type === "investment" || account.type === "other_asset"
-                  ? "savings"
-                  : account.type === "other_liability"
-                    ? "loan"
-                    : account.type,
-        mask: account.mask ?? "manual",
-        nickname: account.name,
-        last_synced_at: account.updatedAt,
-        balance: account.balance,
-        sourceType: "manual",
-      }));
+      const mappedManualAccounts: ConnectedAccountRecord[] = manualAccounts.map(manualAccountToConnected);
 
       const mappedNetWorthItems: ConnectedAccountRecord[] = manualNetWorthItems.map((item) => ({
         id: item.id,
@@ -189,44 +159,20 @@ export function SmartWalletHome() {
         changePct: 0,
       }));
 
-      const mappedCashflowTransactions: StatementTransaction[] = manualCashflow.map((entry) => ({
-        id: `cashflow-${entry.id}`,
-        user_id: "manual",
-        linked_account_id: "manual",
-        merchant_name: entry.label,
-        normalized_merchant: entry.label,
-        amount: entry.type === "expense" ? -Math.abs(entry.amount) : Math.abs(entry.amount),
-        currency: "USD",
-        category: entry.category || "Manual",
-        pending: false,
-        occurred_at: entry.occurredAt,
-        sourceType: "manual",
-      }));
-
-      const mappedReportTransactions: StatementTransaction[] = manualReports.map((entry) => ({
-        id: `report-${entry.id}`,
-        user_id: "manual",
-        linked_account_id: "manual",
-        merchant_name: entry.label,
-        normalized_merchant: entry.label,
-        amount: entry.type === "expense" ? -Math.abs(entry.amount) : Math.abs(entry.amount),
-        currency: "USD",
-        category: "Manual report",
-        pending: false,
-        occurred_at: new Date(`${entry.date}T12:00:00.000Z`).toISOString(),
-        sourceType: "manual",
-      }));
-
-      const mergedTransactionsById = new Map<string, StatementTransaction>();
-      for (const tx of [...connectedTransactions, ...manualTransactions, ...mappedCashflowTransactions, ...mappedReportTransactions]) {
-        mergedTransactionsById.set(tx.id, tx);
-      }
+      const mappedCashflowTransactions = cashflowToTransactions(manualCashflow);
+      const mappedReportTransactions = reportsToTransactions(manualReports);
+      const mergedTransactions = deduplicateTransactions(
+        connectedTransactions,
+        manualTransactions,
+        mappedCashflowTransactions,
+        mappedReportTransactions,
+      );
 
       setHome(homeResult.value);
       setSupportData({
         wallet: walletResult.status === "fulfilled" ? walletResult.value : null,
         accounts: [...connectedAccounts, ...mappedManualAccounts, ...mappedNetWorthItems],
-        transactions: [...mergedTransactionsById.values()],
+        transactions: mergedTransactions,
         recurring: [
           ...connectedRecurring.map((item) => ({
             ...item,

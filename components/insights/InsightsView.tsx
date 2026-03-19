@@ -9,6 +9,7 @@ import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS, type ManualAccountRecord } from "@/lib/manualMode";
 import type { StatementTransaction } from "@/services/statements";
 import { normalizeTransactionType } from "@/lib/manualTransactions";
+import { useFinancialData } from "@/lib/useFinancialData";
 
 interface LocalInsight {
   id: string;
@@ -126,26 +127,21 @@ function generateLocalInsights(
 
 export function InsightsView() {
   const [serverInsights, setServerInsights] = useState<Insight[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [serverLoading, setServerLoading] = useState(true);
   const [, setServerFailed] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [dismissing, setDismissing] = useState<string | null>(null);
 
-  const [manualAccounts] = useLocalStorageState<ManualAccountRecord[]>(
-    MANUAL_STORAGE_KEYS.accounts,
-    [],
-  );
-  const [manualTransactions] = useLocalStorageState<StatementTransaction[]>(
-    MANUAL_STORAGE_KEYS.transactions,
-    [],
-  );
+  // Use the shared financial data hook so insights reflect ALL data
+  const financialData = useFinancialData();
+
   const [storedGoals] = useLocalStorageState<Array<{ name?: string; label?: string; targetAmount?: number; currentSavedAmount?: number; saved?: number }>>(
     MANUAL_STORAGE_KEYS.goals,
     [],
   );
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setServerLoading(true);
     setServerFailed(false);
     try {
       const res = await fetch("/api/insights", { cache: "no-store" });
@@ -160,7 +156,7 @@ export function InsightsView() {
       setServerFailed(true);
       setServerInsights([]);
     } finally {
-      setLoading(false);
+      setServerLoading(false);
     }
   }, []);
 
@@ -168,9 +164,13 @@ export function InsightsView() {
     void load();
   }, [load]);
 
+  const loading = serverLoading || financialData.loading;
+
+  // Use ALL merged transactions (connected + manual + cashflow + reports)
+  // and ALL merged accounts for insight generation
   const localInsights = useMemo(
-    () => generateLocalInsights(manualAccounts, manualTransactions, storedGoals),
-    [manualAccounts, manualTransactions, storedGoals],
+    () => generateLocalInsights(financialData.manualAccounts, financialData.allTransactions, storedGoals),
+    [financialData.manualAccounts, financialData.allTransactions, storedGoals],
   );
 
   const activeServerInsights = serverInsights

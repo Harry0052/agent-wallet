@@ -24,9 +24,11 @@ import {
   WorkspacePanel,
 } from "@/components/finance/WorkspacePrimitives";
 import { ManualEntryModal } from "@/components/finance/ManualDataControls";
+import { ComboboxInput } from "@/components/finance/ComboboxInput";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS, type ManualAccountRecord } from "@/lib/manualMode";
 import { normalizeTransactionType, type ManualTransactionType } from "@/lib/manualTransactions";
+import { buildCategoryOptions, buildMerchantOptions } from "@/lib/formOptions";
 
 type FilterMode = "all" | "income" | "expense" | "transfer" | "recurring";
 
@@ -542,24 +544,28 @@ export function TransactionsView() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
+            <div className="space-y-1">
               <span className="text-xs text-[var(--aw-text-muted)]">Category</span>
-              <input
+              <ComboboxInput
                 value={manualCategory}
-                onChange={(event) => setManualCategory(event.target.value)}
-                className="aw-input h-10 text-sm"
-                placeholder="Groceries"
+                onChange={setManualCategory}
+                options={buildCategoryOptions(statement?.transactions, manualType === "transfer" ? "all" : manualType)}
+                placeholder="Select or type a category"
+                allowCustom
+                customLabel="Add new category"
               />
-            </label>
-            <label className="space-y-1">
+            </div>
+            <div className="space-y-1">
               <span className="text-xs text-[var(--aw-text-muted)]">Merchant or source</span>
-              <input
+              <ComboboxInput
                 value={manualMerchantOrSource}
-                onChange={(event) => setManualMerchantOrSource(event.target.value)}
-                className="aw-input h-10 text-sm"
-                placeholder="Payroll"
+                onChange={setManualMerchantOrSource}
+                options={buildMerchantOptions(statement?.transactions)}
+                placeholder="Select or type a name"
+                allowCustom
+                customLabel="Add new merchant"
               />
-            </label>
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -648,15 +654,17 @@ export function TransactionsView() {
             <br />
             Current category: <span className="font-semibold text-[var(--aw-text)]">{categoryCorrectionTx?.category || "uncategorized"}</span>
           </div>
-          <label className="space-y-1">
+          <div className="space-y-1">
             <span className="text-xs text-[var(--aw-text-muted)]">Corrected category</span>
-            <input
+            <ComboboxInput
               value={correctedCategory}
-              onChange={(event) => setCorrectedCategory(event.target.value)}
-              className="aw-input h-10 text-sm"
-              placeholder="groceries"
+              onChange={setCorrectedCategory}
+              options={buildCategoryOptions(statement?.transactions, "all")}
+              placeholder="Select or type a category"
+              allowCustom
+              customLabel="Add new category"
             />
-          </label>
+          </div>
           {correctionError ? (
             <p className="rounded-lg border border-[var(--aw-danger)]/25 bg-[var(--aw-danger)]/10 px-3 py-2 text-xs text-[var(--aw-danger)]">
               {correctionError}

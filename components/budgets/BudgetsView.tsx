@@ -17,6 +17,7 @@ import {
   ManualEntryButton,
   ManualEntryModal,
 } from "@/components/finance/ManualDataControls";
+import { ComboboxInput } from "@/components/finance/ComboboxInput";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
 import { normalizeTransactionType } from "@/lib/manualTransactions";
@@ -432,11 +433,7 @@ export function BudgetsView() {
     );
   }, [budgetRows, formGroup]);
 
-  const isCustomCategory = useMemo(() => {
-    const trimmed = formCategory.trim();
-    if (!trimmed) return false;
-    return !categoryOptions.some((option) => normalizeCategory(option) === normalizeCategory(trimmed));
-  }, [categoryOptions, formCategory]);
+  // Custom category detection is now handled by ComboboxInput internally
 
   const openCreateModal = () => {
     setEditingRowId(null);
@@ -688,24 +685,17 @@ export function BudgetsView() {
             </label>
           </div>
 
-          <label className="space-y-1">
+          <div className="space-y-1">
             <span className="text-xs text-[var(--aw-text-muted)]">Category</span>
-            <input
+            <ComboboxInput
               value={formCategory}
-              onChange={(event) => setFormCategory(event.target.value)}
-              className="aw-input h-10 text-sm"
-              placeholder="Groceries"
-              list="calico-budget-categories"
+              onChange={setFormCategory}
+              options={categoryOptions}
+              placeholder="Select or type a category"
+              allowCustom
+              customLabel="Add new category"
             />
-            <datalist id="calico-budget-categories">
-              {categoryOptions.map((option) => (
-                <option key={option} value={option} />
-              ))}
-            </datalist>
-            {isCustomCategory ? (
-              <p className="text-xs text-[var(--aw-primary)]">Add custom category: this name will be saved as a new category.</p>
-            ) : null}
-          </label>
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-1">

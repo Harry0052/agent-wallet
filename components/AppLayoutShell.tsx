@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AppProvider } from '@/lib/store';
 import { AppNav } from '@/components/AppNav';
 import { CalicoAssistant } from '@/components/CalicoAssistant';
+import { TutorialOrchestrator } from '@/components/plans/TutorialOrchestrator';
 
 function AppEntryReveal({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = useState<"loading" | "revealing" | "ready">("loading");
@@ -69,20 +70,22 @@ function AppEntryReveal({ children }: { children: React.ReactNode }) {
 export function AppLayoutShell({ children }: { children: React.ReactNode }) {
   return (
     <AppProvider>
-      <AppEntryReveal>
-        <Suspense fallback={null}>
-          <AppNav />
-        </Suspense>
-        <motion.div
-          className="sw-content"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35, duration: 0.45, ease: [0.16, 0.7, 0.2, 1] }}
-        >
-          {children}
-        </motion.div>
-        <CalicoAssistant />
-      </AppEntryReveal>
+      <TutorialOrchestrator>
+        <AppEntryReveal>
+          <Suspense fallback={null}>
+            <AppNav />
+          </Suspense>
+          <motion.div
+            className="sw-content"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.45, ease: [0.16, 0.7, 0.2, 1] }}
+          >
+            {children}
+          </motion.div>
+          <CalicoAssistant />
+        </AppEntryReveal>
+      </TutorialOrchestrator>
     </AppProvider>
   );
 }

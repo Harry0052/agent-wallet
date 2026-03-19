@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
   Bar,
@@ -12,13 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  fetchUnifiedStatement,
-  type DetectedSubscription,
-  type StatementTransaction,
-  type UnifiedStatement,
-} from "@/services/statements";
-import { fetchConnectedAccountsBundle } from "@/services/connect";
+
 import { fmt, fmtDate } from "@/lib/utils";
 import {
   WorkspaceEmpty,
@@ -29,41 +23,16 @@ import { ManualEntryModal } from "@/components/finance/ManualDataControls";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
 import { normalizeTransactionType } from "@/lib/manualTransactions";
-
-interface ManualCashflowEntry {
-  id: string;
-  label: string;
-  type: "income" | "expense";
-  amount: number;
-  category: string;
-  occurredAt: string;
-  sourceType?: "manual";
-}
+import { useFinancialData } from "@/lib/useFinancialData";
+import { ComboboxInput } from "@/components/finance/ComboboxInput";
+import { buildCategoryOptions } from "@/lib/formOptions";
+import type {
+  ManualCashflowEntry,
+  ManualRecurringItem,
+  CashFlowEntry,
+} from "@/lib/financialTypes";
 
 type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
-
-interface ManualRecurringItem extends DetectedSubscription {
-  sourceType?: "manual";
-  cashflowType?: "income" | "expense" | "transfer";
-  manualType?: string;
-  title?: string;
-  amount?: number;
-  frequency?: RecurringFrequency;
-  startDate?: string;
-  category?: string;
-  autopopulateForecast?: boolean;
-}
-
-interface CashFlowEntry {
-  id: string;
-  label: string;
-  type: "income" | "expense" | "transfer";
-  amount: number;
-  category: string;
-  occurredAt: string;
-  sourceType: "manual" | "connected";
-  entryKind?: "actual" | "forecast";
-}
 
 interface ChartPoint {
   label: string;
@@ -257,18 +226,13 @@ function buildChartData(entries: CashFlowEntry[], range: TimeRange): ChartPoint[
 }
 
 export function CashFlowView() {
-  const [statement, setStatement] = useState<UnifiedStatement | null>(null);
-  const [connectedAccountCount, setConnectedAccountCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const financialData = useFinancialData();
   const [range, setRange] = useState<TimeRange>("month");
 
-  const [manualEntries, setManualEntries] = useLocalStorageState<ManualCashflowEntry[]>(
+  // Manual cashflow entry form still writes to its own localStorage key.
+  // Read value unused — we consume merged data from useFinancialData instead.
+  const [, setManualEntries] = useLocalStorageState<ManualCashflowEntry[]>(
     MANUAL_STORAGE_KEYS.cashflow,
-    [],
-  );
-  const [manualTransactions] = useLocalStorageState<StatementTransaction[]>(
-    MANUAL_STORAGE_KEYS.transactions,
     [],
   );
   const [manualRecurringItems] = useLocalStorageState<ManualRecurringItem[]>(
@@ -284,102 +248,39 @@ export function CashFlowView() {
   const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [manualError, setManualError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loading = financialData.loading;
+  const error = financialData.error;
+  const connectedAccountCount = financialData.connectedAccounts.length;
 
-    const [statementResult, accountsResult] = await Promise.allSettled([
-      fetchUnifiedStatement({ page_size: 120 }),
-      fetchConnectedAccountsBundle(),
-    ]);
+  // Convert all merged transactions to CashFlowEntry format
+  const transactionEntries = useMemo<CashFlowEntry[]>(() => {
+    return financialData.allTransactions.reduce<CashFlowEntry[]>((rows, tx) => {
+      const txType = normalizeTransactionType(tx);
+      if (txType !== "income" && txType !== "expense") return rows;
 
-    if (statementResult.status === "fulfilled") {
-      setStatement(statementResult.value);
-    } else {
-      setStatement(null);
-      const message = statementResult.reason instanceof Error
-        ? statementResult.reason.message
-        : "Failed to load cash flow.";
-      const safeNoDataError = /no\s+connected|no\s+account|not\s+connected|empty/i.test(message);
-      if (!safeNoDataError) {
-        setError(message);
-      }
-    }
-
-    if (accountsResult.status === "fulfilled") {
-      setConnectedAccountCount(accountsResult.value.accounts.length);
-    } else {
-      setConnectedAccountCount(0);
-    }
-
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const connectedEntries = useMemo<CashFlowEntry[]>(() => {
-    const connectedTx = statement?.transactions ?? [];
-    return connectedTx.reduce<CashFlowEntry[]>((rows, tx) => {
-        const txType = normalizeTransactionType(tx);
-        if (txType !== "income" && txType !== "expense") return rows;
-
-        rows.push({
-          id: `connected-${tx.id}`,
-          label: tx.merchant_name || tx.normalized_merchant || "Connected transaction",
-          type: txType,
-          amount: Math.abs(tx.amount),
-          category: tx.category || "Uncategorized",
-          occurredAt: tx.occurred_at,
-          sourceType: "connected",
-          entryKind: "actual",
-        });
-        return rows;
-      }, []);
-  }, [statement?.transactions]);
-
-  const manualTransactionEntries = useMemo<CashFlowEntry[]>(() => {
-    return manualTransactions.reduce<CashFlowEntry[]>((rows, tx) => {
-        const txType = normalizeTransactionType(tx);
-        if (txType !== "income" && txType !== "expense") return rows;
-
-        rows.push({
-          id: `tx-${tx.id}`,
-          label: tx.merchant_name || tx.normalized_merchant || "Manual transaction",
-          type: txType,
-          amount: Math.abs(tx.amount),
-          category: tx.category || "Manual",
-          occurredAt: tx.occurred_at,
-          sourceType: "manual",
-          entryKind: "actual",
-        });
-        return rows;
-      }, []);
-  }, [manualTransactions]);
-
-  const manualCashflowEntries = useMemo<CashFlowEntry[]>(() => {
-    return manualEntries.map((entry) => ({
-      id: `cashflow-${entry.id}`,
-      label: entry.label,
-      type: entry.type,
-      amount: entry.amount,
-      category: entry.category,
-      occurredAt: entry.occurredAt,
-      sourceType: "manual",
-      entryKind: "actual",
-    }));
-  }, [manualEntries]);
+      rows.push({
+        id: tx.id,
+        label: tx.merchant_name || tx.normalized_merchant || "Transaction",
+        type: txType,
+        amount: Math.abs(tx.amount),
+        category: tx.category || "Uncategorized",
+        occurredAt: tx.occurred_at,
+        sourceType: tx.sourceType === "manual" ? "manual" : "connected",
+        entryKind: "actual",
+      });
+      return rows;
+    }, []);
+  }, [financialData.allTransactions]);
 
   const recurringForecastEntries = useMemo<CashFlowEntry[]>(() => {
     return buildRecurringForecastEntries(manualRecurringItems);
   }, [manualRecurringItems]);
 
   const allEntries = useMemo(() => {
-    return [...connectedEntries, ...manualTransactionEntries, ...manualCashflowEntries, ...recurringForecastEntries].sort(
+    return [...transactionEntries, ...recurringForecastEntries].sort(
       (a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt),
     );
-  }, [connectedEntries, manualCashflowEntries, manualTransactionEntries, recurringForecastEntries]);
+  }, [transactionEntries, recurringForecastEntries]);
 
   const rangeEntries = useMemo(() => {
     return allEntries.filter((entry) => {
@@ -776,15 +677,17 @@ export function CashFlowView() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
+            <div className="space-y-1">
               <span className="text-xs text-[var(--aw-text-muted)]">Category</span>
-              <input
+              <ComboboxInput
                 value={manualCategory}
-                onChange={(event) => setManualCategory(event.target.value)}
-                className="aw-input h-10 text-sm"
-                placeholder="Salary"
+                onChange={setManualCategory}
+                options={buildCategoryOptions(financialData.connectedTransactions, manualType)}
+                placeholder="Select or type a category"
+                allowCustom
+                customLabel="Add new category"
               />
-            </label>
+            </div>
             <label className="space-y-1">
               <span className="text-xs text-[var(--aw-text-muted)]">Date</span>
               <input

@@ -1,36 +1,18 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { fmt } from "@/lib/utils";
-import {
-  fetchUnifiedStatement,
-  fetchSuspectedSubscriptions,
-  type DetectedSubscription,
-  type StatementTransaction,
-} from "@/services/statements";
+import type { DetectedSubscription } from "@/services/statements";
 import {
   WorkspaceHeader,
   WorkspacePanel,
 } from "@/components/finance/WorkspacePrimitives";
-import { useLocalStorageState } from "@/lib/useLocalStorageState";
-import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
 import { normalizeTransactionType } from "@/lib/manualTransactions";
+import { useFinancialData } from "@/lib/useFinancialData";
+import type { ManualRecurringItem } from "@/lib/financialTypes";
 
 type RecordType = "income" | "expense" | "transfer";
-
-interface ManualCashflowEntry {
-  id: string;
-  label: string;
-  type: "income" | "expense";
-  amount: number;
-  category: string;
-  occurredAt: string;
-}
-
-interface ManualRecurringItem extends DetectedSubscription {
-  cashflowType?: "income" | "expense" | "transfer";
-}
 
 interface SourceRecord {
   type: RecordType;
@@ -182,90 +164,26 @@ function FlowVisualization(props: { income: number; expenses: number; net: numbe
 }
 
 export function ReportsView() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [connectedTransactions, setConnectedTransactions] = useState<StatementTransaction[]>([]);
-  const [connectedRecurring, setConnectedRecurring] = useState<DetectedSubscription[]>([]);
-
-  const [manualTransactions] = useLocalStorageState<StatementTransaction[]>(
-    MANUAL_STORAGE_KEYS.transactions,
-    [],
-  );
-  const [manualCashflowEntries] = useLocalStorageState<ManualCashflowEntry[]>(
-    MANUAL_STORAGE_KEYS.cashflow,
-    [],
-  );
-  const [manualRecurringItems] = useLocalStorageState<ManualRecurringItem[]>(
-    MANUAL_STORAGE_KEYS.recurring,
-    [],
-  );
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    const [statementResult, recurringResult] = await Promise.allSettled([
-      fetchUnifiedStatement({ page_size: 160 }),
-      fetchSuspectedSubscriptions(),
-    ]);
-
-    if (statementResult.status === "fulfilled") {
-      setConnectedTransactions(statementResult.value.transactions ?? []);
-    } else {
-      setConnectedTransactions([]);
-      const message = statementResult.reason instanceof Error
-        ? statementResult.reason.message
-        : "Failed to load.";
-      const safeNoDataError = /no\s+connected|no\s+account|not\s+connected|empty/i.test(message);
-      if (!safeNoDataError) {
-        setError(message);
-      }
-    }
-
-    if (recurringResult.status === "fulfilled") {
-      setConnectedRecurring(recurringResult.value);
-    } else {
-      setConnectedRecurring([]);
-    }
-
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { loading, error, allTransactions, allRecurring } = useFinancialData();
 
   const allRecords = useMemo<SourceRecord[]>(() => {
     const records: SourceRecord[] = [];
 
-    for (const tx of connectedTransactions) {
+    // All transactions (connected + manual + cashflow + reports) are already
+    // merged and deduplicated by useFinancialData
+    for (const tx of allTransactions) {
       const type = normalizeTransactionType(tx);
       if (type === "transfer") continue;
       records.push({ type, amount: Math.abs(tx.amount), category: tx.category });
     }
 
-    for (const tx of manualTransactions) {
-      const type = normalizeTransactionType(tx);
-      if (type === "transfer") continue;
-      records.push({ type, amount: Math.abs(tx.amount), category: tx.category });
-    }
-
-    for (const entry of manualCashflowEntries) {
-      records.push({ type: entry.type, amount: entry.amount, category: entry.category });
-    }
-
-    for (const item of connectedRecurring) {
+    for (const item of allRecurring) {
       if (item.lifecycle_status === "ignored" || item.lifecycle_status === "inactive") continue;
       records.push({ type: recurringKind(item), amount: item.estimated_monthly_cost, category: item.recurrence_interval });
     }
 
-    for (const item of manualRecurringItems) {
-      records.push({ type: recurringKind(item), amount: item.estimated_monthly_cost, category: (item as ManualRecurringItem).cashflowType || "expense" });
-    }
-
     return records;
-  }, [connectedRecurring, connectedTransactions, manualCashflowEntries, manualRecurringItems, manualTransactions]);
+  }, [allTransactions, allRecurring]);
 
   const totals = useMemo(() => toTotals(allRecords), [allRecords]);
   const categories = useMemo(() => topCategories(allRecords, 6), [allRecords]);
