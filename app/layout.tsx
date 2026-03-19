@@ -1,14 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { DM_Sans } from 'next/font/google';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import './globals.css';
-
-const bodyFont = DM_Sans({
-  subsets: ['latin'],
-  variable: '--font-calico',
-  weight: ['400', '500', '600', '700'],
-});
 
 export const metadata: Metadata = {
   title: 'Calico',
@@ -19,7 +12,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${bodyFont.variable} aw-body antialiased min-h-screen overflow-x-hidden bg-[var(--aw-bg)] text-[var(--aw-text)]`}>
+      <body className="aw-body antialiased min-h-screen overflow-x-hidden bg-[var(--aw-bg)] text-[var(--aw-text)]">
         <ThemeProvider>
           {children}
         </ThemeProvider>

@@ -8,8 +8,8 @@ interface SeriesConfig {
   strokeWidth?: number;
 }
 
-interface SimpleTrendChartProps {
-  data: Array<Record<string, number | string>>;
+interface SimpleTrendChartProps<T extends object = Record<string, unknown>> {
+  data: T[];
   xKey: string;
   series: SeriesConfig[];
   heightClassName?: string;
@@ -26,11 +26,15 @@ function buildTicks(minValue: number, maxValue: number, count = 4): number[] {
   });
 }
 
-function sampleXAxisLabels(data: Array<Record<string, number | string>>, xKey: string, maxLabels: number) {
+function getRowValue(row: object, key: string): unknown {
+  return (row as Record<string, unknown>)[key];
+}
+
+function sampleXAxisLabels<T extends object>(data: T[], xKey: string, maxLabels: number) {
   if (data.length <= maxLabels) {
     return data.map((item, index) => ({
-      id: `${String(item[xKey] ?? index)}-${index}`,
-      label: String(item[xKey] ?? ""),
+      id: `${String(getRowValue(item, xKey) ?? index)}-${index}`,
+      label: String(getRowValue(item, xKey) ?? ""),
     }));
   }
 
@@ -38,7 +42,8 @@ function sampleXAxisLabels(data: Array<Record<string, number | string>>, xKey: s
   const sampled = new Map<number, string>();
   for (let index = 0; index < maxLabels; index += 1) {
     const dataIndex = Math.round((lastIndex * index) / (maxLabels - 1));
-    sampled.set(dataIndex, String(data[dataIndex]?.[xKey] ?? ""));
+    const labelValue = data[dataIndex] ? getRowValue(data[dataIndex], xKey) : "";
+    sampled.set(dataIndex, String(labelValue ?? ""));
   }
 
   return [...sampled.entries()].map(([index, label]) => ({
@@ -47,7 +52,7 @@ function sampleXAxisLabels(data: Array<Record<string, number | string>>, xKey: s
   }));
 }
 
-export function SimpleTrendChart({
+export function SimpleTrendChart<T extends object>({
   data,
   xKey,
   series,
@@ -55,14 +60,14 @@ export function SimpleTrendChart({
   maxXAxisLabels = 6,
   showYAxis = true,
   formatValue = (value) => String(Math.round(value)),
-}: SimpleTrendChartProps) {
+}: SimpleTrendChartProps<T>) {
   const chartWidth = 100;
   const chartHeight = 64;
   const paddingX = 8;
   const paddingY = 8;
   const allValues = data.flatMap((row) =>
     series
-      .map((item) => Number(row[item.key]))
+      .map((item) => Number(getRowValue(row, item.key)))
       .filter((value) => Number.isFinite(value)),
   );
   const rawMin = allValues.length > 0 ? Math.min(...allValues) : 0;
@@ -81,7 +86,7 @@ export function SimpleTrendChart({
 
   const seriesPaths = series.map((item) => {
     const points = data.map((row, index) => {
-      const numericValue = Number(row[item.key] ?? 0);
+      const numericValue = Number(getRowValue(row, item.key) ?? 0);
       const x = data.length === 1
         ? chartWidth / 2
         : paddingX + (usableWidth * index) / (data.length - 1);
