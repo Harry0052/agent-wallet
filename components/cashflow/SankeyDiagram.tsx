@@ -107,10 +107,10 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
 
   // SVG dimensions
   const width = 760;
-  const height = 400;
-  const padding = { top: 24, bottom: 24, left: 16, right: 16 };
-  const nodeWidth = 14;
-  const nodeRadius = 7;
+  const height = 380;
+  const padding = { top: 20, bottom: 20, left: 20, right: 20 };
+  const nodeWidth = 8;
+  const nodeRadius = 4;
   const colLeft = padding.left;
   const colCenter = width / 2 - nodeWidth / 2;
   const colRight = width - padding.right - nodeWidth;
@@ -230,7 +230,7 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
       if (!fromNode || !toNode || !hub) return null;
 
       const total = flow.from === "hub" ? (nodes.filter((n) => n.side === "right").reduce((s, n) => s + n.value, 0) || 1) : income || 1;
-      const thickness = Math.max((flow.value / total) * hub.height * 0.85, 2);
+      const thickness = Math.max((flow.value / total) * hub.height * 0.7, 1.5);
 
       let x1: number, y1: number, x2: number, y2: number;
 
@@ -259,15 +259,15 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
             fill="none"
             stroke={flow.color}
             strokeWidth={thickness}
-            strokeOpacity={0.18}
+            strokeOpacity={0.1}
             strokeLinecap="round"
           />
           <path
             d={pathD}
             fill="none"
             stroke={flow.color}
-            strokeWidth={Math.max(thickness * 0.4, 1.5)}
-            strokeOpacity={0.5}
+            strokeWidth={Math.max(thickness * 0.35, 1)}
+            strokeOpacity={0.4}
             strokeLinecap="round"
           />
         </g>
@@ -298,8 +298,8 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
               x2="0"
               y2="1"
             >
-              <stop offset="0%" stopColor={node.color} stopOpacity="0.9" />
-              <stop offset="100%" stopColor={node.color} stopOpacity="0.6" />
+              <stop offset="0%" stopColor={node.color} stopOpacity="0.75" />
+              <stop offset="100%" stopColor={node.color} stopOpacity="0.45" />
             </linearGradient>
           ))}
         </defs>
@@ -325,8 +325,8 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
                   x={node.x + nodeWidth + 10}
                   y={node.y + node.height / 2 - 6}
                   fill="var(--aw-text)"
-                  fontSize="11"
-                  fontWeight="600"
+                  fontSize="9"
+                  fontWeight="400"
                   dominantBaseline="auto"
                 >
                   {node.label}
@@ -335,8 +335,8 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
                   x={node.x + nodeWidth + 10}
                   y={node.y + node.height / 2 + 8}
                   fill="var(--aw-text-muted)"
-                  fontSize="10"
-                  fontWeight="500"
+                  fontSize="9"
+                  fontWeight="400"
                   dominantBaseline="auto"
                 >
                   {fmt(node.value)}
@@ -349,8 +349,8 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
                   x={node.x + nodeWidth / 2}
                   y={node.y - 8}
                   fill="var(--aw-text)"
-                  fontSize="11"
-                  fontWeight="700"
+                  fontSize="9"
+                  fontWeight="600"
                   textAnchor="middle"
                 >
                   {fmt(node.value)}
@@ -363,8 +363,8 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
                   x={node.x - 10}
                   y={node.y + node.height / 2 - 6}
                   fill="var(--aw-text)"
-                  fontSize="11"
-                  fontWeight="600"
+                  fontSize="10"
+                  fontWeight="500"
                   textAnchor="end"
                   dominantBaseline="auto"
                 >

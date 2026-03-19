@@ -51,7 +51,6 @@ function sampleXAxisLabels<T extends object>(data: T[], xKey: string, maxLabels:
   }));
 }
 
-/** Attempt a Catmull-Rom-to-Bezier interpolation for very smooth, flowing curves */
 function toSmoothPath(points: Array<{ x: number; y: number }>): string {
   if (points.length === 0) return "";
   if (points.length === 1) return `M ${points[0].x},${points[0].y}`;
@@ -59,7 +58,6 @@ function toSmoothPath(points: Array<{ x: number; y: number }>): string {
     return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
   }
 
-  // Catmull-Rom → cubic bezier with tension 0 (uniform)
   const tension = 0.3;
   let path = `M ${points[0].x},${points[0].y}`;
 
@@ -101,9 +99,9 @@ export function SimpleTrendChart<T extends object>({
   formatValue = (value) => String(Math.round(value)),
 }: SimpleTrendChartProps<T>) {
   const chartWidth = 100;
-  const chartHeight = 60;
-  const paddingX = 6;
-  const paddingY = 6;
+  const chartHeight = 56;
+  const paddingX = 5;
+  const paddingY = 7;
   const allValues = data.flatMap((row) =>
     series
       .map((item) => Number(getRowValue(row, item.key)))
@@ -113,8 +111,8 @@ export function SimpleTrendChart<T extends object>({
   const rawMax = allValues.length > 0 ? Math.max(...allValues) : 1;
   const hasVariance = rawMax !== rawMin;
   const variancePadding = hasVariance
-    ? Math.max((rawMax - rawMin) * 0.1, 1)
-    : Math.max(Math.abs(rawMax) * 0.1, 1);
+    ? Math.max((rawMax - rawMin) * 0.12, 1)
+    : Math.max(Math.abs(rawMax) * 0.12, 1);
   const domainMin = rawMin - variancePadding;
   const domainMax = rawMax + variancePadding;
   const range = Math.max(domainMax - domainMin, 1);
@@ -137,21 +135,16 @@ export function SimpleTrendChart<T extends object>({
     const smoothPath = toSmoothPath(points);
     const areaPath = item.fill ? toSmoothAreaPath(points, baselineY) : null;
 
-    return {
-      ...item,
-      points,
-      smoothPath,
-      areaPath,
-    };
+    return { ...item, points, smoothPath, areaPath };
   });
 
   const gradientId = (key: string) => `calico-gradient-${key}`;
 
   return (
-    <div className={`rounded-2xl bg-[var(--aw-surface-1)] px-4 py-3 ${heightClassName}`}>
-      <div className={`grid h-full gap-2 ${showYAxis ? "md:grid-cols-[48px_minmax(0,1fr)]" : ""}`}>
+    <div className={`${heightClassName}`}>
+      <div className={`grid h-full ${showYAxis ? "md:grid-cols-[40px_minmax(0,1fr)]" : ""}`}>
         {showYAxis ? (
-          <div className="hidden h-full flex-col justify-between py-1 text-[10px] font-medium tabular-nums text-[var(--aw-text-muted)]/50 md:flex">
+          <div className="hidden h-full flex-col justify-between py-1 text-[9px] tabular-nums text-[var(--aw-text-muted)]/40 md:flex">
             {ticks.map((tick) => (
               <span key={tick} className="truncate">
                 {formatValue(tick)}
@@ -164,7 +157,7 @@ export function SimpleTrendChart<T extends object>({
           <svg
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
             preserveAspectRatio="none"
-            className="h-[calc(100%-20px)] min-h-[160px] w-full"
+            className="h-[calc(100%-18px)] min-h-[140px] w-full"
             aria-hidden="true"
           >
             <defs>
@@ -173,108 +166,62 @@ export function SimpleTrendChart<T extends object>({
                   <linearGradient
                     key={gradientId(item.key)}
                     id={gradientId(item.key)}
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
+                    x1="0" y1="0" x2="0" y2="1"
                   >
-                    <stop offset="0%" stopColor={item.fill} stopOpacity="0.32" />
-                    <stop offset="60%" stopColor={item.fill} stopOpacity="0.08" />
+                    <stop offset="0%" stopColor={item.fill} stopOpacity="0.24" />
+                    <stop offset="50%" stopColor={item.fill} stopOpacity="0.06" />
                     <stop offset="100%" stopColor={item.fill} stopOpacity="0" />
                   </linearGradient>
                 ) : null
               )}
-              {/* Glow filter for endpoint dots */}
-              <filter id="calico-dot-glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="1.2" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
             </defs>
 
-            {/* Very subtle gridlines — barely visible */}
+            {/* Hairline gridlines */}
             {ticks.map((tick) => {
               const y = paddingY + ((domainMax - tick) / range) * usableHeight;
               return (
                 <line
                   key={tick}
-                  x1={paddingX}
-                  x2={chartWidth - paddingX}
-                  y1={y}
-                  y2={y}
+                  x1={paddingX} x2={chartWidth - paddingX}
+                  y1={y} y2={y}
                   stroke={calicoTheme.border}
-                  strokeWidth="0.25"
-                  opacity="0.5"
+                  strokeWidth="0.2"
+                  opacity="0.4"
                 />
               );
             })}
 
-            {/* Rich gradient area fills */}
+            {/* Area fills */}
             {seriesPaths.map((item) =>
               item.areaPath ? (
-                <path
-                  key={`${item.key}-area`}
-                  d={item.areaPath}
-                  fill={`url(#${gradientId(item.key)})`}
-                />
+                <path key={`${item.key}-area`} d={item.areaPath} fill={`url(#${gradientId(item.key)})`} />
               ) : null
             )}
 
-            {/* Smooth flowing curve lines */}
+            {/* Curve lines — thin and sleek */}
             {seriesPaths.map((item) => (
               <path
                 key={item.key}
                 d={item.smoothPath}
                 fill="none"
                 stroke={item.stroke}
-                strokeWidth={item.strokeWidth ?? 2.2}
+                strokeWidth={item.strokeWidth ?? 1.6}
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
             ))}
 
-            {/* Last-point callout with glow dot + value label */}
+            {/* Minimal last-point indicator */}
             {seriesPaths.map((item) => {
               const lastPoint = item.points[item.points.length - 1];
               if (!lastPoint) return null;
               return (
-                <g key={`${item.key}-callout`}>
-                  {/* Glow ring */}
-                  <circle
-                    cx={lastPoint.x}
-                    cy={lastPoint.y}
-                    r="3"
-                    fill={item.stroke}
-                    opacity="0.15"
-                  />
-                  {/* Outer ring */}
-                  <circle
-                    cx={lastPoint.x}
-                    cy={lastPoint.y}
-                    r="2"
-                    fill="var(--aw-surface-1)"
-                    stroke={item.stroke}
-                    strokeWidth="1"
-                    filter="url(#calico-dot-glow)"
-                  />
-                  {/* Inner dot */}
-                  <circle
-                    cx={lastPoint.x}
-                    cy={lastPoint.y}
-                    r="0.8"
-                    fill={item.stroke}
-                  />
-                  {/* Value label */}
+                <g key={`${item.key}-end`}>
+                  <circle cx={lastPoint.x} cy={lastPoint.y} r="1.5" fill="white" stroke={item.stroke} strokeWidth="0.7" />
                   <text
-                    x={lastPoint.x}
-                    y={lastPoint.y - 4}
-                    textAnchor="middle"
-                    fill={item.stroke}
-                    fontSize="3.2"
-                    fontWeight="600"
-                    fontFamily="inherit"
+                    x={lastPoint.x} y={lastPoint.y - 3}
+                    textAnchor="middle" fill={item.stroke}
+                    fontSize="2.8" fontWeight="600" fontFamily="inherit"
                   >
                     {formatValue(lastPoint.value)}
                   </text>
@@ -283,11 +230,9 @@ export function SimpleTrendChart<T extends object>({
             })}
           </svg>
 
-          <div className="flex items-center justify-between gap-1 pt-1.5 text-[10px] font-medium text-[var(--aw-text-muted)]/50">
+          <div className="flex items-center justify-between pt-1 text-[9px] text-[var(--aw-text-muted)]/40">
             {xAxisLabels.map((item) => (
-              <span key={item.id} className="truncate">
-                {item.label}
-              </span>
+              <span key={item.id} className="truncate">{item.label}</span>
             ))}
           </div>
         </div>

@@ -27,14 +27,14 @@ export function WidgetContainer({
     <motion.section
       layout
       whileHover={{ y: -1, boxShadow: dashboardHoverShadow }}
-      transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+      transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
       style={dashboardSurfaceStyle}
       className={cn(
-        "relative overflow-hidden rounded-2xl p-5 md:p-6",
+        "relative overflow-hidden rounded-[20px] p-5 md:p-6",
         className,
       )}
     >
-      <div className="relative z-10 flex h-full flex-col">
+      <div className="flex h-full flex-col">
         <WidgetHeader title={title} subtitle={subtitle} action={action} dragHandleProps={dragHandleProps} />
         <div className={cn("mt-4 flex-1", contentClassName)}>{children}</div>
       </div>

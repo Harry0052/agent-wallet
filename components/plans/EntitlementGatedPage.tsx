@@ -1,19 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Lock, ArrowRight } from "lucide-react";
+import { Lock, ArrowRight, AlertCircle } from "lucide-react";
 import { useEntitlements } from "@/lib/useEntitlements";
 import type { PlanId } from "@/services/billing";
 
 interface EntitlementGatedPageProps {
   children: React.ReactNode;
-  /** Feature key required to access this page */
   requiredFeature: string;
-  /** Human-readable name for the feature */
   featureLabel: string;
-  /** Description shown when locked */
   featureDescription: string;
-  /** Minimum plan needed */
   requiredPlan: PlanId;
 }
 
@@ -23,11 +19,6 @@ const PLAN_NAMES: Record<PlanId, string> = {
   autonomous: "Fully Autonomous",
 };
 
-/**
- * Wraps a full page with entitlement checking.
- * Shows a clear upgrade prompt if the user doesn't have access.
- * Uses the centralized useEntitlements hook (fetches from /api/entitlements).
- */
 export function EntitlementGatedPage({
   children,
   requiredFeature,
@@ -35,7 +26,7 @@ export function EntitlementGatedPage({
   featureDescription,
   requiredPlan,
 }: EntitlementGatedPageProps) {
-  const { loading, error, can, refresh } = useEntitlements();
+  const { loading, error, stale, can, refresh } = useEntitlements();
 
   if (loading) {
     return (
@@ -45,31 +36,67 @@ export function EntitlementGatedPage({
     );
   }
 
+  // User has access (from fresh fetch or cached data) — show content
   if (can(requiredFeature)) {
-    return <>{children}</>;
+    return (
+      <>
+        {/* If data is stale (from cache after a fetch failure), show a subtle non-blocking banner */}
+        {stale && error && (
+          <div className="mx-auto max-w-4xl px-4 pt-4">
+            <div className="flex items-center gap-2 rounded-xl bg-[var(--aw-warning)]/10 px-4 py-2.5 text-xs text-[var(--aw-text-muted)]">
+              <AlertCircle size={14} className="shrink-0 text-[var(--aw-warning)]" />
+              <span>Plan verification is temporarily unavailable. Using your last known plan.</span>
+              <button
+                type="button"
+                onClick={() => { void refresh(); }}
+                className="ml-auto shrink-0 font-semibold text-[var(--aw-primary)] hover:underline"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+        {children}
+      </>
+    );
   }
 
-  // If the entitlement check failed due to a network/server error, show
-  // a retry prompt instead of the paywall — the user may actually have access.
+  // No access AND error — verification failed and no cached data supports access.
+  // Distinguish between "we couldn't check" vs "user genuinely doesn't have access."
   if (error) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-6">
         <div className="w-full max-w-md text-center">
-          <p className="text-sm text-[var(--aw-text-muted)]">
-            Could not verify your plan. This is usually temporary.
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--aw-warning)]/15">
+            <AlertCircle size={22} className="text-[var(--aw-warning)]" />
+          </div>
+          <p className="text-base font-semibold text-[var(--aw-text)]">
+            Couldn't verify your plan
           </p>
-          <button
-            type="button"
-            onClick={() => { void refresh(); }}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
-          >
-            Try again
-          </button>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-[var(--aw-text-muted)]">
+            We're having trouble reaching our billing system. This is usually temporary — try again in a moment.
+          </p>
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => { void refresh(); }}
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-2.5 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
+            >
+              Try again
+            </button>
+            <Link
+              href="/home"
+              className="text-sm font-medium text-[var(--aw-text-muted)] hover:text-[var(--aw-text)] transition"
+            >
+              Go home
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
+  // No error, no access — user genuinely doesn't have this feature on their plan
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-6">
       <div className="w-full max-w-md text-center">
