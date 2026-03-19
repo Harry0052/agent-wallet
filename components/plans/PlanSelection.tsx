@@ -10,33 +10,34 @@ const plans: {
   name: string;
   price: string;
   period: string;
-  desc: string;
-  promise: string;
+  tagline: string;
+  bestFor: string;
   badge?: string;
   icon: typeof Sparkles;
   iconColor: string;
   features: string[];
   highlight: boolean;
+  cta: string;
 }[] = [
   {
     id: "starter",
     name: "Starter",
     price: "$8.99",
     period: "/month",
-    desc: "A simple way to see your money in one place. 14-day free trial included.",
-    promise: "Help me see where I stand.",
+    tagline: "A simple, stress-free view of your money.",
+    bestFor: "Best for getting organized",
     icon: Sparkles,
     iconColor: "#FDBA74",
     features: [
       "Connect up to 3 accounts",
-      "Money dashboard",
-      "Net worth tracking",
-      "Transaction feed",
-      "Monthly cash flow view",
+      "Money dashboard and net worth",
+      "Transaction feed with auto-categories",
+      "Monthly cash flow snapshot",
       "Simple budgets",
       "Manual entry",
     ],
     highlight: false,
+    cta: "Start 14-day free trial",
   },
   {
     id: "pro",
@@ -44,45 +45,42 @@ const plans: {
     price: "$29.99",
     period: "/month",
     badge: "Most Popular",
-    desc: "Calico helps you understand your habits and make better money decisions.",
-    promise: "Help me understand what to do next.",
+    tagline: "Smarter guidance and clearer next steps.",
+    bestFor: "Best for smarter money decisions",
     icon: Zap,
     iconColor: "#FDBA74",
     features: [
       "Everything in Starter",
       "Unlimited accounts",
-      "Money goals",
-      "Income vs. expense chart",
-      "Spending trends and insights",
-      "Recurring payment detection",
-      "Smart alerts",
-      "AI-powered summaries",
-      "Can I afford this?",
-      "What's Coming forecast",
-      "Custom spending groups",
+      "Money goals with progress tracking",
+      "Spending reports, trends, and forecasts",
+      "AI-powered insights and smart alerts",
+      "Recurring bill and subscription detection",
+      "Affordability check — ask before you spend",
       "Priority support",
     ],
     highlight: true,
+    cta: "Subscribe to Pro",
   },
   {
     id: "autonomous",
     name: "Fully Autonomous",
     price: "$89.99",
     period: "/month",
-    desc: "Calico helps handle complex finances and takes action for you.",
-    promise: "Help me handle it.",
+    tagline: "Calico reduces effort and handles more for you.",
+    bestFor: "Best for active financial optimization",
     icon: Crown,
     iconColor: "#FDBA74",
     features: [
       "Everything in Pro",
-      "Task Center and automations",
-      "Long-range outlook",
-      "Bill negotiation workflows",
-      "Custom integrations",
-      "API access",
-      "Premium intelligence",
+      "Task center with auto-actions",
+      "Action approval workflows",
+      "Advanced money intelligence",
+      "Financial memory — Calico learns you",
+      "Investments page",
     ],
     highlight: false,
+    cta: "Subscribe to Autonomous",
   },
 ];
 
@@ -110,17 +108,14 @@ export function PlanSelection() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSelect = async (planId: PlanId) => {
-    console.log('[Checkout] Starting checkout for plan:', planId);
     setError(null);
     setLoading(planId);
     try {
       await startCheckout(planId);
-      console.log('[Checkout] Redirect initiated');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setError(message);
       setLoading(null);
-      console.error('[Checkout] Failed:', message);
     }
   };
 
@@ -144,7 +139,7 @@ export function PlanSelection() {
       <motion.h1
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.45, ease: [0.16, 0.7, 0.2, 1] }}
+        transition={{ delay: 0.1, duration: 0.45, ease: easeOut }}
         className="mb-3 text-center"
         style={{ fontSize: "clamp(1.6rem, 4vw, 2.2rem)", fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.15 }}
       >
@@ -207,31 +202,38 @@ export function PlanSelection() {
                 </span>
               )}
 
-              <div className="mb-5 flex items-center gap-3">
+              {/* Plan name + icon */}
+              <div className="mb-1 flex items-center gap-3">
                 <div
-                  style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(253,186,116,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(253,186,116,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  <Icon size={20} color={plan.iconColor} />
+                  <Icon size={18} color={plan.iconColor} />
                 </div>
                 <span style={{ fontSize: 16, fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif" }}>
                   {plan.name}
                 </span>
               </div>
 
-              <div className="mb-1 flex items-baseline gap-1">
-                <span style={{ fontSize: 36, fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif", lineHeight: 1 }}>
+              {/* Best for — small positioning line right under name */}
+              <p className="mb-4 ml-[48px]" style={{ fontSize: 11, fontWeight: 600, color: "#FDBA74", letterSpacing: "0.03em" }}>
+                {plan.bestFor}
+              </p>
+
+              {/* Price */}
+              <div className="mb-2 flex items-baseline gap-1">
+                <span style={{ fontSize: 34, fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif", lineHeight: 1 }}>
                   {plan.price}
                 </span>
                 <span style={{ fontSize: 14, color: "#6B5B4B" }}>{plan.period}</span>
               </div>
-              <p className="mb-2" style={{ fontSize: 13, color: "#6B5B4B", lineHeight: 1.5 }}>
-                {plan.desc}
-              </p>
-              <p className="mb-5" style={{ fontSize: 12, fontStyle: "italic", color: "#9B8B7B", lineHeight: 1.5 }}>
-                &ldquo;{plan.promise}&rdquo;
+
+              {/* Tagline */}
+              <p className="mb-5" style={{ fontSize: 13, color: "#6B5B4B", lineHeight: 1.55 }}>
+                {plan.tagline}
               </p>
 
-              <ul className="flex-1" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Feature list */}
+              <ul className="flex-1" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 9 }}>
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-start gap-2" style={{ fontSize: 13, color: "#3A332E" }}>
                     <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: "#FDBA74" }} />
@@ -240,6 +242,7 @@ export function PlanSelection() {
                 ))}
               </ul>
 
+              {/* CTA */}
               <motion.button
                 type="button"
                 onClick={() => void handleSelect(plan.id)}
@@ -253,11 +256,7 @@ export function PlanSelection() {
                     : { background: "#FFFCF8", border: "1.5px solid #F2DECC", color: "#3A332E" }
                 }
               >
-                {loading === plan.id
-                  ? "Redirecting to checkout..."
-                  : plan.id === "starter"
-                    ? "Start 14-day free trial"
-                    : `Subscribe to ${plan.name}`}
+                {loading === plan.id ? "Redirecting to checkout..." : plan.cta}
               </motion.button>
             </motion.div>
           );

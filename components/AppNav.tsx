@@ -34,6 +34,12 @@ const primaryLinks: NavLink[] = [
   { href: "/reports", key: "reports", icon: BarChart3 },
 ];
 
+// Features that gate specific nav links
+const PRIMARY_GATES: Partial<Record<string, string>> = {
+  "/goals": "simple_goals",
+  "/reports": "spending_trends",
+};
+
 const secondaryLinks: NavLink[] = [
   { href: "/cashflow", key: "cashflow", icon: TrendingUp },
   { href: "/tasks", key: "tasks", icon: ListChecks },
@@ -49,11 +55,10 @@ export function AppNav() {
   const { loading, can } = useEntitlements();
 
   const visiblePrimaryLinks = primaryLinks.filter((link) => {
-    if (loading) {
-      return link.href !== "/goals";
-    }
-    if (link.href === "/goals") return can("simple_goals");
-    return true;
+    const gate = PRIMARY_GATES[link.href];
+    if (!gate) return true;
+    if (loading) return false;
+    return can(gate);
   });
 
   const visibleSecondaryLinks = secondaryLinks.filter((link) => {

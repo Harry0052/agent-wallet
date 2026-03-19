@@ -11,13 +11,14 @@ const plans = [
     name: "Starter",
     price: "$8.99",
     period: "/month",
-    desc: "14-day free trial included",
+    tagline: "A simple, stress-free view of your money.",
+    bestFor: "Best for getting organized",
     features: [
       "Connect up to 3 accounts",
-      "See all transactions",
-      "Basic spending insights",
-      "Recurring bill detection",
-      "Monthly summaries",
+      "Money dashboard and net worth",
+      "Transaction feed with auto-categories",
+      "Monthly cash flow snapshot",
+      "Simple budgets",
     ],
     cta: "Start Free Trial",
     href: "/signup?plan=starter",
@@ -27,14 +28,17 @@ const plans = [
     name: "Pro",
     price: "$29.99",
     period: "/month",
-    desc: "Everything, unlimited",
+    tagline: "Smarter guidance and clearer next steps.",
+    bestFor: "Best for smarter money decisions",
     badge: "Most Popular",
     features: [
       "Everything in Starter",
       "Unlimited accounts",
-      "Smart savings suggestions",
-      "Spending trend analysis",
-      "Custom categories",
+      "Money goals and spending reports",
+      "AI insights and smart alerts",
+      "Recurring bill detection",
+      "Spending trends and forecasts",
+      "Affordability check",
       "Priority support",
     ],
     cta: "Subscribe to Pro",
@@ -42,18 +46,18 @@ const plans = [
     highlighted: true,
   },
   {
-    name: "Autonomous",
+    name: "Fully Autonomous",
     price: "$89.99",
     period: "/month",
-    desc: "Full AI-powered automation",
+    tagline: "Calico reduces effort and handles more for you.",
+    bestFor: "Best for active financial optimization",
     features: [
       "Everything in Pro",
-      "AI-powered automation",
-      "Autonomous bill negotiation",
-      "Advanced cash flow forecasting",
-      "Dedicated account manager",
-      "Custom integrations",
-      "API access",
+      "Task center with auto-actions",
+      "Action approval workflows",
+      "Advanced money intelligence",
+      "Financial memory",
+      "Investments page",
     ],
     cta: "Subscribe to Autonomous",
     href: "/signup?plan=autonomous",
@@ -118,22 +122,29 @@ export function LandingPricing() {
                 </span>
               )}
 
-              <div className="mb-6">
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.textPrimary, fontFamily: C.fontFamily }}>
+              <div className="mb-5">
+                {/* Plan name */}
+                <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.textPrimary, fontFamily: C.fontFamily }}>
                   {plan.name}
                 </p>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span style={{ fontSize: 40, fontWeight: 700, color: C.textPrimary, fontFamily: C.fontFamily, lineHeight: 1 }}>
+                {/* Best for — right under name */}
+                <p style={{ margin: "3px 0 0", fontSize: 11, fontWeight: 600, color: C.apricot, letterSpacing: "0.03em" }}>
+                  {plan.bestFor}
+                </p>
+                {/* Price */}
+                <div className="mt-3 flex items-baseline gap-1">
+                  <span style={{ fontSize: 38, fontWeight: 700, color: C.textPrimary, fontFamily: C.fontFamily, lineHeight: 1 }}>
                     {plan.price}
                   </span>
                   <span style={{ fontSize: 14, color: C.textMuted }}>{plan.period}</span>
                 </div>
-                <p style={{ margin: "6px 0 0", fontSize: 13, color: C.textMuted }}>{plan.desc}</p>
+                {/* Tagline */}
+                <p style={{ margin: "8px 0 0", fontSize: 13, color: C.textMuted, lineHeight: 1.55 }}>{plan.tagline}</p>
               </div>
 
-              <ul className="flex-1" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
+              <ul className="flex-1" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 11 }}>
                 {plan.features.map((feat) => (
-                  <li key={feat} className="flex items-start gap-2.5" style={{ fontSize: 14, color: C.textSecondary }}>
+                  <li key={feat} className="flex items-start gap-2.5" style={{ fontSize: 13, color: C.textSecondary }}>
                     <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: C.apricot }} />
                     {feat}
                   </li>

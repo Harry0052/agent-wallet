@@ -155,15 +155,22 @@ function recordHistoryPoint(
 }
 
 function toSmoothPath(points: Array<{ x: number; y: number }>): string {
-  if (points.length < 2) {
-    return points.length === 1 ? `M ${points[0].x},${points[0].y}` : "";
-  }
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x},${points[0].y}`;
+  if (points.length === 2) return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
+
+  const tension = 0.3;
   let path = `M ${points[0].x},${points[0].y}`;
   for (let i = 0; i < points.length - 1; i++) {
-    const curr = points[i];
-    const next = points[i + 1];
-    const midX = (curr.x + next.x) / 2;
-    path += ` C ${midX},${curr.y} ${midX},${next.y} ${next.x},${next.y}`;
+    const p0 = points[Math.max(i - 1, 0)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(i + 2, points.length - 1)];
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+    path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
   }
   return path;
 }
@@ -203,8 +210,8 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
     : "";
 
   return (
-    <div className="grid gap-3 md:grid-cols-[56px_minmax(0,1fr)]">
-      <div className="hidden h-[248px] flex-col justify-between py-1 text-[10px] font-medium tabular-nums text-[var(--aw-text-muted)]/70 md:flex">
+    <div className="grid gap-2 md:grid-cols-[48px_minmax(0,1fr)]">
+      <div className="hidden h-[248px] flex-col justify-between py-1 text-[10px] font-medium tabular-nums text-[var(--aw-text-muted)]/50 md:flex">
         {ticks.map((tick) => (
           <span key={tick} className="aw-number">
             {fmt(tick)}
@@ -222,9 +229,17 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
         >
           <defs>
             <linearGradient id="nw-area-gradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--aw-chart-primary)" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="var(--aw-chart-primary)" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="var(--aw-chart-primary)" stopOpacity="0.32" />
+              <stop offset="60%" stopColor="var(--aw-chart-primary)" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="var(--aw-chart-primary)" stopOpacity="0" />
             </linearGradient>
+            <filter id="nw-dot-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="1.2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
           {ticks.map((tick) => {
             const y = paddingY + ((domainMax - tick) / range) * usableHeight;
@@ -236,8 +251,8 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
                 y1={y}
                 y2={y}
                 stroke="var(--aw-chart-grid)"
-                strokeWidth="0.35"
-                strokeDasharray="1.5 2"
+                strokeWidth="0.25"
+                opacity="0.5"
               />
             );
           })}
@@ -248,25 +263,25 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
             d={smoothPath}
             fill="none"
             stroke="var(--aw-chart-primary)"
-            strokeWidth="1.6"
+            strokeWidth="2"
             strokeLinejoin="round"
             strokeLinecap="round"
           />
-          {[points[0], points[points.length - 1]].filter(Boolean).map((point, idx) => (
-            <circle
-              key={`dot-${idx}`}
-              cx={point.x}
-              cy={point.y}
-              r="1.6"
-              fill="var(--aw-surface-1)"
-              stroke="var(--aw-chart-primary)"
-              strokeWidth="0.9"
-            />
-          ))}
+          {/* Last-point callout with glow */}
+          {lastPoint && (
+            <g>
+              <circle cx={lastPoint.x} cy={lastPoint.y} r="3" fill="var(--aw-chart-primary)" opacity="0.15" />
+              <circle cx={lastPoint.x} cy={lastPoint.y} r="2" fill="var(--aw-surface-1)" stroke="var(--aw-chart-primary)" strokeWidth="1" filter="url(#nw-dot-glow)" />
+              <circle cx={lastPoint.x} cy={lastPoint.y} r="0.8" fill="var(--aw-chart-primary)" />
+              <text x={lastPoint.x} y={lastPoint.y - 4} textAnchor="middle" fill="var(--aw-chart-primary)" fontSize="3.2" fontWeight="600" fontFamily="inherit">
+                {fmt(lastPoint.value)}
+              </text>
+            </g>
+          )}
         </svg>
 
         <div
-          className="grid gap-2 pt-2 text-[10px] font-medium text-[var(--aw-text-muted)]/60"
+          className="grid gap-2 pt-1.5 text-[10px] font-medium text-[var(--aw-text-muted)]/50"
           style={{ gridTemplateColumns: `repeat(${props.data.length}, minmax(0, 1fr))` }}
         >
           {props.data.map((point) => (

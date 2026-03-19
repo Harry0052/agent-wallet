@@ -889,10 +889,10 @@ function InstitutionsSection() {
   );
 }
 
-const PLAN_DISPLAY: Record<PlanId, { name: string; price: string; description: string }> = {
-  starter: { name: "Starter", price: "Free", description: "See where you stand" },
-  pro: { name: "Pro", price: "$9/mo", description: "Understand what to do next" },
-  autonomous: { name: "Fully Autonomous", price: "$29/mo", description: "Let Calico handle it" },
+const PLAN_DISPLAY: Record<PlanId, { name: string; price: string; description: string; bestFor: string }> = {
+  starter: { name: "Starter", price: "$8.99/mo", description: "See where you stand", bestFor: "Best for getting organized" },
+  pro: { name: "Pro", price: "$29.99/mo", description: "Understand what to do next", bestFor: "Best for smarter money decisions" },
+  autonomous: { name: "Fully Autonomous", price: "$89.99/mo", description: "Let Calico handle it", bestFor: "Best for active financial optimization" },
 };
 
 function BillingSection({
