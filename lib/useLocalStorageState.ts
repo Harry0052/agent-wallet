@@ -72,13 +72,17 @@ export function useLocalStorageState<T>(
           ? (update as (prevState: T) => T)(current)
           : update;
 
-      if (hydrated) {
-        persist(nextValue);
-      }
-
       return nextValue;
     });
-  }, [hydrated, persist]);
+  }, []);
+
+  // Persist to localStorage in a useEffect so writes happen after render,
+  // avoiding cascading re-renders when calico:storage-change listeners fire.
+  useEffect(() => {
+    if (hydrated) {
+      persist(value);
+    }
+  }, [hydrated, persist, value]);
 
   // Listen for changes from other components on the same page
   useEffect(() => {

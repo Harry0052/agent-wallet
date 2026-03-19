@@ -51,6 +51,24 @@
   --aw-chart-grid: #F2DECC;
   --aw-chart-positive-fill: #BBF7D0;
   --aw-chart-negative-fill: #FECDD3;
+
+  /* Calico aliases — point to aw-* vars so dashboard widgets work without inline style overrides */
+  --calico-background: var(--aw-bg);
+  --calico-card: var(--aw-surface-1);
+  --calico-secondary-surface: var(--aw-surface-subtle);
+  --calico-text: var(--aw-text);
+  --calico-text-soft: var(--aw-text-soft);
+  --calico-text-muted: var(--aw-text-muted);
+  --calico-primary: var(--aw-primary);
+  --calico-primary-hover: var(--aw-primary-strong);
+  --calico-primary-soft: var(--aw-primary-soft);
+  --calico-primary-secondary: var(--aw-primary-secondary);
+  --calico-primary-secondary-soft: var(--aw-primary-secondary-soft);
+  --calico-success: var(--aw-success);
+  --calico-warning: var(--aw-warning);
+  --calico-negative: var(--aw-danger);
+  --calico-border: var(--aw-border);
+  --calico-hover: var(--aw-surface-subtle);
 }
 
 * {

@@ -4,14 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Landmark, Loader2, Plus, RefreshCw } from "lucide-react";
 import {
-  fetchConnectedAccountsBundle,
-  type ConnectedAccountRecord,
-  type ConnectedInstitutionRecord,
-} from "@/services/connect";
-import {
   dismissFinancialNotification,
   fetchFinancialOsDashboard,
 } from "@/services/financialOs";
+import { useFinancialData } from "@/lib/useFinancialData";
 import { fmt } from "@/lib/utils";
 import {
   ToolbarButton,
@@ -33,11 +29,6 @@ import {
 } from "@/lib/manualMode";
 import { sourceTypeUiLabel } from "@/lib/sourceType";
 import type { UnifiedFinancialAccountDashboard } from "@/lib/server/financialOs/types";
-
-interface AccountsBundle {
-  accounts: ConnectedAccountRecord[];
-  institutions: ConnectedInstitutionRecord[];
-}
 
 interface NetWorthHistoryPoint {
   dayKey: string;
@@ -265,9 +256,7 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
 
 export function AccountsView() {
   const router = useRouter();
-  const [bundle, setBundle] = useState<AccountsBundle | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const financialData = useFinancialData();
   const [financialInfra, setFinancialInfra] = useState<UnifiedFinancialAccountDashboard | null>(null);
   const [financialInfraLoading, setFinancialInfraLoading] = useState(false);
   const loadSequenceRef = useRef(0);
@@ -294,30 +283,11 @@ export function AccountsView() {
   const [manualNotes, setManualNotes] = useState("");
   const [manualError, setManualError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // Fetch financial OS dashboard (page-specific, not in useFinancialData)
+  const loadFinancialInfra = useCallback(async () => {
     const requestId = loadSequenceRef.current + 1;
     loadSequenceRef.current = requestId;
-    setLoading(true);
-    setError(null);
     setFinancialInfraLoading(true);
-
-    const accountsResult = await fetchConnectedAccountsBundle().then(
-      (value) => ({ status: "fulfilled" as const, value }),
-      (reason) => ({ status: "rejected" as const, reason }),
-    );
-
-    if (requestId !== loadSequenceRef.current) {
-      return;
-    }
-
-    if (accountsResult.status === "fulfilled") {
-      setBundle(accountsResult.value);
-    } else {
-      setBundle(null);
-      setError(accountsResult.reason instanceof Error ? accountsResult.reason.message : "Failed to load accounts.");
-    }
-
-    setLoading(false);
 
     void fetchFinancialOsDashboard()
       .then((value) => {
@@ -335,10 +305,12 @@ export function AccountsView() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadFinancialInfra();
+  }, [loadFinancialInfra]);
 
-  const connectedAccounts = bundle?.accounts ?? [];
+  const loading = financialData.loading;
+  const error = financialData.error;
+  const connectedAccounts = financialData.connectedAccounts;
 
   const connectedKnownBalanceSum = connectedAccounts.reduce(
     (sum, account) => sum + (typeof account.balance === "number" ? account.balance : 0),
@@ -522,7 +494,8 @@ export function AccountsView() {
             <ToolbarButton
               icon={<RefreshCw size={14} />}
               onClick={() => {
-                void load();
+                void financialData.refresh();
+                void loadFinancialInfra();
               }}
             >
               Refresh all
@@ -589,7 +562,7 @@ export function AccountsView() {
                             type="button"
                             className="text-[11px] text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
                             onClick={() => {
-                              void dismissFinancialNotification(item.id).then(() => load());
+                              void dismissFinancialNotification(item.id).then(() => loadFinancialInfra());
                             }}
                           >
                             Dismiss

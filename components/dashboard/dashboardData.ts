@@ -12,24 +12,10 @@ import {
 
 const DAY_COUNT = 30;
 
-export const placeholderSpending = Array.from({ length: DAY_COUNT }, (_, index) => {
-  const day = index + 1;
-  const curve = Math.sin(day / 4.3) * 10;
-  return {
-    day,
-    thisMonth: Math.max(0, Math.round(day * 1.6 + curve + (day % 6 === 0 ? 14 : 0))),
-    lastMonth: Math.max(0, Math.round(day * 1.35 + Math.cos(day / 5.2) * 12 + (day % 7 === 0 ? 10 : 0))),
-  };
-});
+/** Empty placeholder arrays — widgets check length to decide empty state */
+export const placeholderSpending: Array<{ day: number; thisMonth: number; lastMonth: number }> = [];
 
-export const placeholderNetWorth = [
-  { label: "Jan", value: 1 },
-  { label: "Feb", value: 1 },
-  { label: "Mar", value: 1 },
-  { label: "Apr", value: 1 },
-  { label: "May", value: 1 },
-  { label: "Jun", value: 1 },
-];
+export const placeholderNetWorth: Array<{ label: string; value: number }> = [];
 
 export function toCurrency(value: number): string {
   return fmt(Number.isFinite(value) ? value : 0);

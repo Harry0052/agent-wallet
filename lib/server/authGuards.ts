@@ -24,12 +24,17 @@ export async function requirePageAuth(loginRedirect = '/login'): Promise<void> {
 }
 
 export async function redirectAuthenticatedUser(home = '/home'): Promise<void> {
-  const user = await getAuthenticatedUser();
-  if (user) {
-    const target = home === '/home'
-      ? await getPostAuthRedirectPath(user.appUserId)
-      : home;
-    redirect(target);
+  try {
+    const user = await getAuthenticatedUser();
+    if (user) {
+      const target = home === '/home'
+        ? await getPostAuthRedirectPath(user.appUserId)
+        : home;
+      redirect(target);
+    }
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error('[authGuards] failed to resolve post-auth redirect', error);
   }
 }
 

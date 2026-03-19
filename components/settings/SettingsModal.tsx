@@ -22,6 +22,10 @@ export function SettingsModal({
   useEffect(() => {
     if (!open) return;
 
+    // Lock body scroll while modal is open
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
@@ -29,7 +33,10 @@ export function SettingsModal({
     };
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [onClose, open]);
 
   if (!open) return null;

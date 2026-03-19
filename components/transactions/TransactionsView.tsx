@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftRight,
-  CalendarDays,
   PencilLine,
   Filter,
   Loader2,
@@ -19,7 +18,6 @@ import {
   type StatementTransaction,
   type UnifiedStatement,
 } from "@/services/statements";
-import { fetchConnectedAccountsBundle, type ConnectedAccountRecord } from "@/services/connect";
 import {
   ToolbarButton,
   WorkspaceHeader,
@@ -55,10 +53,6 @@ function sortByDateDesc(a: StatementTransaction, b: StatementTransaction): numbe
 
 export function TransactionsView() {
   const financialData = useFinancialData();
-  const [statement, setStatement] = useState<UnifiedStatement | null>(null);
-  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
@@ -88,6 +82,18 @@ export function TransactionsView() {
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const [correctionNotice, setCorrectionNotice] = useState<string | null>(null);
 
+  // Use shared financial data instead of duplicate API calls
+  const connectedAccounts = financialData.connectedAccounts;
+
+  // Fetch statement only for money_intelligence (not covered by useFinancialData)
+  const [statement, setStatement] = useState<UnifiedStatement | null>(null);
+  useEffect(() => {
+    void fetchUnifiedStatement({ page_size: 120 }).then(
+      (value) => setStatement(value),
+      () => setStatement(null),
+    );
+  }, [financialData.epoch]);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -96,41 +102,6 @@ export function TransactionsView() {
     }, 250);
     return () => clearTimeout(debounceRef.current);
   }, [search]);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    const [statementResult, accountsResult] = await Promise.allSettled([
-      fetchUnifiedStatement({ page_size: 120 }),
-      fetchConnectedAccountsBundle(),
-    ]);
-
-    if (statementResult.status === "fulfilled") {
-      setStatement(statementResult.value);
-    } else {
-      setStatement(null);
-      const message = statementResult.reason instanceof Error
-        ? statementResult.reason.message
-        : "Failed to load transactions.";
-      const safeNoDataError = /no\s+connected|no\s+account|not\s+connected|empty/i.test(message);
-      if (!safeNoDataError) {
-        setError(message);
-      }
-    }
-
-    if (accountsResult.status === "fulfilled") {
-      setConnectedAccounts(accountsResult.value.accounts);
-    } else {
-      setConnectedAccounts([]);
-    }
-
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
 
   const accountOptions = useMemo<AccountOption[]>(() => {
     const fromConnected: AccountOption[] = connectedAccounts.map((account) => ({
@@ -313,7 +284,7 @@ export function TransactionsView() {
           : "Correction saved. Calico will activate learning after repeated consistent corrections.",
       );
       setCategoryCorrectionTx(null);
-      await loadData();
+      await financialData.refresh();
     } catch (e) {
       setCorrectionError(e instanceof Error ? e.message : "Failed to save category correction.");
     } finally {
@@ -324,8 +295,8 @@ export function TransactionsView() {
   const moneyIntelligence = statement?.money_intelligence || null;
   const topAlerts = moneyIntelligence?.alerts?.slice(0, 2) || [];
   const tonightCard = moneyIntelligence?.studentFocus.cards.find((card) => card.id === "can_i_afford_tonight") || null;
-  const pageLoading = loading || financialData.loading;
-  const pageError = error ?? financialData.error;
+  const pageLoading = financialData.loading;
+  const pageError = financialData.error;
 
   return (
     <div className="aw-workspace-page">
@@ -346,7 +317,6 @@ export function TransactionsView() {
                 className="aw-input h-[38px] rounded-xl pl-10 text-sm"
               />
             </div>
-            <ToolbarButton icon={<CalendarDays size={14} />}>Date</ToolbarButton>
             <ToolbarButton icon={<Filter size={14} />}>Filters</ToolbarButton>
             <button
               type="button"
