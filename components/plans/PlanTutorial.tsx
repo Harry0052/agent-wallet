@@ -18,6 +18,7 @@ interface PlanTutorialProps {
   heading: string;
   steps: TutorialStep[];
   onComplete: () => void;
+  onSkip: () => void;
 }
 
 const ICON_MAP: Record<string, typeof Sparkles> = {
@@ -26,7 +27,7 @@ const ICON_MAP: Record<string, typeof Sparkles> = {
   Bot, Brain, Target, Code, HeartHandshake, PiggyBank, Settings,
 };
 
-export function PlanTutorial({ heading, steps, onComplete }: PlanTutorialProps) {
+export function PlanTutorial({ heading, steps, onComplete, onSkip }: PlanTutorialProps) {
   const [current, setCurrent] = useState(0);
   const step = steps[current];
   const Icon = ICON_MAP[step.icon] || Sparkles;
@@ -109,7 +110,7 @@ export function PlanTutorial({ heading, steps, onComplete }: PlanTutorialProps) 
         {!isLast && (
           <button
             type="button"
-            onClick={onComplete}
+            onClick={onSkip}
             className="mt-3 w-full text-center text-xs transition-colors"
             style={{ color: "#6B5B4B" }}
           >

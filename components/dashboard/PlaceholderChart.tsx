@@ -1,6 +1,5 @@
-import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { calicoTheme } from "@/styles/theme";
-import { dashboardInsetStyle } from "@/components/dashboard/dashboardStyles";
+import { SimpleTrendChart } from "@/components/dashboard/SimpleTrendChart";
 
 interface PlaceholderChartProps {
   data: Array<Record<string, number | string>>;
@@ -9,25 +8,19 @@ interface PlaceholderChartProps {
 
 export function PlaceholderChart({ data, dataKey }: PlaceholderChartProps) {
   return (
-    <div style={dashboardInsetStyle} className="h-44 rounded-[20px] p-3">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data}>
-          <defs>
-            <linearGradient id="placeholder-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={calicoTheme.primary} stopOpacity={0.26} />
-              <stop offset="95%" stopColor={calicoTheme.primary} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area
-            type="monotone"
-            dataKey={dataKey}
-            stroke={calicoTheme.primary}
-            strokeWidth={2}
-            fill="url(#placeholder-fill)"
-            fillOpacity={1}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
+    <SimpleTrendChart
+      data={data}
+      xKey={typeof data[0]?.label === "string" ? "label" : typeof data[0]?.day === "number" ? "day" : dataKey}
+      series={[{
+        key: dataKey,
+        stroke: calicoTheme.primary,
+        fill: calicoTheme.primary,
+        strokeWidth: 2.2,
+      }]}
+      heightClassName="h-44"
+      maxXAxisLabels={4}
+      showYAxis={false}
+      formatValue={(value) => String(Math.round(value))}
+    />
   );
 }

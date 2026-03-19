@@ -10,18 +10,16 @@ import {
   Trash2,
   AlertCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fmt } from "@/lib/utils";
-import {
-  fetchUnifiedStatement,
-  type StatementTransaction,
-} from "@/services/statements";
 import {
   ManualEntryModal,
 } from "@/components/finance/ManualDataControls";
+import { WorkspaceHeader, WorkspacePanel } from "@/components/finance/WorkspacePrimitives";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
 import { contributionAmount, parseGoalContributionTarget } from "@/lib/manualTransactions";
+import { useFinancialData } from "@/lib/useFinancialData";
 
 type GoalSource = "manual" | "connected";
 type GoalPriority = "high" | "medium" | "low";
@@ -173,12 +171,7 @@ function getGoalStatus(goal: GoalWithMetrics): "on-track" | "at-risk" | "complet
 }
 
 export function GoalsView() {
-  const [loading, setLoading] = useState(true);
-  const [connectedTransactions, setConnectedTransactions] = useState<StatementTransaction[]>([]);
-  const [manualTransactions] = useLocalStorageState<StatementTransaction[]>(
-    MANUAL_STORAGE_KEYS.transactions,
-    [],
-  );
+  const financialData = useFinancialData();
   const [storedGoals, setStoredGoals] = useLocalStorageState<StoredGoal[]>(
     MANUAL_STORAGE_KEYS.goals,
     [],
@@ -221,32 +214,12 @@ export function GoalsView() {
     }
   }, [setStoredGoals, storedGoals]);
 
-  const loadConnectedTransactions = useCallback(async () => {
-    const result = await Promise.allSettled([
-      fetchUnifiedStatement({ page_size: 160 }),
-    ]);
-
-    const statementResult = result[0];
-    if (statementResult.status === "fulfilled") {
-      setConnectedTransactions(statementResult.value.transactions ?? []);
-    } else {
-      setConnectedTransactions([]);
-    }
-
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void loadConnectedTransactions();
-  }, [loadConnectedTransactions]);
-
   const contributions = useMemo(() => {
-    const all = [...connectedTransactions, ...manualTransactions];
     const totalMap = new Map<string, number>();
     const monthMap = new Map<string, number>();
     const currentMonth = monthKeyFromDate(new Date());
 
-    for (const tx of all) {
+    for (const tx of financialData.allTransactions) {
       const goalTarget = parseGoalContributionTarget(tx);
       if (!goalTarget) continue;
       const key = normalizeGoalName(goalTarget);
@@ -261,7 +234,7 @@ export function GoalsView() {
     }
 
     return { totalMap, monthMap };
-  }, [connectedTransactions, manualTransactions]);
+  }, [financialData.allTransactions]);
 
   const goalCards = useMemo<GoalWithMetrics[]>(() => {
     return goals.map((goal) => {
@@ -431,7 +404,7 @@ export function GoalsView() {
     setContributionError(null);
   };
 
-  if (loading) {
+  if (financialData.loading) {
     return (
       <div className="aw-page flex items-center justify-center py-32">
         <Loader2 size={20} className="animate-spin text-[var(--calico-primary, #FDBA74)]" />
@@ -442,10 +415,20 @@ export function GoalsView() {
   return (
     <div className="aw-page">
       <div className="px-4 py-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-[var(--aw-text)]">Money Goals</h1>
-          <p className="mt-1 text-[var(--aw-text-muted)]">What you're saving for and paying off, sorted by what matters most</p>
-        </div>
+        <WorkspaceHeader
+          title="Money Goals"
+          subtitle="Track what you're saving for or paying down, with progress based on the same transaction history used across Calico."
+          actions={(
+            <button
+              type="button"
+              onClick={() => openCreateGoal()}
+              className="aw-button-primary inline-flex h-10 items-center gap-1.5 rounded-xl px-4 text-sm"
+            >
+              <Plus size={16} />
+              Add goal
+            </button>
+          )}
+        />
 
         <div className="mb-6 flex gap-3 border-b border-[var(--aw-border)]">
           <button
@@ -514,7 +497,8 @@ export function GoalsView() {
         )}
 
         {filteredGoals.length === 0 ? (
-          <div className="aw-card !p-8 text-center">
+          <WorkspacePanel className="!p-0">
+            <div className="aw-card !border-0 !shadow-none !p-8 text-center">
             <Target size={32} className="mx-auto mb-3 text-[var(--aw-text-muted)]" />
             <p className="text-[var(--aw-text)]">No {activeTab === "save-up" ? "savings" : "payoff"} goals yet</p>
             <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
@@ -530,9 +514,11 @@ export function GoalsView() {
               <Plus size={16} />
               Add a goal
             </button>
-          </div>
+            </div>
+          </WorkspacePanel>
         ) : (
-          <div className="space-y-3 mb-8">
+          <WorkspacePanel className="!p-0">
+            <div className="space-y-3 mb-8">
             {filteredGoals.map((goal) => {
               const status = getGoalStatus(goal);
               const statusColor = status === "completed" ? "text-green-600" : status === "at-risk" ? "text-orange-500" : "text-green-600";
@@ -612,11 +598,12 @@ export function GoalsView() {
                 </div>
               );
             })}
-          </div>
+            </div>
+          </WorkspacePanel>
         )}
 
         {filteredGoals.length > 0 && (
-          <div className="mt-12 aw-card !p-6">
+          <WorkspacePanel className="mt-6">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-[var(--aw-text)]">
@@ -637,7 +624,7 @@ export function GoalsView() {
                 Add another goal
               </button>
             </div>
-          </div>
+          </WorkspacePanel>
         )}
       </div>
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType, HTMLAttributes } from "react";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
@@ -118,6 +119,8 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
     useLiveData: preferences.useLiveData,
   };
   const liveMode = effectiveWidgetProps.useLiveData && effectiveWidgetProps.accountsConnected;
+  const trackedSourceCount = widgetProps.dataSource.accounts.length;
+  const primaryActionHref = liveMode ? null : "/connect";
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveWidgetId(event.active.id as DashboardWidgetId);
@@ -149,42 +152,66 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(251,207,232,0.24),transparent_28%),radial-gradient(circle_at_top_right,rgba(253,230,138,0.2),transparent_22%),linear-gradient(180deg,#FFF7ED_0%,#FFFCF8_100%)]" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.28] [background-image:linear-gradient(rgba(253,186,116,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(253,186,116,0.1)_1px,transparent_1px)] [background-size:90px_90px]" />
 
-        <div className="relative mx-auto flex w-full max-w-[1480px] flex-col gap-6 px-4 py-6 md:px-8 md:py-8 xl:px-10">
+        <div className="relative mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-6 md:px-8 md:py-8 xl:px-10">
           <motion.section
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.32, ease: "easeOut" }}
-            className="overflow-hidden rounded-[20px] border border-[var(--calico-border)] bg-[var(--calico-card)] p-6 shadow-[0_4px_12px_rgba(17,17,17,0.05)]"
+            className="overflow-hidden rounded-[20px] border border-[var(--calico-border)] bg-[var(--calico-card)] p-5 shadow-[0_4px_12px_rgba(17,17,17,0.05)] md:p-6"
           >
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,207,232,0.26),transparent_34%),linear-gradient(135deg,rgba(255,252,248,0.98),rgba(255,241,230,0.94))]" />
-            <div className="relative flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,207,232,0.18),transparent_34%),linear-gradient(135deg,rgba(255,252,248,0.98),rgba(255,245,237,0.94))]" />
+            <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">
-                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-[var(--calico-primary)]">Your Dashboard</p>
-                <h1 className="mt-4 text-4xl font-semibold tracking-[-0.03em] text-[var(--calico-text)] md:text-5xl">{greeting}</h1>
-                <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--calico-text-muted)]">
-                  Here's your money at a glance. Drag things around to set it up the way you like.
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-[var(--calico-primary)]">Money Overview</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-[var(--calico-text)] md:text-4xl">{greeting}</h1>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--calico-text-muted)] md:text-base">
+                  {liveMode
+                    ? "Your core money picture is ready below. Everything is arranged to help you scan first, then act."
+                    : "Start with one account or one manual entry. Calico will turn these widgets into your real money picture as data arrives."}
                 </p>
               </div>
 
-              <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center">
-                <div className="rounded-[20px] border border-[var(--calico-border)] bg-[var(--calico-hover)] px-4 py-3">
-                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-[var(--calico-text-muted)]">Data mode</p>
-                  <p className="mt-2 text-sm text-[var(--calico-text)]">{liveMode ? "Live data mode" : "Placeholder mode"}</p>
-                  <p className="mt-1 text-xs text-[var(--calico-text-muted)]">{describeLiveMode(liveMode)}</p>
-                </div>
-                <div className="rounded-[20px] border border-[var(--calico-border)] bg-[var(--calico-hover)] px-4 py-3">
-                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-[var(--calico-text-muted)]">Sources</p>
-                  <p className="mt-2 text-sm text-[var(--calico-text)]">{widgetProps.dataSource.accounts.length} account source{widgetProps.dataSource.accounts.length === 1 ? "" : "s"} tracked</p>
-                  <p className="mt-1 text-xs text-[var(--calico-text-muted)]">{widgetProps.home.freshness.label}</p>
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {primaryActionHref ? (
+                  <Link
+                    href={primaryActionHref}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[var(--calico-primary)] px-5 text-sm font-semibold text-[var(--calico-text)] shadow-[0_4px_18px_rgba(253,186,116,0.42)] transition hover:bg-[var(--calico-primary-hover)]"
+                  >
+                    Connect an account
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomizeOpen(true)}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[var(--calico-primary)] px-5 text-sm font-semibold text-[var(--calico-text)] shadow-[0_4px_18px_rgba(253,186,116,0.42)] transition hover:bg-[var(--calico-primary-hover)]"
+                  >
+                    <LayoutGrid size={17} />
+                    Customize
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsCustomizeOpen(true)}
-                  className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-[var(--calico-primary)] px-5 text-sm font-semibold text-[var(--calico-text)] shadow-[0_4px_18px_rgba(253,186,116,0.42)] transition hover:bg-[var(--calico-primary-hover)]"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-4 text-sm font-semibold text-[var(--calico-text)] transition hover:bg-[var(--calico-card)]"
                 >
-                  <LayoutGrid size={17} />
-                  Customize
+                  <LayoutGrid size={16} />
+                  Edit widgets
                 </button>
+              </div>
+            </div>
+
+            <div className="relative mt-4 flex flex-wrap items-center gap-2">
+              <div className="rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--calico-text-muted)]">
+                {liveMode ? "Live data" : "Setup mode"}
+              </div>
+              <div className="rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1.5 text-xs text-[var(--calico-text-muted)]">
+                {trackedSourceCount} account source{trackedSourceCount === 1 ? "" : "s"} tracked
+              </div>
+              <div className="rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1.5 text-xs text-[var(--calico-text-muted)]">
+                {widgetProps.home.freshness.label}
+              </div>
+              <div className="rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1.5 text-xs text-[var(--calico-text-muted)]">
+                {describeLiveMode(liveMode)}
               </div>
             </div>
           </motion.section>

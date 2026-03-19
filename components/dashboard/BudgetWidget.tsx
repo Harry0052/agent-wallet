@@ -12,16 +12,13 @@ import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes
 
 export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
   const { budgetCategories, monthlyBudget } = buildDashboardSummary(props);
-  const money = props.home.moneyIntelligence;
   const hasBudget = props.useLiveData && props.accountsConnected && budgetCategories.length > 0 && monthlyBudget > 0;
 
   return (
     <WidgetContainer
       title="Spending Plan"
       subtitle={hasBudget
-        ? money
-          ? `Your monthly spending limit is ${toCurrency(monthlyBudget)}. Calico tracks it for you.`
-          : `You planned to spend ${toCurrency(monthlyBudget)} this month`
+        ? `You're working with ${toCurrency(monthlyBudget)} this month across your top categories.`
         : "Set up a plan so you know where your money goes."}
       dragHandleProps={props.dragHandleProps}
     >
@@ -31,7 +28,9 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
             <div key={category.category} className="space-y-2">
               <div className="flex items-center justify-between gap-4 text-sm">
                 <span className="font-medium capitalize text-[var(--calico-text)]">{category.category}</span>
-                <span className="text-[var(--calico-text-muted)]">{toCurrency(category.spent)}</span>
+                <span className="text-[var(--calico-text-muted)]">
+                  {toCurrency(category.spent)} of {toCurrency(category.total)}
+                </span>
               </div>
               <div className="h-2 rounded-full bg-[var(--calico-border)]">
                 <div
@@ -58,13 +57,15 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
-            <Link
-              href="/connect"
-              style={dashboardSecondaryButtonStyle}
-              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-card)]"
-            >
-              Connect an account
-            </Link>
+            {!props.accountsConnected ? (
+              <Link
+                href="/connect"
+                style={dashboardSecondaryButtonStyle}
+                className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-card)]"
+              >
+                Connect an account
+              </Link>
+            ) : null}
             <Link
               href="/budgets"
               style={dashboardPrimaryButtonStyle}

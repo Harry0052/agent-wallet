@@ -1,7 +1,14 @@
 import { fmt } from "@/lib/utils";
-import type { Wallet } from "@/lib/types";
 import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 import type { StatementTransaction } from "@/services/statements";
+import {
+  buildBudgetCategoryProgress,
+  buildEstimatedNetWorthSeries,
+  buildRecentTransactions,
+  buildSpendingComparisonSeries,
+  summarizeAccounts,
+  summarizeCurrentMonthTransactions,
+} from "@/lib/financialTypes";
 
 const DAY_COUNT = 30;
 
@@ -28,167 +35,67 @@ export function toCurrency(value: number): string {
   return fmt(Number.isFinite(value) ? value : 0);
 }
 
-function dayOfMonth(dateString: string): number | null {
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.getDate();
-}
-
-function sameMonth(dateString: string, monthOffset = 0): boolean {
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return false;
-  const now = new Date();
-  const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-  return date.getFullYear() === target.getFullYear() && date.getMonth() === target.getMonth();
-}
-
-function transactionSpendAmount(tx: StatementTransaction): number {
-  const amount = Number(tx.amount) || 0;
-  return amount < 0 ? Math.abs(amount) : 0;
-}
-
-export function buildSpendingDataset(transactions: StatementTransaction[], live: boolean) {
+export function buildSpendingDataset(
+  transactions: DashboardWidgetProps["dataSource"]["transactions"],
+  live: boolean,
+) {
   if (!live || transactions.length === 0) {
     return placeholderSpending;
   }
-
-  const points = Array.from({ length: DAY_COUNT }, (_, index) => ({
-    day: index + 1,
-    thisMonth: 0,
-    lastMonth: 0,
-  }));
-
-  for (const tx of transactions) {
-    const day = dayOfMonth(tx.occurred_at);
-    if (!day || day > DAY_COUNT) continue;
-    const slot = points[day - 1];
-    const amount = transactionSpendAmount(tx);
-    if (sameMonth(tx.occurred_at, 0)) slot.thisMonth += amount;
-    if (sameMonth(tx.occurred_at, -1)) slot.lastMonth += amount;
-  }
-
-  let rollingThisMonth = 0;
-  let rollingLastMonth = 0;
-  return points.map((point) => {
-    rollingThisMonth += point.thisMonth;
-    rollingLastMonth += point.lastMonth;
-    return {
-      day: point.day,
-      thisMonth: Math.round(rollingThisMonth),
-      lastMonth: Math.round(rollingLastMonth),
-    };
-  });
+  return buildSpendingComparisonSeries(transactions, { dayCount: DAY_COUNT });
 }
 
-export function buildNetWorthDataset(wallet: Wallet | null, transactions: StatementTransaction[], live: boolean) {
-  if (!live || !wallet || transactions.length === 0) {
+export function buildNetWorthDataset(
+  accounts: DashboardWidgetProps["dataSource"]["accounts"],
+  transactions: DashboardWidgetProps["dataSource"]["transactions"],
+  live: boolean,
+) {
+  if (!live || accounts.length === 0) {
     return placeholderNetWorth;
   }
-
-  const now = new Date();
-  const monthLabels: Array<{ key: string; label: string }> = [];
-  for (let offset = 5; offset >= 0; offset -= 1) {
-    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-    const key = `${date.getFullYear()}-${date.getMonth()}`;
-    const label = date.toLocaleDateString("en-US", { month: "short" });
-    monthLabels.push({ key, label });
-  }
-
-  const monthlySpend = new Map<string, number>();
-  for (const tx of transactions) {
-    const date = new Date(tx.occurred_at);
-    if (Number.isNaN(date.getTime())) continue;
-    const key = `${date.getFullYear()}-${date.getMonth()}`;
-    monthlySpend.set(key, (monthlySpend.get(key) ?? 0) + transactionSpendAmount(tx));
-  }
-
-  let baseline = wallet.balance + monthLabels.reduce((sum, month) => sum + (monthlySpend.get(month.key) ?? 0), 0);
-  return monthLabels.map((month) => {
-    const value = Math.max(0, baseline - (monthlySpend.get(month.key) ?? 0));
-    baseline = value;
-    return {
-      label: month.label,
-      value: Math.round(value),
-    };
-  });
+  return buildEstimatedNetWorthSeries(accounts, transactions);
 }
 
-export function buildBudgetCategories(wallet: Wallet | null, transactions: StatementTransaction[], live: boolean) {
-  if (!live || !wallet || transactions.length === 0 || wallet.settings.monthlyBudget <= 0) {
+export function buildBudgetCategories(
+  transactions: DashboardWidgetProps["dataSource"]["transactions"],
+  monthlyBudget: number,
+  live: boolean,
+) {
+  if (!live || transactions.length === 0 || monthlyBudget <= 0) {
     return [];
   }
-
-  const currentMonthTransactions = transactions.filter((tx) => sameMonth(tx.occurred_at, 0));
-  const grouped = new Map<string, number>();
-
-  for (const tx of currentMonthTransactions) {
-    const key = tx.category?.trim() || "uncategorized";
-    grouped.set(key, (grouped.get(key) ?? 0) + transactionSpendAmount(tx));
-  }
-
-  return [...grouped.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
-    .map(([category, spent]) => ({
-      category: category.replace(/_/g, " "),
-      spent: Math.round(spent),
-      total: wallet.settings.monthlyBudget,
-      progress: Math.min(100, Math.round((spent / wallet.settings.monthlyBudget) * 100)),
-    }));
+  return buildBudgetCategoryProgress(transactions, monthlyBudget);
 }
 
 export function buildDashboardSummary(props: DashboardWidgetProps) {
-  const { home, wallet, dataSource, accountsConnected, useLiveData } = props;
+  const { wallet, dataSource, accountsConnected, useLiveData } = props;
   const live = useLiveData && accountsConnected;
-  const intelligence = home.moneyIntelligence;
+  const accountSummary = summarizeAccounts(dataSource.accounts);
+  const monthSummary = summarizeCurrentMonthTransactions(dataSource.transactions);
   const spending = buildSpendingDataset(dataSource.transactions, live);
-  let netWorth = buildNetWorthDataset(wallet, dataSource.transactions, live);
-  const budgetCategories = intelligence
-    ? intelligence.spendingLimits.categoryBudgets.slice(0, 4).map((budget) => ({
-        category: budget.category.replace(/_/g, " "),
-        spent: Math.round(budget.observedMonthlySpend),
-        total: Math.max(1, Math.round(budget.recommendedMonthlyBudget)),
-        progress: Math.min(100, Math.round((budget.observedMonthlySpend / Math.max(budget.recommendedMonthlyBudget, 1)) * 100)),
-      }))
-    : buildBudgetCategories(wallet, dataSource.transactions, live);
-  const hasManualAccountBalance = dataSource.accounts.some((account) => typeof account.balance === "number");
-  const manualAccountNetWorth = dataSource.accounts.reduce(
-    (sum, account) => sum + (typeof account.balance === "number" ? account.balance : 0),
-    0,
-  );
-  const liveNetWorth = live
-    ? intelligence?.netWorth.trackedNetWorth
-      ?? wallet?.balance
-      ?? (hasManualAccountBalance ? manualAccountNetWorth : home.summary.netCashPosition)
-    : 1;
-
-  if (live && intelligence?.netWorth?.trend7d?.length) {
-    netWorth = intelligence.netWorth.trend7d.map((point) => ({
-      label: new Date(point.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      value: Math.round(point.netWorth),
-    }));
-  }
-
-  if (live && !wallet && hasManualAccountBalance && !(intelligence?.netWorth?.trend7d?.length)) {
-    netWorth = placeholderNetWorth.map((point, index) => ({
-      ...point,
-      value: Math.max(0, Math.round(liveNetWorth * (0.92 + index * 0.02))),
-    }));
-  }
-
-  const previousNetWorth = netWorth[Math.max(0, netWorth.length - 2)]?.value ?? liveNetWorth;
-  const netWorthDelta = live
-    ? intelligence?.netWorth?.delta7d ?? (liveNetWorth - previousNetWorth)
-    : 0;
+  const netWorth =
+    live && dataSource.accounts.length > 0
+      ? buildNetWorthDataset(dataSource.accounts, dataSource.transactions, live)
+      : placeholderNetWorth;
+  const monthlyBudget = wallet?.settings.monthlyBudget ?? 0;
+  const budgetCategories = buildBudgetCategories(dataSource.transactions, monthlyBudget, live);
+  const previousNetWorth = netWorth[Math.max(0, netWorth.length - 2)]?.value ?? accountSummary.netWorth;
+  const netWorthDelta = live ? accountSummary.netWorth - previousNetWorth : 0;
 
   return {
     live,
     spending,
     netWorth,
     budgetCategories,
-    netWorthValue: live ? liveNetWorth : 1,
+    recentTransactions: buildRecentTransactions(dataSource.transactions),
+    netWorthValue: live ? accountSummary.netWorth : 0,
     netWorthDelta,
-    monthlyBudget: intelligence?.spendingLimits.monthlyLimit ?? wallet?.settings.monthlyBudget ?? 0,
+    monthlyBudget,
+    monthIncome: monthSummary.monthIncome,
+    monthExpenses: monthSummary.monthExpenses,
+    monthNet: monthSummary.monthNet,
+    savingsRate: monthSummary.savingsRate,
+    monthTransactionCount: monthSummary.monthTransactionCount,
   };
 }
 

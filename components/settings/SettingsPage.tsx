@@ -15,12 +15,12 @@ import {
   X,
   Plus,
   Monitor,
-  Users,
   Settings,
   Gift,
   Eye,
 } from "lucide-react";
 import { EditProfileModal } from "@/modals/EditProfileModal";
+import { NotificationSettingsModal } from "@/modals/NotificationSettingsModal";
 import { SecuritySettingsModal } from "@/modals/SecuritySettingsModal";
 import {
   fetchAuthenticatedAccount,
@@ -49,6 +49,16 @@ type SettingsSection =
   | "billing"
   | "referrals";
 
+function readStoredJson<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return fallback;
+    return { ...fallback, ...JSON.parse(stored) } as T;
+  } catch {
+    return fallback;
+  }
+}
+
 // ============================================================================
 // SIDEBAR NAVIGATION
 // ============================================================================
@@ -58,6 +68,7 @@ interface SidebarProps {
   onSectionChange: (section: SettingsSection) => void;
   isOpen: boolean;
   onClose: () => void;
+  onLogout: () => void;
 }
 
 function Sidebar({
@@ -65,6 +76,7 @@ function Sidebar({
   onSectionChange,
   isOpen,
   onClose,
+  onLogout,
 }: SidebarProps) {
   const sections: Array<{
     id: SettingsSection;
@@ -72,25 +84,10 @@ function Sidebar({
     icon: React.ElementType;
     group: "account" | "household";
   }> = [
-    // Account
     { id: "profile", label: "Profile", icon: UserRound, group: "account" },
-    { id: "display", label: "Display", icon: Monitor, group: "account" },
-    {
-      id: "notifications",
-      label: "Notifications",
-      icon: Bell,
-      group: "account",
-    },
     { id: "security", label: "Security", icon: KeyRound, group: "account" },
-    // Household
-    { id: "general", label: "General", icon: Settings, group: "household" },
-    { id: "members", label: "Members", icon: Users, group: "household" },
-    {
-      id: "preferences",
-      label: "Preferences",
-      icon: Eye,
-      group: "household",
-    },
+    { id: "notifications", label: "Notifications", icon: Bell, group: "account" },
+    { id: "display", label: "Display", icon: Monitor, group: "account" },
     {
       id: "institutions",
       label: "Connected Banks",
@@ -98,6 +95,8 @@ function Sidebar({
       group: "household",
     },
     { id: "billing", label: "Plan & Billing", icon: CreditCard, group: "household" },
+    { id: "general", label: "General", icon: Settings, group: "household" },
+    { id: "preferences", label: "Preferences", icon: Eye, group: "household" },
     { id: "referrals", label: "Invite Friends", icon: Gift, group: "household" },
   ];
 
@@ -191,6 +190,7 @@ function Sidebar({
           <div className="mt-auto border-t border-[var(--aw-border)] p-4">
             <button
               type="button"
+              onClick={onLogout}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-[var(--aw-danger)] transition hover:bg-[var(--aw-danger)]/10"
             >
               <LogOut size={14} />
@@ -256,6 +256,7 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
           <button
             onClick={() => setOpenModal(true)}
             className="rounded-lg px-3 py-2 text-xs font-medium transition"
+            aria-label="edit-profile"
             style={{
               background: "var(--calico-card, #FFFCF8)",
               border: "1px solid var(--calico-border, #F2DECC)",
@@ -308,6 +309,28 @@ function DisplaySection() {
   const [currency, setCurrency] = useState("USD");
   const [dateFormat, setDateFormat] = useState("MM/DD/YYYY");
   const [numberFormat, setNumberFormat] = useState("1,000.00");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const stored = readStoredJson("calico.display-prefs", {
+      currency: "USD",
+      dateFormat: "MM/DD/YYYY",
+      numberFormat: "1,000.00",
+    });
+    setCurrency(stored.currency);
+    setDateFormat(stored.dateFormat);
+    setNumberFormat(stored.numberFormat);
+  }, []);
+
+  const saveDisplayPrefs = () => {
+    try {
+      localStorage.setItem("calico.display-prefs", JSON.stringify({ currency, dateFormat, numberFormat }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <div className="aw-card space-y-6 !p-6">
@@ -370,11 +393,24 @@ function DisplaySection() {
           </select>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={saveDisplayPrefs}
+        className="rounded-lg px-4 py-2 text-sm font-medium transition"
+        style={{
+          background: "var(--calico-primary, #FDBA74)",
+          color: "var(--calico-text, #111)",
+        }}
+      >
+        {saved ? "Saved" : "Save display settings"}
+      </button>
     </div>
   );
 }
 
 function NotificationsSection() {
+  const [openModal, setOpenModal] = useState(false);
   const [emailWeekly, setEmailWeekly] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -463,6 +499,31 @@ function NotificationsSection() {
       >
         {saved ? "Saved" : "Save preferences"}
       </button>
+
+      <div className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-[var(--aw-text)]">Subscription operation alerts</p>
+            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
+              Review cancellation and subscription-management notifications in one place.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpenModal(true)}
+            className="rounded-lg px-3 py-2 text-xs font-medium transition"
+            style={{
+              background: "var(--calico-card, #FFFCF8)",
+              border: "1px solid var(--calico-border, #F2DECC)",
+              color: "var(--aw-text)",
+            }}
+          >
+            Manage
+          </button>
+        </div>
+      </div>
+
+      <NotificationSettingsModal open={openModal} onClose={() => setOpenModal(false)} />
     </div>
   );
 }
@@ -498,6 +559,7 @@ function SecuritySection({
           <button
             onClick={() => setOpenModal(true)}
             className="rounded-lg px-3 py-2 text-xs font-medium transition"
+            aria-label="change-password"
             style={{
               background: "var(--calico-card, #FFFCF8)",
               border: "1px solid var(--calico-border, #F2DECC)",
@@ -509,18 +571,13 @@ function SecuritySection({
           </button>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4">
-          <div>
-            <p className="text-sm font-medium text-[var(--aw-text)]">
-              Two-factor authentication
-            </p>
-            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
-              Authenticator app and email 2FA are coming soon
-            </p>
-          </div>
-          <span className="rounded-lg border border-[var(--aw-border)] px-3 py-2 text-xs font-medium text-[var(--aw-text-muted)]">
-            Coming soon
-          </span>
+        <div className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
+          <p className="text-sm font-medium text-[var(--aw-text)]">
+            Additional sign-in methods
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
+            Extra security methods will appear here when they are available for your account.
+          </p>
         </div>
       </div>
 
@@ -538,7 +595,29 @@ function GeneralSection() {
   const [household, setHousehold] = useState("My Household");
   const [country, setCountry] = useState("US");
   const [currency, setCurrency] = useState("USD");
+  const [saved, setSaved] = useState(false);
   const { replay } = useTutorialReplay();
+
+  useEffect(() => {
+    const stored = readStoredJson("calico.general-prefs", {
+      household: "My Household",
+      country: "US",
+      currency: "USD",
+    });
+    setHousehold(stored.household);
+    setCountry(stored.country);
+    setCurrency(stored.currency);
+  }, []);
+
+  const saveGeneralPrefs = () => {
+    try {
+      localStorage.setItem("calico.general-prefs", JSON.stringify({ household, country, currency }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <div className="aw-card space-y-6 !p-6">
@@ -619,6 +698,18 @@ function GeneralSection() {
           </select>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={saveGeneralPrefs}
+        className="rounded-lg px-4 py-2 text-sm font-medium transition"
+        style={{
+          background: "var(--calico-primary, #FDBA74)",
+          color: "var(--calico-text, #111)",
+        }}
+      >
+        {saved ? "Saved" : "Save general settings"}
+      </button>
     </div>
   );
 }
@@ -654,13 +745,8 @@ function MembersSection({ account, billing }: { account: AuthenticatedAccount | 
 
         <div className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
           <p className="text-sm text-[var(--aw-text-muted)]">
-            Household invitations are coming soon. Your plan supports up to {maxMembers} members ({memberCount}/{maxMembers} used).
+            Shared households are not open in this build yet. Your plan support will apply automatically when invites are available ({memberCount}/{maxMembers} used).
           </p>
-          {plan !== "autonomous" && (
-            <p className="mt-2 text-xs text-[var(--aw-text-muted)]">
-              Upgrade to the Autonomous plan for up to 5 household members.
-            </p>
-          )}
         </div>
       </div>
     </div>
@@ -671,6 +757,28 @@ function PreferencesSection() {
   const [transactionView, setTransactionView] = useState("date");
   const [firstDay, setFirstDay] = useState("sunday");
   const [fiscalYear, setFiscalYear] = useState("january");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const stored = readStoredJson("calico.preferences", {
+      transactionView: "date",
+      firstDay: "sunday",
+      fiscalYear: "january",
+    });
+    setTransactionView(stored.transactionView);
+    setFirstDay(stored.firstDay);
+    setFiscalYear(stored.fiscalYear);
+  }, []);
+
+  const savePreferences = () => {
+    try {
+      localStorage.setItem("calico.preferences", JSON.stringify({ transactionView, firstDay, fiscalYear }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <div className="aw-card space-y-6 !p-6">
@@ -729,6 +837,18 @@ function PreferencesSection() {
           </select>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={savePreferences}
+        className="rounded-lg px-4 py-2 text-sm font-medium transition"
+        style={{
+          background: "var(--calico-primary, #FDBA74)",
+          color: "var(--calico-text, #111)",
+        }}
+      >
+        {saved ? "Saved" : "Save preferences"}
+      </button>
     </div>
   );
 }
@@ -948,15 +1068,19 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
 function DeleteAccountButton() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState("");
+  const [password, setPassword] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleDelete = async () => {
-    if (confirmText !== "DELETE MY ACCOUNT") return;
+    if (confirmText !== "DELETE MY ACCOUNT" || !password.trim()) return;
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await deleteAccount(confirmText);
+      await deleteAccount({
+        password,
+        confirmText,
+      });
       // Clear all local data before redirecting
       try { localStorage.clear(); } catch { /* ignore */ }
       try { sessionStorage.clear(); } catch { /* ignore */ }
@@ -987,6 +1111,14 @@ function DeleteAccountButton() {
         Type <strong>DELETE MY ACCOUNT</strong> to confirm:
       </p>
       <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Current password"
+        className="aw-input h-9 w-full text-xs"
+        style={{ borderColor: "var(--aw-danger)" }}
+      />
+      <input
         type="text"
         value={confirmText}
         onChange={(e) => setConfirmText(e.target.value)}
@@ -1001,7 +1133,7 @@ function DeleteAccountButton() {
         <button
           type="button"
           onClick={() => void handleDelete()}
-          disabled={confirmText !== "DELETE MY ACCOUNT" || isDeleting}
+          disabled={confirmText !== "DELETE MY ACCOUNT" || !password.trim() || isDeleting}
           className="rounded-lg px-4 py-2 text-xs font-semibold text-white transition disabled:opacity-40"
           style={{ background: "var(--aw-danger)" }}
         >
@@ -1012,6 +1144,7 @@ function DeleteAccountButton() {
           onClick={() => {
             setShowConfirm(false);
             setConfirmText("");
+            setPassword("");
           }}
           className="rounded-lg px-4 py-2 text-xs font-medium text-[var(--aw-text-muted)]"
         >
@@ -1086,6 +1219,7 @@ export function SettingsPage() {
         onSectionChange={setActiveSection}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onLogout={() => { void onLogout(); }}
       />
 
       {/* Main Content */}

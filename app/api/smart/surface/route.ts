@@ -15,7 +15,7 @@ const BodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   const guard = await enforceEntitlement(req, {
-    requiredFeature: 'ai_research',
+    requiredFeature: 'basic_insights',
     rateLimitScope: 'smart_surface',
   });
   if (!guard.ok) return guard.response;

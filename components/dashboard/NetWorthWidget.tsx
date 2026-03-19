@@ -1,62 +1,58 @@
 import type { HTMLAttributes } from "react";
 import { motion } from "framer-motion";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PlaceholderChart } from "@/components/dashboard/PlaceholderChart";
+import { SimpleTrendChart } from "@/components/dashboard/SimpleTrendChart";
 import { WidgetContainer } from "@/components/dashboard/WidgetContainer";
 import { buildDashboardSummary, placeholderNetWorth, toCurrency } from "@/components/dashboard/dashboardData";
-import { dashboardChipStyle, dashboardInsetStyle } from "@/components/dashboard/dashboardStyles";
+import { dashboardChipStyle } from "@/components/dashboard/dashboardStyles";
 import { calicoTheme } from "@/styles/theme";
 import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 
 export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
   const summary = buildDashboardSummary(props);
   const chartData = summary.netWorth;
-  const netWorthConfidence = props.home.moneyIntelligence?.netWorth.confidence;
+  const hasData = summary.live && props.dataSource.accounts.length > 0;
 
   return (
     <WidgetContainer
-      title="Total Money"
-      subtitle={summary.live
-        ? netWorthConfidence
-          ? `What you have minus what you owe. Updates automatically.`
-          : "What you have minus what you owe. Updates automatically."
-        : "Connect an account to see your real numbers here."}
+      title="Net Worth"
+      subtitle={hasData
+        ? "Everything you have minus what you owe across connected and manual accounts."
+        : "Connect an account or add one manually to see your real net worth here."}
       dragHandleProps={props.dragHandleProps}
     >
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-4xl font-semibold tracking-tight text-[var(--calico-text)]">{toCurrency(summary.netWorthValue)}</p>
-            <p className="mt-2 text-sm text-[var(--calico-text-muted)]">{summary.live ? `${summary.netWorthDelta >= 0 ? "+" : ""}${toCurrency(summary.netWorthDelta)} from previous period` : "$0.00"}</p>
+            <p className="text-4xl font-semibold tracking-tight text-[var(--calico-text)]">
+              {hasData ? toCurrency(summary.netWorthValue) : "—"}
+            </p>
+            <p className="mt-2 text-sm text-[var(--calico-text-muted)]">
+              {hasData
+                ? `${summary.netWorthDelta >= 0 ? "+" : ""}${toCurrency(summary.netWorthDelta)} versus the prior month`
+                : "We'll show the trend once Calico has account balances to track."}
+            </p>
           </div>
           <div style={dashboardChipStyle} className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]">
-            {summary.live ? "Live preview" : "Placeholder"}
+            {hasData ? "Live" : "Setup needed"}
           </div>
         </div>
-        {!props.accountsConnected ? (
+        {!hasData ? (
           <PlaceholderChart data={placeholderNetWorth} dataKey="value" />
         ) : (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={dashboardInsetStyle} className="h-56 rounded-[20px] p-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="net-worth-fill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={calicoTheme.primary} stopOpacity={0.22} />
-                    <stop offset="100%" stopColor={calicoTheme.primary} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke={calicoTheme.border} vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: calicoTheme.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis hide domain={[0, "dataMax + 100"]} />
-                <Tooltip
-                  formatter={(value) => [toCurrency(Number(value ?? 0)), "Total money"]}
-                  contentStyle={{ background: calicoTheme.card, border: `1px solid ${calicoTheme.border}`, borderRadius: 16, boxShadow: "0 8px 18px rgba(15,23,42,0.08)" }}
-                  itemStyle={{ color: calicoTheme.text }}
-                  labelStyle={{ color: calicoTheme.textMuted }}
-                />
-                <Area type="monotone" dataKey="value" stroke={calicoTheme.primary} strokeWidth={3} fill="url(#net-worth-fill)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <SimpleTrendChart
+              data={chartData}
+              xKey="label"
+              series={[{
+                key: "value",
+                stroke: calicoTheme.primary,
+                fill: calicoTheme.primary,
+                strokeWidth: 2.8,
+              }]}
+              formatValue={toCurrency}
+              maxXAxisLabels={6}
+            />
           </motion.div>
         )}
       </div>

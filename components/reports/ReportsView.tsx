@@ -1,18 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { fmt } from "@/lib/utils";
-import type { DetectedSubscription } from "@/services/statements";
 import {
+  WorkspaceEmpty,
   WorkspaceHeader,
   WorkspacePanel,
 } from "@/components/finance/WorkspacePrimitives";
 import { normalizeTransactionType } from "@/lib/manualTransactions";
 import { useFinancialData } from "@/lib/useFinancialData";
-import type { ManualRecurringItem } from "@/lib/financialTypes";
 
 type RecordType = "income" | "expense" | "transfer";
+type TimeRange = "month" | "quarter" | "year";
 
 interface SourceRecord {
   type: RecordType;
@@ -33,11 +34,31 @@ interface CategoryTotal {
   percent: number;
 }
 
-function recurringKind(recurring: DetectedSubscription): RecordType {
-  const maybeManual = recurring as ManualRecurringItem;
-  if (maybeManual.cashflowType === "income") return "income";
-  if (maybeManual.cashflowType === "transfer") return "transfer";
-  return "expense";
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, months: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function inRange(date: Date, range: TimeRange): boolean {
+  const now = new Date();
+  if (range === "month") {
+    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  }
+
+  if (range === "quarter") {
+    return date >= addMonths(startOfMonth(now), -2);
+  }
+
+  return date >= addMonths(startOfMonth(now), -11);
+}
+
+function rangeLabel(range: TimeRange): string {
+  if (range === "month") return "This month";
+  if (range === "quarter") return "Last 3 months";
+  return "Last 12 months";
 }
 
 function toTotals(records: SourceRecord[]): AggregateTotals {
@@ -164,29 +185,26 @@ function FlowVisualization(props: { income: number; expenses: number; net: numbe
 }
 
 export function ReportsView() {
-  const { loading, error, allTransactions, allRecurring } = useFinancialData();
+  const { loading, error, allTransactions, connectedAccounts } = useFinancialData();
+  const [range, setRange] = useState<TimeRange>("month");
 
   const allRecords = useMemo<SourceRecord[]>(() => {
     const records: SourceRecord[] = [];
 
-    // All transactions (connected + manual + cashflow + reports) are already
-    // merged and deduplicated by useFinancialData
     for (const tx of allTransactions) {
       const type = normalizeTransactionType(tx);
       if (type === "transfer") continue;
+      const date = new Date(tx.occurred_at);
+      if (Number.isNaN(date.getTime()) || !inRange(date, range)) continue;
       records.push({ type, amount: Math.abs(tx.amount), category: tx.category });
     }
 
-    for (const item of allRecurring) {
-      if (item.lifecycle_status === "ignored" || item.lifecycle_status === "inactive") continue;
-      records.push({ type: recurringKind(item), amount: item.estimated_monthly_cost, category: item.recurrence_interval });
-    }
-
     return records;
-  }, [allTransactions, allRecurring]);
+  }, [allTransactions, range]);
 
   const totals = useMemo(() => toTotals(allRecords), [allRecords]);
   const categories = useMemo(() => topCategories(allRecords, 6), [allRecords]);
+  const hasConnectedAccounts = connectedAccounts.length > 0;
 
   if (loading) {
     return (
@@ -198,7 +216,17 @@ export function ReportsView() {
 
   return (
     <div className="aw-workspace-page">
-      <WorkspaceHeader title="Reports" />
+      <WorkspaceHeader
+        title="Reports"
+        subtitle="Summary-first view of your actual income and spending."
+        actions={(
+          <div className="aw-segmented">
+            <button type="button" data-active={range === "month"} onClick={() => setRange("month")}>Month</button>
+            <button type="button" data-active={range === "quarter"} onClick={() => setRange("quarter")}>Quarter</button>
+            <button type="button" data-active={range === "year"} onClick={() => setRange("year")}>Year</button>
+          </div>
+        )}
+      />
 
       {error ? (
         <div className="mb-4 rounded-2xl border border-[var(--aw-border)] bg-white px-4 py-3 text-sm text-[var(--aw-text)]">
@@ -210,30 +238,55 @@ export function ReportsView() {
         <div className="aw-card aw-card-compact">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Income</p>
           <p className="aw-number mt-3 text-2xl text-[var(--aw-success)]">{fmt(totals.income)}</p>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">{rangeLabel(range)}</p>
         </div>
         <div className="aw-card aw-card-compact">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Expenses</p>
           <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(totals.expenses)}</p>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">{rangeLabel(range)}</p>
         </div>
         <div className="aw-card aw-card-compact">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Net</p>
           <p className={`aw-number mt-3 text-2xl ${totals.net >= 0 ? "text-[var(--aw-text)]" : "text-[var(--aw-danger)]"}`}>
             {fmt(totals.net)}
           </p>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">{rangeLabel(range)}</p>
         </div>
         <div className="aw-card aw-card-compact">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Savings rate</p>
           <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{totals.savingsRate}%</p>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">{rangeLabel(range)}</p>
         </div>
       </div>
 
-      <WorkspacePanel className="mt-4" title="Money flow">
+      <WorkspacePanel className="mt-4" title="Income vs expenses">
         {allRecords.length === 0 ? (
-          <div className="flex min-h-[200px] items-center justify-center text-sm text-[var(--aw-text-muted)]">
-            Add transactions or connect an account to see your money flow.
-          </div>
+          <WorkspaceEmpty
+            title="No reporting data yet"
+            description={hasConnectedAccounts
+              ? "Add a few transactions to see category breakdowns and reporting totals for this period."
+              : "Connect an account or add manual transactions to unlock reporting totals and category breakdowns."}
+            action={(
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {!hasConnectedAccounts ? (
+                  <Link href="/connect" className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm">
+                    Connect an account
+                  </Link>
+                ) : null}
+                <Link href="/transactions" className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm">
+                  Add a transaction
+                </Link>
+              </div>
+            )}
+            className="min-h-[220px]"
+          />
         ) : (
-          <FlowVisualization income={totals.income} expenses={totals.expenses} net={totals.net} />
+          <>
+            <p className="mb-4 text-sm text-[var(--aw-text-muted)]">
+              Showing actual transactions for {rangeLabel(range).toLowerCase()}.
+            </p>
+            <FlowVisualization income={totals.income} expenses={totals.expenses} net={totals.net} />
+          </>
         )}
       </WorkspacePanel>
 

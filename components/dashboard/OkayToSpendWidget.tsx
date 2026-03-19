@@ -1,16 +1,16 @@
 import type { HTMLAttributes } from "react";
 import { WidgetContainer } from "@/components/dashboard/WidgetContainer";
-import { toCurrency } from "@/components/dashboard/dashboardData";
+import { buildDashboardSummary, toCurrency } from "@/components/dashboard/dashboardData";
 import { dashboardChipStyle, dashboardDashedStyle } from "@/components/dashboard/dashboardStyles";
 import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 
 export function OkayToSpendWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
-  const money = props.home.moneyIntelligence;
-  const hasData = props.useLiveData && props.accountsConnected;
+  const summary = buildDashboardSummary(props);
+  const hasData = summary.live && props.dataSource.transactions.length > 0;
 
-  // Calculate okay to spend: income minus bills minus goal contributions minus existing spend
-  const income = money?.statement.trueIncomeAmount ?? 0;
-  const totalSpend = money?.statement.trueSpendAmount ?? 0;
+  // Conservative estimate: current month income minus recurring commitments and spending so far.
+  const income = summary.monthIncome;
+  const totalSpend = summary.monthExpenses;
   const recurringCost = props.dataSource.recurring.reduce(
     (sum, item) => sum + (item.estimated_monthly_cost ?? 0),
     0,

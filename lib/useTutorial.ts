@@ -21,6 +21,8 @@ export interface TutorialState {
   steps: TutorialStep[];
   /** Close the tutorial and persist dismissal */
   dismiss: () => void;
+  /** Skip the tutorial flow entirely */
+  skip: () => void;
   /** Re-open the tutorial (for replay from settings/help) */
   replay: () => void;
   /** Whether tutorial data is still loading */
@@ -149,6 +151,14 @@ export function useTutorial(): TutorialState {
     setForceReplay(false);
   }, [phase, planTutorial, forceReplay]);
 
+  const skip = useCallback(() => {
+    localStorage.setItem(BASE_TUTORIAL_KEY, "1");
+    localStorage.setItem(STORAGE_KEY, "1");
+    setPhase("idle");
+    setVisible(false);
+    setForceReplay(false);
+  }, []);
+
   const replay = useCallback(() => {
     setForceReplay(true);
     setPhase("base");
@@ -172,6 +182,7 @@ export function useTutorial(): TutorialState {
     heading,
     steps,
     dismiss,
+    skip,
     replay,
     loading,
   };

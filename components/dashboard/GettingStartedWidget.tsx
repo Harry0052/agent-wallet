@@ -2,7 +2,11 @@ import type { HTMLAttributes } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, X } from "lucide-react";
 import { WidgetContainer } from "@/components/dashboard/WidgetContainer";
-import { buildBudgetCategories, getCategoryCompletion } from "@/components/dashboard/dashboardData";
+import {
+  buildBudgetCategories,
+  buildDashboardSummary,
+  getCategoryCompletion,
+} from "@/components/dashboard/dashboardData";
 import { dashboardInsetStyle } from "@/components/dashboard/dashboardStyles";
 import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 
@@ -12,13 +16,18 @@ interface GettingStartedWidgetProps extends DashboardWidgetProps {
 }
 
 export function GettingStartedWidget(props: GettingStartedWidgetProps) {
-  const budgetCategories = buildBudgetCategories(props.wallet, props.dataSource.transactions, props.useLiveData && props.accountsConnected);
+  const summary = buildDashboardSummary(props);
+  const budgetCategories = buildBudgetCategories(
+    props.dataSource.transactions,
+    summary.monthlyBudget,
+    props.useLiveData && props.accountsConnected,
+  );
   const hasGoals = props.dataSource.goals.length > 0;
   const steps = [
-    { label: "Connect an account", complete: props.dataSource.accounts.length > 0, href: "/accounts" },
+    { label: "Connect an account", complete: props.dataSource.accounts.length > 0, href: "/connect" },
     { label: "Set up your spending groups", complete: getCategoryCompletion(props.dataSource.transactions), href: "/transactions" },
     { label: "Set your first money goal", complete: hasGoals, href: "/goals" },
-    { label: "Create a spending plan", complete: budgetCategories.length > 0, href: "/budgets" },
+    { label: "Create a spending plan", complete: budgetCategories.length > 0 || summary.monthlyBudget > 0, href: "/budgets" },
   ];
   const completed = steps.filter((step) => step.complete).length;
   const progress = Math.round((completed / steps.length) * 100);

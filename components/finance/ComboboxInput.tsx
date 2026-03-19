@@ -60,8 +60,9 @@ export function ComboboxInput({
     query.trim().length > 0 &&
     !options.some((opt) => opt.toLowerCase() === query.trim().toLowerCase());
 
-  // Close on outside click
+  // Close on outside click — only listen when dropdown is open
   useEffect(() => {
+    if (!open) return;
     const onClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -70,7 +71,7 @@ export function ComboboxInput({
     };
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+  }, [open]);
 
   // Scroll highlighted item into view
   useEffect(() => {

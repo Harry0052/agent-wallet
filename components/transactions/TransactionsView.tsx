@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftRight,
   CalendarDays,
+  PencilLine,
   Filter,
   Loader2,
   Plus,
   Search,
+  Trash2,
 } from "lucide-react";
 import { fmt, fmtDate } from "@/lib/utils";
 import {
@@ -25,6 +28,7 @@ import {
 } from "@/components/finance/WorkspacePrimitives";
 import { ManualEntryModal } from "@/components/finance/ManualDataControls";
 import { ComboboxInput } from "@/components/finance/ComboboxInput";
+import { useFinancialData } from "@/lib/useFinancialData";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS, type ManualAccountRecord } from "@/lib/manualMode";
 import { normalizeTransactionType, type ManualTransactionType } from "@/lib/manualTransactions";
@@ -50,6 +54,7 @@ function sortByDateDesc(a: StatementTransaction, b: StatementTransaction): numbe
 }
 
 export function TransactionsView() {
+  const financialData = useFinancialData();
   const [statement, setStatement] = useState<UnifiedStatement | null>(null);
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccountRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +62,7 @@ export function TransactionsView() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
-  const [manualTransactions, setManualTransactions] = useLocalStorageState<StatementTransaction[]>(
+  const [, setManualTransactions] = useLocalStorageState<StatementTransaction[]>(
     MANUAL_STORAGE_KEYS.transactions,
     [],
   );
@@ -67,6 +72,7 @@ export function TransactionsView() {
   );
 
   const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [editingManualTxId, setEditingManualTxId] = useState<string | null>(null);
   const [manualAmount, setManualAmount] = useState("");
   const [manualType, setManualType] = useState<ManualTransactionType>("expense");
   const [manualCategory, setManualCategory] = useState("");
@@ -145,15 +151,8 @@ export function TransactionsView() {
   }, [connectedAccounts, manualAccounts]);
 
   const mergedTransactions = useMemo(() => {
-    const connected = statement?.transactions ?? [];
-    const byId = new Map<string, StatementTransaction>();
-
-    for (const tx of [...connected, ...manualTransactions]) {
-      byId.set(tx.id, tx);
-    }
-
-    return [...byId.values()].sort(sortByDateDesc);
-  }, [manualTransactions, statement?.transactions]);
+    return [...financialData.allTransactions].sort(sortByDateDesc);
+  }, [financialData.allTransactions]);
 
   const filteredTransactions = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase();
@@ -182,11 +181,39 @@ export function TransactionsView() {
     });
   }, [debouncedSearch, filterMode, mergedTransactions]);
 
+  const resetManualForm = () => {
+    setEditingManualTxId(null);
+    setManualAmount("");
+    setManualType("expense");
+    setManualCategory("");
+    setManualMerchantOrSource("");
+    setManualAccountId("manual");
+    setManualDate(new Date().toISOString().slice(0, 10));
+    setManualNotes("");
+    setManualRecurring(false);
+    setManualError(null);
+  };
+
   const openManualTransaction = () => {
+    resetManualForm();
     setManualModalOpen(true);
   };
 
-  const addManualTransaction = () => {
+  const openEditManualTransaction = (tx: StatementTransaction) => {
+    setEditingManualTxId(tx.id);
+    setManualAmount(String(Math.abs(tx.amount)));
+    setManualType(normalizeTransactionType(tx));
+    setManualCategory(tx.category || "");
+    setManualMerchantOrSource(tx.merchant_name || tx.normalized_merchant || "");
+    setManualAccountId(tx.linked_account_id || "manual");
+    setManualDate(tx.occurred_at ? new Date(tx.occurred_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+    setManualNotes(tx.notes || "");
+    setManualRecurring(Boolean(tx.recurring));
+    setManualError(null);
+    setManualModalOpen(true);
+  };
+
+  const saveManualTransaction = () => {
     setManualError(null);
     const amount = Number(manualAmount);
     const merchantOrSource = manualMerchantOrSource.trim();
@@ -206,38 +233,46 @@ export function TransactionsView() {
       return;
     }
 
-    const signedAmount = manualType === "income" ? Math.abs(amount) : -Math.abs(amount);
+    const signedAmount =
+      manualType === "income"
+        ? Math.abs(amount)
+        : manualType === "transfer"
+          ? Math.abs(amount)
+          : -Math.abs(amount);
     const selectedAccount = accountOptions.find((option) => option.id === manualAccountId);
+    const payload: StatementTransaction = {
+      id: editingManualTxId ?? `manual-${Date.now()}`,
+      user_id: "manual",
+      linked_account_id: manualAccountId,
+      merchant_name: merchantOrSource,
+      normalized_merchant: merchantOrSource.toLowerCase(),
+      amount: signedAmount,
+      currency: "USD",
+      category: manualCategory.trim() || "Manual",
+      pending: false,
+      occurred_at: new Date(`${manualDate}T12:00:00.000Z`).toISOString(),
+      transaction_type: manualType,
+      account_name: selectedAccount?.name,
+      notes: manualNotes.trim() || undefined,
+      recurring: manualRecurring,
+      sourceType: "manual",
+    };
 
-    setManualTransactions((prev) => [
-      {
-        id: `manual-${Date.now()}`,
-        user_id: "manual",
-        linked_account_id: manualAccountId,
-        merchant_name: merchantOrSource,
-        normalized_merchant: merchantOrSource.toLowerCase(),
-        amount: signedAmount,
-        currency: "USD",
-        category: manualCategory.trim() || "Manual",
-        pending: false,
-        occurred_at: new Date(`${manualDate}T12:00:00.000Z`).toISOString(),
-        transaction_type: manualType,
-        account_name: selectedAccount?.name,
-        notes: manualNotes.trim() || undefined,
-        recurring: manualRecurring,
-        sourceType: "manual",
-      },
-      ...prev,
-    ]);
+    setManualTransactions((prev) => {
+      if (!editingManualTxId) {
+        return [payload, ...prev];
+      }
+      return prev.map((tx) => (tx.id === editingManualTxId ? payload : tx));
+    });
 
-    setManualAmount("");
-    setManualType("expense");
-    setManualCategory("");
-    setManualMerchantOrSource("");
-    setManualAccountId("manual");
-    setManualDate(new Date().toISOString().slice(0, 10));
-    setManualNotes("");
-    setManualRecurring(false);
+    resetManualForm();
+    setManualModalOpen(false);
+  };
+
+  const deleteManualTransaction = () => {
+    if (!editingManualTxId) return;
+    setManualTransactions((prev) => prev.filter((tx) => tx.id !== editingManualTxId));
+    resetManualForm();
     setManualModalOpen(false);
   };
 
@@ -289,6 +324,8 @@ export function TransactionsView() {
   const moneyIntelligence = statement?.money_intelligence || null;
   const topAlerts = moneyIntelligence?.alerts?.slice(0, 2) || [];
   const tonightCard = moneyIntelligence?.studentFocus.cards.find((card) => card.id === "can_i_afford_tonight") || null;
+  const pageLoading = loading || financialData.loading;
+  const pageError = error ?? financialData.error;
 
   return (
     <div className="aw-workspace-page">
@@ -399,14 +436,14 @@ export function TransactionsView() {
         </div>
       ) : null}
 
-      {error ? (
+      {pageError ? (
         <div className="mb-4 rounded-2xl border border-[var(--aw-border)] bg-white px-4 py-3 text-sm text-[var(--aw-text)]">
-          {error}
+          {pageError}
         </div>
       ) : null}
 
       <WorkspacePanel>
-        {loading ? (
+        {pageLoading ? (
           <div className="flex min-h-[480px] items-center justify-center">
             <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
           </div>
@@ -419,15 +456,12 @@ export function TransactionsView() {
               : "No matching transactions for these filters. Connect another account or add a transaction manually."}
             action={(
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  type="button"
+                <Link
+                  href="/connect"
                   className="aw-button-secondary inline-flex h-11 items-center rounded-[10px] px-5 text-sm"
-                  onClick={() => {
-                    window.location.href = "/connect";
-                  }}
                 >
                   Connect an account
-                </button>
+                </Link>
                 <button
                   type="button"
                   className="aw-button-primary inline-flex h-11 items-center rounded-[10px] px-5 text-sm"
@@ -469,13 +503,25 @@ export function TransactionsView() {
                       {tx.category || "Uncategorized"}
                       {tx.notes ? ` • ${tx.notes}` : ""}
                     </p>
-                    <button
-                      type="button"
-                      className="mt-1 text-[11px] font-semibold text-[var(--aw-primary)] hover:text-[var(--aw-primary-strong)]"
-                      onClick={() => openCategoryCorrection(tx)}
-                    >
-                      Correct category
-                    </button>
+                    <div className="mt-1 flex flex-wrap items-center gap-3">
+                      {tx.sourceType === "manual" ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--aw-primary)] hover:text-[var(--aw-primary-strong)]"
+                          onClick={() => openEditManualTransaction(tx)}
+                        >
+                          <PencilLine size={12} />
+                          Edit
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-[var(--aw-primary)] hover:text-[var(--aw-primary-strong)]"
+                        onClick={() => openCategoryCorrection(tx)}
+                      >
+                        Correct category
+                      </button>
+                    </div>
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm text-[var(--aw-text)]">{tx.account_name || "-"}</p>
@@ -498,8 +544,11 @@ export function TransactionsView() {
                             : "text-[var(--aw-text)]"
                       }`}
                     >
-                      {transactionType === "income" ? "+" : "-"}
-                      {fmt(displayAmount)}
+                      {transactionType === "income"
+                        ? `+${fmt(displayAmount)}`
+                        : transactionType === "expense"
+                          ? `-${fmt(displayAmount)}`
+                          : fmt(displayAmount)}
                     </p>
                   </div>
                 </div>
@@ -511,9 +560,12 @@ export function TransactionsView() {
 
       <ManualEntryModal
         open={manualModalOpen}
-        onClose={() => setManualModalOpen(false)}
-        title="Add manual transaction"
-        description="Create a transaction without a connected account."
+        onClose={() => {
+          resetManualForm();
+          setManualModalOpen(false);
+        }}
+        title={editingManualTxId ? "Edit manual transaction" : "Add manual transaction"}
+        description={editingManualTxId ? "Update a manual transaction and keep the feed in sync." : "Create a transaction without a connected account."}
       >
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -621,21 +673,38 @@ export function TransactionsView() {
             </p>
           ) : null}
 
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setManualModalOpen(false)}
-              className="aw-button-secondary h-10 px-4 text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={addManualTransaction}
-              className="aw-button-primary h-10 px-4 text-sm"
-            >
-              Save transaction
-            </button>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              {editingManualTxId ? (
+                <button
+                  type="button"
+                  onClick={deleteManualTransaction}
+                  className="aw-button-danger inline-flex h-10 items-center gap-1.5 px-4 text-sm"
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              ) : null}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  resetManualForm();
+                  setManualModalOpen(false);
+                }}
+                className="aw-button-secondary h-10 px-4 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveManualTransaction}
+                className="aw-button-primary h-10 px-4 text-sm"
+              >
+                {editingManualTxId ? "Save changes" : "Save transaction"}
+              </button>
+            </div>
           </div>
         </div>
       </ManualEntryModal>
@@ -643,7 +712,11 @@ export function TransactionsView() {
       <ManualEntryModal
         open={categoryCorrectionTx !== null}
         onClose={() => {
-          if (!correctionBusy) setCategoryCorrectionTx(null);
+          if (!correctionBusy) {
+            setCategoryCorrectionTx(null);
+            setCorrectionError(null);
+            setCorrectionNotice(null);
+          }
         }}
         title="Correct category"
         description="Teach Calico by confirming a better category for this merchant."

@@ -1,12 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronLeft, ChevronRight, Loader2, PencilLine, PieChart, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { fmt } from "@/lib/utils";
 import {
-  fetchUnifiedStatement,
   type DetectedSubscription,
-  type StatementTransaction,
 } from "@/services/statements";
 import {
   ToolbarButton,
@@ -18,6 +17,7 @@ import {
   ManualEntryModal,
 } from "@/components/finance/ManualDataControls";
 import { ComboboxInput } from "@/components/finance/ComboboxInput";
+import { useFinancialData } from "@/lib/useFinancialData";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
 import { normalizeTransactionType } from "@/lib/manualTransactions";
@@ -232,18 +232,13 @@ function BudgetSection(props: {
 }
 
 export function BudgetsView() {
+  const financialData = useFinancialData();
   const currentMonthKey = useMemo(() => monthKeyFromDate(new Date()), []);
-  const [loading, setLoading] = useState(true);
   const [activeMonth, setActiveMonth] = useState(currentMonthKey);
   const [storedRows, setStoredRows] = useLocalStorageState<StoredBudgetRow[]>(
     MANUAL_STORAGE_KEYS.budgets,
     [],
   );
-  const [manualTransactions] = useLocalStorageState<StatementTransaction[]>(
-    MANUAL_STORAGE_KEYS.transactions,
-    [],
-  );
-  const [connectedTransactions, setConnectedTransactions] = useState<StatementTransaction[]>([]);
   const [manualRecurringItems] = useLocalStorageState<ManualRecurringItem[]>(
     MANUAL_STORAGE_KEYS.recurring,
     [],
@@ -261,28 +256,6 @@ export function BudgetsView() {
   const [manualError, setManualError] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void fetchUnifiedStatement({ page_size: 240 })
-      .then((statement) => {
-        if (!active) return;
-        setConnectedTransactions(statement.transactions ?? []);
-      })
-      .catch(() => {
-        if (!active) return;
-        setConnectedTransactions([]);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     if (storedRows.some((row) => !isBudgetLineItem(row))) {
       setStoredRows((prev) => prev.map((row) => toBudgetLineItem(row, currentMonthKey)));
     }
@@ -296,9 +269,8 @@ export function BudgetsView() {
 
   const transactionActuals = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
-    const allTransactions = [...connectedTransactions, ...manualTransactions];
 
-    for (const tx of allTransactions) {
+    for (const tx of financialData.allTransactions) {
       const txMonth = monthKeyFromIso(tx.occurred_at);
       if (!txMonth || txMonth !== activeMonth) continue;
 
@@ -318,7 +290,7 @@ export function BudgetsView() {
     }
 
     return map;
-  }, [activeMonth, connectedTransactions, manualTransactions]);
+  }, [activeMonth, financialData.allTransactions]);
 
   const rowsForActiveMonth = useMemo(() => {
     return budgetRows.filter((row) => row.month === activeMonth);
@@ -526,7 +498,7 @@ export function BudgetsView() {
     setEditingRowId(null);
   };
 
-  if (loading) {
+  if (financialData.loading) {
     return (
       <div className="aw-workspace-page flex items-center justify-center py-32">
         <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
@@ -580,15 +552,12 @@ export function BudgetsView() {
                   Import transactions later if you connect accounts. Start planning today with manual categories.
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.href = "/connect";
-                    }}
+                  <Link
+                    href="/connect"
                     className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm"
                   >
                     Connect an account
-                  </button>
+                  </Link>
                   <button
                     type="button"
                     onClick={openCreateModal}
@@ -605,12 +574,12 @@ export function BudgetsView() {
         <WorkspacePanel title="Summary">
           <div className="space-y-5">
             <div className="rounded-[16px] border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Left to spend</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Budget remaining</p>
               <p className={`aw-number mt-2 text-3xl font-semibold ${summary.remaining < 0 ? "text-[var(--aw-danger)]" : "text-[var(--aw-text)]"}`}>
                 {fmt(summary.remaining)}
               </p>
               <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
-                {fmt(summary.incomeActual)} earned · {fmt(summary.expensesActual)} spent
+                {fmt(summary.incomeBudget)} planned income · {fmt(summary.expensesActual)} spent
               </p>
             </div>
 

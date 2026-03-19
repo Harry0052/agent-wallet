@@ -81,6 +81,7 @@ export function ConnectWorkspace() {
   const [manualAccounts, setManualAccounts] = useLocalStorageState<ManualAccountRecord[]>(
     MANUAL_STORAGE_KEYS.accounts,
     [],
+    { broadcast: false },
   );
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [manualName, setManualName] = useState("");

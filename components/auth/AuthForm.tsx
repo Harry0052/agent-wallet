@@ -81,12 +81,19 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
     event.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password) {
+    const formData = new FormData(event.currentTarget);
+    const submittedEmail = String(formData.get('email') ?? email).trim();
+    const submittedPassword = String(formData.get('password') ?? password);
+
+    setEmail(submittedEmail);
+    setPassword(submittedPassword);
+
+    if (!submittedEmail || !submittedPassword) {
       setError('Email and password are required.');
       return;
     }
 
-    if (isSignup && password.length < 8) {
+    if (isSignup && submittedPassword.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
     }
@@ -94,7 +101,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
     setIsLoading(true);
     try {
       if (isSignup) {
-        await signup({ email, password });
+        await signup({ email: submittedEmail, password: submittedPassword });
         // Show success state briefly before transitioning to login
         setSignupComplete(true);
         setTimeout(() => {
@@ -104,7 +111,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
         return;
       }
 
-      const result = await login({ email, password });
+      const result = await login({ email: submittedEmail, password: submittedPassword });
       router.replace(result.redirectTo);
       router.refresh();
     } catch (submitError) {
@@ -287,6 +294,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                   <span className="text-xs text-[var(--aw-text-muted)]">Email</span>
                   <input
                     className="aw-input h-10 text-sm"
+                    name="email"
                     type="email"
                     autoComplete="email"
                     value={email}
@@ -299,6 +307,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                   <span className="text-xs text-[var(--aw-text-muted)]">Password</span>
                   <input
                     className="aw-input h-10 text-sm"
+                    name="password"
                     type="password"
                     autoComplete={isSignup ? 'new-password' : 'current-password'}
                     value={password}

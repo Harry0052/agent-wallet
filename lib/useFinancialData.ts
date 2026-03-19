@@ -15,14 +15,17 @@ import {
   MANUAL_STORAGE_KEYS,
   readLocalStorageJson,
   type ManualAccountRecord,
+  type ManualNetWorthItem,
 } from "@/lib/manualMode";
-import { normalizeTransactionType } from "@/lib/manualTransactions";
 import { normalizeRecordSourceType } from "@/lib/sourceType";
 import {
   cashflowToTransactions,
   reportsToTransactions,
   deduplicateTransactions,
   manualAccountToConnected,
+  manualNetWorthItemToConnected,
+  summarizeAccounts,
+  summarizeCurrentMonthTransactions,
   type ManualCashflowEntry,
   type ManualReportEntry,
   type ManualRecurringItem,
@@ -41,6 +44,8 @@ export interface FinancialData {
   connectedAccounts: ConnectedAccountRecord[];
   /** Manual accounts from localStorage */
   manualAccounts: ManualAccountRecord[];
+  /** Manual net worth items from localStorage */
+  manualNetWorthItems: ManualNetWorthItem[];
   /** All accounts merged (connected + manual) */
   allAccounts: ConnectedAccountRecord[];
 
@@ -90,6 +95,7 @@ export function useFinancialData(): FinancialData {
 
   // Manual data (from localStorage — re-read on every refresh / storage event)
   const [manualAccounts, setManualAccounts] = useState<ManualAccountRecord[]>([]);
+  const [manualNetWorthItems, setManualNetWorthItems] = useState<ManualNetWorthItem[]>([]);
   const [manualTransactions, setManualTransactions] = useState<StatementTransaction[]>([]);
   const [manualCashflow, setManualCashflow] = useState<ManualCashflowEntry[]>([]);
   const [manualReports, setManualReports] = useState<ManualReportEntry[]>([]);
@@ -102,6 +108,9 @@ export function useFinancialData(): FinancialData {
   const readManualData = useCallback(() => {
     setManualAccounts(
       readLocalStorageJson<ManualAccountRecord[]>(MANUAL_STORAGE_KEYS.accounts, []),
+    );
+    setManualNetWorthItems(
+      readLocalStorageJson<ManualNetWorthItem[]>(MANUAL_STORAGE_KEYS.netWorth, []),
     );
     setManualTransactions(
       readLocalStorageJson<StatementTransaction[]>(MANUAL_STORAGE_KEYS.transactions, []),
@@ -192,7 +201,12 @@ export function useFinancialData(): FinancialData {
     window.addEventListener("storage", onStorage);
 
     // Same-page: custom event dispatched by our patched useLocalStorageState
-    const onLocalChange = () => readManualData();
+    const onLocalChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ key: string }>).detail;
+      if (detail?.key && manualKeys.has(detail.key)) {
+        readManualData();
+      }
+    };
     window.addEventListener("calico:storage-change", onLocalChange);
 
     return () => {
@@ -204,8 +218,9 @@ export function useFinancialData(): FinancialData {
   // ── Merged accounts ─────────────────────────────────────────────────────
   const allAccounts = useMemo<ConnectedAccountRecord[]>(() => {
     const mapped = manualAccounts.map(manualAccountToConnected);
-    return [...connectedAccounts, ...mapped];
-  }, [connectedAccounts, manualAccounts]);
+    const mappedNetWorthItems = manualNetWorthItems.map(manualNetWorthItemToConnected);
+    return [...connectedAccounts, ...mapped, ...mappedNetWorthItems];
+  }, [connectedAccounts, manualAccounts, manualNetWorthItems]);
 
   // ── Merged transactions ─────────────────────────────────────────────────
   const allTransactions = useMemo<StatementTransaction[]>(() => {
@@ -234,70 +249,21 @@ export function useFinancialData(): FinancialData {
 
   // ── Derived financial summary ───────────────────────────────────────────
   const summary = useMemo<FinancialSummary>(() => {
-    // Balances
-    const connectedBalance = connectedAccounts.reduce(
-      (sum, a) => sum + (typeof a.balance === "number" ? a.balance : 0),
-      0,
-    );
-    const manualBalance = manualAccounts.reduce((sum, a) => sum + a.balance, 0);
-    const netWorth = connectedBalance + manualBalance;
-
-    const manualAssets = manualAccounts
-      .filter((a) => a.balance >= 0)
-      .reduce((sum, a) => sum + a.balance, 0);
-    const manualLiabilities = manualAccounts
-      .filter((a) => a.balance < 0)
-      .reduce((sum, a) => sum + Math.abs(a.balance), 0);
-
-    const totalAssets = Math.max(connectedBalance, 0) + manualAssets;
-    const totalLiabilities =
-      (connectedBalance < 0 ? Math.abs(connectedBalance) : 0) + manualLiabilities;
-
-    // Current month income/expenses from ALL transactions
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    let monthIncome = 0;
-    let monthExpenses = 0;
-
-    for (const tx of allTransactions) {
-      const txDate = new Date(tx.occurred_at);
-      if (txDate.getMonth() !== currentMonth || txDate.getFullYear() !== currentYear) continue;
-
-      const txType = normalizeTransactionType(tx);
-      if (txType === "transfer") continue;
-
-      const absAmount = Math.abs(tx.amount);
-      if (txType === "income") {
-        monthIncome += absAmount;
-      } else {
-        monthExpenses += absAmount;
-      }
-    }
-
-    const monthNet = monthIncome - monthExpenses;
-    const savingsRate = monthIncome > 0 ? Math.round((monthNet / monthIncome) * 100) : 0;
+    const accountSummary = summarizeAccounts(allAccounts);
+    const monthSummary = summarizeCurrentMonthTransactions(allTransactions);
 
     return {
-      totalAccounts: allAccounts.length,
-      connectedBalance,
-      manualBalance,
-      netWorth,
-      totalAssets,
-      totalLiabilities,
-      monthIncome,
-      monthExpenses,
-      monthNet,
-      savingsRate,
+      ...accountSummary,
+      ...monthSummary,
     };
-  }, [allAccounts.length, allTransactions, connectedAccounts, manualAccounts]);
+  }, [allAccounts, allTransactions]);
 
   return {
     loading,
     error,
     connectedAccounts,
     manualAccounts,
+    manualNetWorthItems,
     allAccounts,
     connectedTransactions,
     manualTransactions,

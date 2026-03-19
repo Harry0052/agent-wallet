@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createUserWithPassword, AuthError } from '@/lib/server/auth';
 import { recordAccountAuditEvent } from '@/lib/server/accountAudit';
+import { getPostAuthRedirectPath } from '@/lib/server/onboarding';
 import { extractRequestMeta } from '@/lib/server/requestMeta';
 import { enforceRateLimit } from '@/security/rateLimiter';
 import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
         email: created.email,
       },
       signupComplete: true,
+      redirectTo: await getPostAuthRedirectPath(created.appUserId),
     });
   } catch (error) {
     const message = error instanceof z.ZodError

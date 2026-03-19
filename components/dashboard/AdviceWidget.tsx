@@ -87,7 +87,7 @@ export function AdviceWidget(props: DashboardWidgetProps & { dragHandleProps?: H
           </Link>
           {automation ? (
             <Link href="/tasks" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
-              Open your to-do list
+              Open Task Center
             </Link>
           ) : null}
         </div>

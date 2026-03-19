@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
   BarChart3,
-  Bot,
   Home,
   Landmark,
   Lightbulb,
@@ -18,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useCustomLabels } from "@/lib/useCustomLabels";
+import { useEntitlements } from "@/lib/useEntitlements";
 
 interface NavLink {
   href: string;
@@ -25,21 +25,20 @@ interface NavLink {
   icon: LucideIcon;
 }
 
-const mainLinks: NavLink[] = [
+const primaryLinks: NavLink[] = [
   { href: "/home", key: "home", icon: Home },
   { href: "/accounts", key: "accounts", icon: Landmark },
   { href: "/transactions", key: "transactions", icon: ArrowLeftRight },
-  { href: "/tasks", key: "tasks", icon: ListChecks },
-  { href: "/cashflow", key: "cashflow", icon: TrendingUp },
-];
-
-const planLinks: NavLink[] = [
   { href: "/budgets", key: "budgets", icon: PieChart },
   { href: "/goals", key: "goals", icon: Target },
-  { href: "/investments", key: "investments", icon: LineChart },
   { href: "/reports", key: "reports", icon: BarChart3 },
+];
+
+const secondaryLinks: NavLink[] = [
+  { href: "/cashflow", key: "cashflow", icon: TrendingUp },
+  { href: "/tasks", key: "tasks", icon: ListChecks },
+  { href: "/investments", key: "investments", icon: LineChart },
   { href: "/insights", key: "insights", icon: Lightbulb },
-  { href: "/automations", key: "automations", icon: Bot },
 ];
 
 const utilLinks: NavLink[] = [{ href: "/settings", key: "settings", icon: Settings }];
@@ -47,6 +46,32 @@ const utilLinks: NavLink[] = [{ href: "/settings", key: "settings", icon: Settin
 export function AppNav() {
   const pathname = usePathname();
   const { getLabel } = useCustomLabels();
+  const { loading, can } = useEntitlements();
+
+  const visiblePrimaryLinks = primaryLinks.filter((link) => {
+    if (loading) {
+      return link.href !== "/goals";
+    }
+    if (link.href === "/goals") return can("simple_goals");
+    return true;
+  });
+
+  const visibleSecondaryLinks = secondaryLinks.filter((link) => {
+    if (loading) return link.href === "/cashflow";
+    if (link.href === "/cashflow") return can("monthly_cashflow");
+    if (link.href === "/tasks") return can("ai_automation");
+    if (link.href === "/investments") return can("premium_intelligence");
+    if (link.href === "/insights") return can("basic_insights");
+    return false;
+  });
+
+  const mobileLinks = [
+    visiblePrimaryLinks.find((link) => link.href === "/home"),
+    visiblePrimaryLinks.find((link) => link.href === "/transactions"),
+    visiblePrimaryLinks.find((link) => link.href === "/budgets"),
+    visiblePrimaryLinks.find((link) => link.href === "/goals"),
+    utilLinks[0],
+  ].filter(Boolean) as NavLink[];
 
   const renderLink = (link: NavLink) => {
     const isActive = pathname === link.href;
@@ -73,12 +98,16 @@ export function AppNav() {
         </div>
 
         <div className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Your Money</div>
-        <div className="sw-sidebar-nav">{mainLinks.map(renderLink)}</div>
+        <div className="sw-sidebar-nav">{visiblePrimaryLinks.map(renderLink)}</div>
 
-        <div className="sw-sidebar-divider" />
+        {visibleSecondaryLinks.length > 0 ? <div className="sw-sidebar-divider" /> : null}
 
-        <div className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Plan Ahead</div>
-        <div className="sw-sidebar-nav">{planLinks.map(renderLink)}</div>
+        {visibleSecondaryLinks.length > 0 ? (
+          <>
+            <div className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">More Tools</div>
+            <div className="sw-sidebar-nav">{visibleSecondaryLinks.map(renderLink)}</div>
+          </>
+        ) : null}
 
         <div className="mt-auto rounded-[16px] border border-[var(--aw-border)] bg-[var(--aw-surface-1)]/70 p-2 shadow-[0_4px_12px_rgba(15,23,42,0.04)]">
           <div className="sw-sidebar-nav">{utilLinks.map(renderLink)}</div>
@@ -87,7 +116,7 @@ export function AppNav() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--aw-border)] bg-[var(--aw-surface-1)]/90 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-around px-2 py-2">
-          {[mainLinks[0], mainLinks[2], mainLinks[3], mainLinks[4], utilLinks[0]].filter(Boolean).map((link) => {
+          {mobileLinks.map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
             return (

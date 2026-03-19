@@ -40,11 +40,17 @@ export function hasFeature(available: string[], feature: string): boolean {
   return available.includes(feature);
 }
 
-export async function deleteAccount(confirmation: string): Promise<void> {
-  const res = await fetch('/api/account/delete', {
-    method: 'POST',
+export async function deleteAccount(input: {
+  password: string;
+  confirmText: string;
+}): Promise<void> {
+  const res = await fetch('/api/auth/account', {
+    method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirmation }),
+    body: JSON.stringify({
+      password: input.password,
+      confirmText: input.confirmText,
+    }),
   });
   const body = await res.json();
   if (!res.ok || !body.ok) {

@@ -98,7 +98,16 @@ export function AutomationsView() {
     <div className="flex h-full min-h-screen flex-col gap-8 bg-[var(--aw-surface-subtle)] p-6">
       <WorkspaceHeader
         title="Automations"
-        subtitle={isAutonomous ? "Calico handles these for you" : "Let Calico handle your money tasks"}
+        subtitle={isAutonomous ? "Review automation-capable workflows in Task Center." : "Let Calico handle your money tasks"}
+        actions={isAutonomous ? (
+          <Link
+            href="/tasks"
+            className="inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-4 py-2 text-sm font-semibold text-[var(--aw-text)] shadow-sm transition hover:opacity-90"
+          >
+            Open Task Center
+            <ArrowRight size={16} />
+          </Link>
+        ) : null}
       />
 
       {!isAutonomous && (
@@ -110,10 +119,7 @@ export function AutomationsView() {
             Unlock Automations
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-[var(--aw-text-muted)]">
-            With the Fully Autonomous plan, Calico can move money for you, auto-fund your goals, help cancel subscriptions, negotiate bills, and optimize your debt payoff.
-          </p>
-          <p className="mt-3 text-xs italic text-[var(--aw-text-muted)]">
-            &ldquo;Help me handle it.&rdquo;
+            Automation review lives in Task Center on the Fully Autonomous plan. This preview shows the kinds of workflows Calico can support safely.
           </p>
           <Link
             href="/plans"
@@ -146,6 +152,13 @@ export function AutomationsView() {
 
       {isAutonomous && (
         <>
+          <div className="rounded-2xl border border-[var(--aw-border)] bg-white p-6">
+            <p className="text-sm font-semibold text-[var(--aw-text)]">Review-first automations</p>
+            <p className="mt-2 max-w-2xl text-sm text-[var(--aw-text-muted)]">
+              In this build, Calico stages automation-capable workflows for review instead of silently running them. Use Task Center to inspect any live actions before you approve them.
+            </p>
+          </div>
+
           {/* Active automations */}
           {AUTOMATIONS.filter((a) => a.status === "active").length > 0 && (
             <div>
@@ -170,9 +183,9 @@ export function AutomationsView() {
                             </span>
                           </div>
                           <p className="mt-1 text-xs text-[var(--aw-text-muted)]">{auto.description}</p>
-                          <button className="mt-3 text-xs font-medium text-[var(--calico-primary,#FDBA74)] hover:underline">
-                            Manage
-                          </button>
+                          <p className="mt-3 text-xs font-medium text-[var(--aw-text-muted)]">
+                            Managed through Task Center
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -197,10 +210,9 @@ export function AutomationsView() {
                     <div className="flex-1">
                       <h4 className="text-sm font-semibold text-[var(--aw-text)]">{auto.title}</h4>
                       <p className="mt-1 text-xs text-[var(--aw-text-muted)]">{auto.description}</p>
-                      <button className="mt-3 inline-flex items-center gap-1 rounded-lg bg-[var(--calico-primary,#FDBA74)] px-3 py-1.5 text-xs font-medium text-[var(--aw-text)] hover:opacity-90 transition">
-                        <Zap size={12} />
-                        Set it up
-                      </button>
+                      <p className="mt-3 text-xs font-medium text-[var(--aw-text-muted)]">
+                        Preview only in this build
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -229,8 +241,8 @@ export function AutomationsView() {
               <div className="flex gap-3">
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">3</div>
                 <div>
-                  <p className="text-sm font-medium text-[var(--aw-text)]">Calico handles it</p>
-                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Calico runs the action and checks in with you when needed.</p>
+                  <p className="text-sm font-medium text-[var(--aw-text)]">Calico stages the action</p>
+                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Calico prepares the workflow and checks in with you when approval is required.</p>
                 </div>
               </div>
             </div>

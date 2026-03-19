@@ -3,19 +3,18 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { WidgetContainer } from "@/components/dashboard/WidgetContainer";
 import { fmtDate } from "@/lib/utils";
-import { toCurrency } from "@/components/dashboard/dashboardData";
+import { buildDashboardSummary, toCurrency } from "@/components/dashboard/dashboardData";
 import { dashboardDashedStyle, dashboardInsetStyle, dashboardPrimaryButtonStyle } from "@/components/dashboard/dashboardStyles";
 import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 
 export function TransactionsWidget(props: DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }) {
-  const items = props.useLiveData && props.accountsConnected
-    ? [...props.dataSource.transactions].sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at)).slice(0, 6)
-    : [];
+  const { recentTransactions } = buildDashboardSummary(props);
+  const items = props.useLiveData && props.accountsConnected ? recentTransactions : [];
 
   return (
     <WidgetContainer
       title="Money Moves"
-      subtitle={items.length > 0 ? "Your most recent spending and income." : "Your recent activity will show up here once you connect an account."}
+      subtitle={items.length > 0 ? "Your most recent spending and income in one calm feed." : "Connect an account or add a transaction to start your activity feed."}
       dragHandleProps={props.dragHandleProps}
       action={
         <Link href="/transactions" className="inline-flex rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1 text-xs font-semibold text-[var(--calico-text)] transition hover:bg-[var(--calico-card)]">
@@ -52,8 +51,12 @@ export function TransactionsWidget(props: DashboardWidgetProps & { dragHandlePro
           {items.map((tx) => (
             <div key={tx.id} style={dashboardInsetStyle} className="flex items-center justify-between gap-4 rounded-[20px] px-4 py-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-[var(--calico-text)]">{tx.merchant_name}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--calico-text-muted)]">{tx.category}</p>
+                <p className="truncate text-sm font-semibold text-[var(--calico-text)]">
+                  {tx.merchant_name || tx.normalized_merchant || "Manual entry"}
+                </p>
+                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--calico-text-muted)]">
+                  {tx.category || "Uncategorized"}
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-sm font-semibold text-[var(--calico-text)]">{toCurrency(tx.amount)}</p>

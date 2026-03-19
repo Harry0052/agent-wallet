@@ -44,7 +44,7 @@ test('all protected API routes enforce authenticated user context in-handler', (
   const offenders: string[] = [];
   for (const file of protectedFiles) {
     const source = readFileSync(join(ROOT, file), 'utf8');
-    const hasAuthGuard = /getWalletUserId\(|requireAuthenticatedUser\(|getAuthenticatedUser\(|enforceApiAuth\(/.test(source);
+    const hasAuthGuard = /getWalletUserId\(|requireAuthenticatedUser\(|getAuthenticatedUser\(|enforceApiAuth\(|enforceEntitlement\(/.test(source);
     if (!hasAuthGuard) offenders.push(file);
   }
 

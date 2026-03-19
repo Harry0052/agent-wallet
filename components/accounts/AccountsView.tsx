@@ -1,18 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Landmark, Loader2, Plus, RefreshCw } from "lucide-react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { useApp } from "@/lib/store";
 import {
   fetchConnectedAccountsBundle,
   type ConnectedAccountRecord,
@@ -31,6 +21,10 @@ import {
 } from "@/components/finance/WorkspacePrimitives";
 import { ManualEntryModal } from "@/components/finance/ManualDataControls";
 import { ComboboxInput } from "@/components/finance/ComboboxInput";
+import {
+  manualAccountToConnected,
+  summarizeAccounts,
+} from "@/lib/financialTypes";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import {
   MANUAL_STORAGE_KEYS,
@@ -63,6 +57,11 @@ interface AccountRow {
   updatedLabel: string;
   sourceType: "connected" | "manual";
   notes?: string;
+}
+
+interface TrendPoint {
+  label: string;
+  value: number;
 }
 
 const MANUAL_ACCOUNT_OPTIONS: Array<{
@@ -164,21 +163,124 @@ function recordHistoryPoint(
   return next.sort((a, b) => a.dayKey.localeCompare(b.dayKey)).slice(-90);
 }
 
+function NetWorthTrendChart(props: { data: TrendPoint[] }) {
+  const chartWidth = 100;
+  const chartHeight = 64;
+  const paddingX = 8;
+  const paddingY = 8;
+  const values = props.data.map((point) => point.value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const hasVariance = maxValue !== minValue;
+  const domainMin = hasVariance ? minValue : minValue - Math.max(Math.abs(minValue) * 0.04, 1);
+  const domainMax = hasVariance ? maxValue : maxValue + Math.max(Math.abs(maxValue) * 0.04, 1);
+  const range = Math.max(domainMax - domainMin, 1);
+  const tickCount = 4;
+  const ticks = Array.from({ length: tickCount }, (_, index) => {
+    const ratio = index / (tickCount - 1);
+    return domainMax - ratio * range;
+  });
+  const usableWidth = chartWidth - paddingX * 2;
+  const usableHeight = chartHeight - paddingY * 2;
+  const points = props.data.map((point, index) => {
+    const x = props.data.length === 1
+      ? chartWidth / 2
+      : paddingX + (usableWidth * index) / (props.data.length - 1);
+    const y = paddingY + ((domainMax - point.value) / range) * usableHeight;
+    return {
+      ...point,
+      x,
+      y,
+    };
+  });
+  const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
+
+  return (
+    <div className="grid gap-3 md:grid-cols-[72px_minmax(0,1fr)]">
+      <div className="hidden h-[248px] flex-col justify-between py-1 text-[11px] text-[var(--aw-text-muted)] md:flex">
+        {ticks.map((tick) => (
+          <span key={tick} className="aw-number">
+            {fmt(tick)}
+          </span>
+        ))}
+      </div>
+
+      <div className="min-w-0">
+        <svg
+          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          preserveAspectRatio="none"
+          className="h-[248px] w-full"
+          aria-label="Net worth trend"
+          role="img"
+        >
+          {ticks.map((tick) => {
+            const y = paddingY + ((domainMax - tick) / range) * usableHeight;
+            return (
+              <line
+                key={tick}
+                x1={paddingX}
+                x2={chartWidth - paddingX}
+                y1={y}
+                y2={y}
+                stroke="var(--aw-chart-grid)"
+                strokeWidth="0.6"
+              />
+            );
+          })}
+          <polyline
+            fill="none"
+            stroke="var(--aw-chart-primary)"
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            points={polyline}
+          />
+          {points.map((point) => (
+            <circle
+              key={`${point.label}-${point.value}`}
+              cx={point.x}
+              cy={point.y}
+              r="1.9"
+              fill="var(--aw-chart-primary)"
+              stroke="#ffffff"
+              strokeWidth="0.9"
+            />
+          ))}
+        </svg>
+
+        <div
+          className="mt-3 grid gap-2 text-[11px] text-[var(--aw-text-muted)]"
+          style={{ gridTemplateColumns: `repeat(${props.data.length}, minmax(0, 1fr))` }}
+        >
+          {props.data.map((point) => (
+            <span key={`${point.label}-${point.value}`} className="truncate text-center">
+              {point.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AccountsView() {
   const router = useRouter();
-  const { wallet } = useApp();
   const [bundle, setBundle] = useState<AccountsBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [financialInfra, setFinancialInfra] = useState<UnifiedFinancialAccountDashboard | null>(null);
+  const [financialInfraLoading, setFinancialInfraLoading] = useState(false);
+  const loadSequenceRef = useRef(0);
 
   const [manualAccounts, setManualAccounts] = useLocalStorageState<ManualAccountRecord[]>(
     MANUAL_STORAGE_KEYS.accounts,
     [],
+    { broadcast: false },
   );
   const [netWorthHistory, setNetWorthHistory] = useLocalStorageState<NetWorthHistoryPoint[]>(
     MANUAL_STORAGE_KEYS.netWorthHistory,
     [],
+    { broadcast: false },
   );
 
   const [addAccountChoiceOpen, setAddAccountChoiceOpen] = useState(false);
@@ -193,12 +295,20 @@ export function AccountsView() {
   const [manualError, setManualError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const requestId = loadSequenceRef.current + 1;
+    loadSequenceRef.current = requestId;
     setLoading(true);
     setError(null);
-    const [accountsResult, infraResult] = await Promise.allSettled([
-      fetchConnectedAccountsBundle(),
-      fetchFinancialOsDashboard(),
-    ]);
+    setFinancialInfraLoading(true);
+
+    const accountsResult = await fetchConnectedAccountsBundle().then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (reason) => ({ status: "rejected" as const, reason }),
+    );
+
+    if (requestId !== loadSequenceRef.current) {
+      return;
+    }
 
     if (accountsResult.status === "fulfilled") {
       setBundle(accountsResult.value);
@@ -207,12 +317,21 @@ export function AccountsView() {
       setError(accountsResult.reason instanceof Error ? accountsResult.reason.message : "Failed to load accounts.");
     }
 
-    if (infraResult.status === "fulfilled") {
-      setFinancialInfra(infraResult.value);
-    } else {
-      setFinancialInfra(null);
-    }
     setLoading(false);
+
+    void fetchFinancialOsDashboard()
+      .then((value) => {
+        if (requestId !== loadSequenceRef.current) return;
+        setFinancialInfra(value);
+      })
+      .catch(() => {
+        if (requestId !== loadSequenceRef.current) return;
+        setFinancialInfra(null);
+      })
+      .finally(() => {
+        if (requestId !== loadSequenceRef.current) return;
+        setFinancialInfraLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -230,32 +349,19 @@ export function AccountsView() {
   ).length;
 
   const connectedTotalBalance =
-    connectedKnownBalanceCount === connectedAccounts.length && connectedAccounts.length > 0
-      ? connectedKnownBalanceSum
-      : wallet.balance;
+    connectedKnownBalanceSum;
 
   const connectedAverageBalance =
-    connectedAccounts.length > 0
-      ? connectedTotalBalance / connectedAccounts.length
+    connectedKnownBalanceCount > 0
+      ? connectedKnownBalanceSum / connectedKnownBalanceCount
       : 0;
 
-  const manualTotalBalance = manualAccounts.reduce((sum, account) => sum + account.balance, 0);
-  const combinedNetWorth = connectedTotalBalance + manualTotalBalance;
-
-  const manualAssets = manualAccounts
-    .filter((account) => account.balance >= 0)
-    .reduce((sum, account) => sum + account.balance, 0);
-  const manualLiabilities = manualAccounts
-    .filter((account) => account.balance < 0)
-    .reduce((sum, account) => sum + Math.abs(account.balance), 0);
-
-  const summary = {
-    connected: connectedTotalBalance,
-    manual: manualTotalBalance,
-    totalAssets: Math.max(connectedTotalBalance, 0) + manualAssets,
-    totalLiabilities: (connectedTotalBalance < 0 ? Math.abs(connectedTotalBalance) : 0) + manualLiabilities,
-    netWorth: combinedNetWorth,
-  };
+  const summary = useMemo(() => summarizeAccounts([
+    ...connectedAccounts,
+    ...manualAccounts.map(manualAccountToConnected),
+  ]), [connectedAccounts, manualAccounts]);
+  const manualTotalBalance = summary.manualBalance;
+  const combinedNetWorth = summary.netWorth;
 
   useEffect(() => {
     const total = connectedTotalBalance + manualTotalBalance;
@@ -432,82 +538,98 @@ export function AccountsView() {
         )}
       />
 
-      {financialInfra ? (
-        <WorkspacePanel title="Financial OS Infrastructure">
-          <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-            <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-              <p className="text-xs text-[var(--aw-text-muted)]">Connected accounts</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
-                {financialInfra.sync.connectedAccountCount}
-              </p>
-            </article>
-            <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-              <p className="text-xs text-[var(--aw-text-muted)]">Fresh sync</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
-                {financialInfra.sync.freshAccountCount}
-              </p>
-            </article>
-            <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-              <p className="text-xs text-[var(--aw-text-muted)]">Internal transfers</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
-                {fmt(financialInfra.moneyFlow.internalTransferAmount)}
-              </p>
-            </article>
-            <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-              <p className="text-xs text-[var(--aw-text-muted)]">Task center active</p>
-              <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
-                {financialInfra.taskCenter.activeCount}
-              </p>
-            </article>
-          </div>
-
-          {topNotifications.length > 0 ? (
-            <div className="mb-4 rounded-xl border border-[var(--aw-border)] bg-white p-3">
-              <p className="text-xs font-semibold text-[var(--aw-text)]">Actionable notifications</p>
-              <div className="mt-2 space-y-2">
-                {topNotifications.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-[var(--aw-text)]">{item.title}</p>
-                      <button
-                        type="button"
-                        className="text-[11px] text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
-                        onClick={() => {
-                          void dismissFinancialNotification(item.id).then(() => load());
-                        }}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                    <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">{item.summary}</p>
-                  </div>
-                ))}
-              </div>
+      {(financialInfra || financialInfraLoading) ? (
+        <WorkspacePanel
+          title="Financial OS Infrastructure"
+          action={financialInfraLoading ? (
+            <div className="inline-flex items-center gap-2 text-xs text-[var(--aw-text-muted)]">
+              <Loader2 size={12} className="animate-spin" />
+              Refreshing
             </div>
           ) : null}
+        >
+          {financialInfra ? (
+            <>
+              <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">Connected accounts</p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                    {financialInfra.sync.connectedAccountCount}
+                  </p>
+                </article>
+                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">Fresh sync</p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                    {financialInfra.sync.freshAccountCount}
+                  </p>
+                </article>
+                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">Internal transfers</p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                    {fmt(financialInfra.moneyFlow.internalTransferAmount)}
+                  </p>
+                </article>
+                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">Task center active</p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
+                    {financialInfra.taskCenter.activeCount}
+                  </p>
+                </article>
+              </div>
 
-          <div className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-            <p className="text-xs font-semibold text-[var(--aw-text)]">Financial timeline</p>
-            <div className="mt-2 space-y-2">
-              {topTimeline.length === 0 ? (
-                <p className="text-xs text-[var(--aw-text-muted)]">No timeline events yet.</p>
-              ) : (
-                topTimeline.map((event) => (
-                  <a
-                    key={event.id}
-                    href={event.deepLink}
-                    className="block rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2 transition hover:border-[var(--aw-border-strong)]"
-                  >
-                    <p className="text-xs font-semibold text-[var(--aw-text)]">{event.title}</p>
-                    <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">{event.summary}</p>
-                    <p className="mt-0.5 text-[11px] text-[var(--aw-text-muted)]">
-                      {new Date(event.occurredAt).toLocaleDateString()} · {event.priority.toUpperCase()}
-                    </p>
-                  </a>
-                ))
-              )}
+              {topNotifications.length > 0 ? (
+                <div className="mb-4 rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs font-semibold text-[var(--aw-text)]">Actionable notifications</p>
+                  <div className="mt-2 space-y-2">
+                    {topNotifications.map((item) => (
+                      <div key={item.id} className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-[var(--aw-text)]">{item.title}</p>
+                          <button
+                            type="button"
+                            className="text-[11px] text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
+                            onClick={() => {
+                              void dismissFinancialNotification(item.id).then(() => load());
+                            }}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                        <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">{item.summary}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                <p className="text-xs font-semibold text-[var(--aw-text)]">Financial timeline</p>
+                <div className="mt-2 space-y-2">
+                  {topTimeline.length === 0 ? (
+                    <p className="text-xs text-[var(--aw-text-muted)]">No timeline events yet.</p>
+                  ) : (
+                    topTimeline.map((event) => (
+                      <a
+                        key={event.id}
+                        href={event.deepLink}
+                        className="block rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2 transition hover:border-[var(--aw-border-strong)]"
+                      >
+                        <p className="text-xs font-semibold text-[var(--aw-text)]">{event.title}</p>
+                        <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">{event.summary}</p>
+                        <p className="mt-0.5 text-[11px] text-[var(--aw-text-muted)]">
+                          {new Date(event.occurredAt).toLocaleDateString()} · {event.priority.toUpperCase()}
+                        </p>
+                      </a>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-[var(--aw-border)] bg-white px-4 py-3 text-sm text-[var(--aw-text-muted)]">
+              Loading background sync status...
             </div>
-          </div>
+          )}
         </WorkspacePanel>
       ) : null}
 
@@ -523,52 +645,15 @@ export function AccountsView() {
           </p>
         </div>
 
-        <div className="h-[280px] rounded-[16px] border border-[var(--aw-border)] bg-white px-3 py-4">
+        <div className="min-w-0 rounded-[16px] border border-[var(--aw-border)] bg-white px-3 py-4">
           {chartData.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="flex h-[248px] flex-col items-center justify-center text-center">
               <p className="text-sm text-[var(--aw-text-muted)]">
                 Add an account to start tracking your net worth over time.
               </p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
-                <CartesianGrid stroke="var(--aw-chart-grid)" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  minTickGap={28}
-                />
-                <YAxis
-                  tick={{ fill: "var(--aw-text-muted)", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={44}
-                  tickFormatter={(value: number) => `$${value}`}
-                />
-                <Tooltip
-                  formatter={(value) => [fmt(Number(value ?? 0)), "Net worth"]}
-                  labelStyle={{ color: "var(--aw-text-muted)" }}
-                  itemStyle={{ color: "var(--aw-text)" }}
-                  contentStyle={{
-                    background: "var(--aw-surface-1)",
-                    border: "1px solid var(--aw-border)",
-                    borderRadius: 12,
-                    boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke="var(--aw-chart-primary)"
-                  strokeWidth={2.5}
-                  dot={chartData.length <= 3}
-                  activeDot={{ r: 4, fill: "var(--aw-chart-primary)", stroke: "#FFFFFF", strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <NetWorthTrendChart data={chartData} />
           )}
         </div>
       </WorkspacePanel>
@@ -636,14 +721,14 @@ export function AccountsView() {
           <div className="space-y-5">
             <div className="aw-card aw-card-compact">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Connected balances</p>
-              <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(summary.connected)}</p>
+              <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(summary.connectedBalance)}</p>
               <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Synced accounts</p>
             </div>
 
             <div className="aw-card aw-card-compact">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Manual balances</p>
-              <p className={`aw-number mt-3 text-2xl ${summary.manual < 0 ? "text-[var(--aw-danger)]" : "text-[var(--aw-text)]"}`}>
-                {fmt(summary.manual)}
+              <p className={`aw-number mt-3 text-2xl ${summary.manualBalance < 0 ? "text-[var(--aw-danger)]" : "text-[var(--aw-text)]"}`}>
+                {fmt(summary.manualBalance)}
               </p>
               <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Manual accounts</p>
             </div>

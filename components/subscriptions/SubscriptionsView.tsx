@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
@@ -650,15 +651,12 @@ export function SubscriptionsView() {
                 : "Track recurring income and expenses from connected data and manual entries in one place."}
               action={(
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.href = "/connect";
-                    }}
+                  <Link
+                    href="/connect"
                     className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm"
                   >
                     Connect an account
-                  </button>
+                  </Link>
                   <button
                     type="button"
                     onClick={() => setManageModalOpen(true)}

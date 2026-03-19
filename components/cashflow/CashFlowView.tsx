@@ -276,43 +276,49 @@ export function CashFlowView() {
     return buildRecurringForecastEntries(manualRecurringItems);
   }, [manualRecurringItems]);
 
-  const allEntries = useMemo(() => {
-    return [...transactionEntries, ...recurringForecastEntries].sort(
-      (a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt),
-    );
-  }, [transactionEntries, recurringForecastEntries]);
-
-  const rangeEntries = useMemo(() => {
-    return allEntries.filter((entry) => {
+  const actualRangeEntries = useMemo(() => {
+    return transactionEntries.filter((entry) => {
       const date = new Date(entry.occurredAt);
       if (Number.isNaN(date.getTime())) return false;
       return inRange(date, range);
     });
-  }, [allEntries, range]);
+  }, [range, transactionEntries]);
 
-  const monthEntries = useMemo(() => {
-    return allEntries.filter((entry) => {
+  const monthActualEntries = useMemo(() => {
+    return transactionEntries.filter((entry) => {
       const date = new Date(entry.occurredAt);
       return inRange(date, "month");
     });
-  }, [allEntries]);
+  }, [transactionEntries]);
 
-  const monthIncome = monthEntries
+  const upcomingForecastEntries = useMemo(() => {
+    const now = Date.now();
+    return recurringForecastEntries
+      .filter((entry) => Date.parse(entry.occurredAt) >= now)
+      .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt))
+      .slice(0, 6);
+  }, [recurringForecastEntries]);
+
+  const monthIncome = monthActualEntries
     .filter((entry) => entry.type === "income")
     .reduce((sum, entry) => sum + entry.amount, 0);
 
-  const monthExpenses = monthEntries
+  const monthExpenses = monthActualEntries
     .filter((entry) => entry.type === "expense")
     .reduce((sum, entry) => sum + entry.amount, 0);
 
   const monthNet = monthIncome - monthExpenses;
   const savingsRate = monthIncome > 0 ? Math.round((monthNet / monthIncome) * 100) : 0;
-  const incomeEntries = rangeEntries.filter((entry) => entry.type === "income");
-  const expenseEntries = rangeEntries.filter((entry) => entry.type === "expense");
-  const chartData = useMemo(() => buildChartData(rangeEntries, range), [range, rangeEntries]);
+  const chartData = useMemo(() => buildChartData(actualRangeEntries, range), [actualRangeEntries, range]);
+  const rangeLabel = range === "month" ? "this month" : range === "quarter" ? "the last 3 months" : "the last 12 months";
 
   const openManualEntry = (type?: "income" | "expense") => {
-    if (type) setManualType(type);
+    setManualType(type ?? "expense");
+    setManualLabel("");
+    setManualAmount("");
+    setManualCategory("");
+    setManualDate(new Date().toISOString().slice(0, 10));
+    setManualError(null);
     setManualModalOpen(true);
   };
 
@@ -378,20 +384,21 @@ export function CashFlowView() {
   return (
     <div className="aw-workspace-page">
       <WorkspaceHeader
-        title="Money In & Out"
+        title="Cash Flow"
+        subtitle="Actual posted money in and out, plus your next recurring items."
         actions={(
           <button
             type="button"
             onClick={() => openManualEntry()}
             className="aw-button-primary inline-flex h-[38px] items-center gap-1.5 rounded-xl px-4 text-sm"
           >
-            Add Transaction
+            Add cash flow entry
           </button>
         )}
       />
 
       <WorkspacePanel
-        title="Income vs expenses"
+        title="Cash flow history"
         action={(
           <div className="aw-toolbar">
             <div className="aw-segmented">
@@ -402,7 +409,7 @@ export function CashFlowView() {
           </div>
         )}
       >
-        {rangeEntries.length === 0 ? (
+        {actualRangeEntries.length === 0 ? (
           <WorkspaceEmpty
             title="No cash flow data yet"
             description={connectedAccountCount === 0
@@ -426,6 +433,9 @@ export function CashFlowView() {
           />
         ) : (
           <>
+            <p className="mb-4 text-sm text-[var(--aw-text-muted)]">
+              Showing actual income and expenses for {rangeLabel}. Savings rate this month: {savingsRate}%.
+            </p>
             <div className="mb-3 flex items-center gap-5">
               <div className="flex items-center gap-1.5">
                 <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aw-chart-positive-fill)" }} />
@@ -462,7 +472,7 @@ export function CashFlowView() {
         )}
       </WorkspacePanel>
 
-      <div className="aw-workspace-grid mt-4" data-columns="4">
+      <div className="aw-workspace-grid mt-4" data-columns="2">
         <div className="aw-card aw-card-compact">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
             Income
@@ -490,23 +500,16 @@ export function CashFlowView() {
           </p>
           <p className="mt-2 text-sm text-[var(--aw-text-muted)]">This month</p>
         </div>
-        <div className="aw-card aw-card-compact">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-            Savings rate
-          </p>
-          <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{savingsRate}%</p>
-          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">This month</p>
-        </div>
       </div>
 
-      <WorkspacePanel className="mt-4" title="Income">
+      <WorkspacePanel className="mt-4" title="Upcoming recurring">
         <div className="aw-card-table">
-          {incomeEntries.length === 0 ? (
+          {upcomingForecastEntries.length === 0 ? (
             <WorkspaceEmpty
-              title="No income entries"
+              title="No upcoming recurring items"
               description={connectedAccountCount === 0
-                ? "Connect an account or add income manually to populate cash flow for this range."
-                : "Add income manually to populate cash flow for this range."}
+                ? "Connect an account or add recurring bills and paychecks to preview what is coming next."
+                : "Recurring bills and paychecks will appear here when Calico detects them or when you add them manually."}
               action={(
                 <div className="flex flex-wrap items-center gap-2">
                   {connectedAccountCount === 0 ? (
@@ -519,17 +522,10 @@ export function CashFlowView() {
                   ) : null}
                   <button
                     type="button"
-                    className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm"
-                    onClick={() => openManualEntry("income")}
-                  >
-                    Add income manually
-                  </button>
-                  <button
-                    type="button"
                     className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm"
                     onClick={() => openManualEntry()}
                   >
-                    Add transaction manually
+                    Add cash flow entry
                   </button>
                 </div>
               )}
@@ -537,93 +533,33 @@ export function CashFlowView() {
             />
           ) : (
             <>
-              <div className="grid grid-cols-[minmax(0,1.4fr)_140px_140px] gap-4 border-b border-[var(--aw-border)] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-                <span>Income</span>
+              <div className="grid grid-cols-[minmax(0,1.4fr)_120px_120px_140px] gap-4 border-b border-[var(--aw-border)] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
+                <span>Item</span>
+                <span>Type</span>
                 <span>Date</span>
                 <span className="text-right">Amount</span>
               </div>
-              {incomeEntries.map((entry) => (
+              {upcomingForecastEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  className="grid grid-cols-[minmax(0,1.4fr)_140px_140px] gap-4 border-t border-[var(--aw-border)] px-4 py-4 transition hover:bg-[var(--aw-primary-soft)]/40 first:border-t-0"
+                  className="grid grid-cols-[minmax(0,1.4fr)_120px_120px_140px] gap-4 border-t border-[var(--aw-border)] px-4 py-4 transition hover:bg-[var(--aw-primary-soft)]/40 first:border-t-0"
                 >
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-[var(--aw-text)]">{entry.label}</p>
-                      {entry.sourceType === "manual" ? <span className="aw-pill">Manual</span> : null}
                       {entry.entryKind === "forecast" ? <span className="aw-pill">Forecast</span> : null}
                     </div>
                     <p className="mt-1 text-xs text-[var(--aw-text-muted)]">{entry.category}</p>
                   </div>
-                  <span className="text-sm text-[var(--aw-text-muted)]">{fmtDate(entry.occurredAt)}</span>
-                  <span className="aw-number text-right text-sm text-[var(--aw-success)]">
-                    {fmt(entry.amount)}
+                  <span className="text-sm text-[var(--aw-text-muted)]">
+                    {entry.type === "income" ? "Income" : entry.type === "expense" ? "Expense" : "Transfer"}
                   </span>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      </WorkspacePanel>
-
-      <WorkspacePanel className="mt-4" title="Expenses">
-        <div className="aw-card-table">
-          {expenseEntries.length === 0 ? (
-            <WorkspaceEmpty
-              title="No expense entries"
-              description={connectedAccountCount === 0
-                ? "Connect an account or add expenses manually to populate cash flow for this range."
-                : "Add expenses manually to populate cash flow for this range."}
-              action={(
-                <div className="flex flex-wrap items-center gap-2">
-                  {connectedAccountCount === 0 ? (
-                    <Link
-                      href="/connect"
-                      className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm"
-                    >
-                      Connect an account
-                    </Link>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm"
-                    onClick={() => openManualEntry("expense")}
-                  >
-                    Add expense manually
-                  </button>
-                  <button
-                    type="button"
-                    className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm"
-                    onClick={() => openManualEntry()}
-                  >
-                    Add transaction manually
-                  </button>
-                </div>
-              )}
-              className="min-h-[220px] text-[var(--aw-text-muted)]"
-            />
-          ) : (
-            <>
-              <div className="grid grid-cols-[minmax(0,1.4fr)_140px_140px] gap-4 border-b border-[var(--aw-border)] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
-                <span>Expense</span>
-                <span>Date</span>
-                <span className="text-right">Amount</span>
-              </div>
-              {expenseEntries.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="grid grid-cols-[minmax(0,1.4fr)_140px_140px] gap-4 border-t border-[var(--aw-border)] px-4 py-4 transition hover:bg-[var(--aw-primary-soft)]/40 first:border-t-0"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-[var(--aw-text)]">{entry.label}</p>
-                      {entry.sourceType === "manual" ? <span className="aw-pill">Manual</span> : null}
-                      {entry.entryKind === "forecast" ? <span className="aw-pill">Forecast</span> : null}
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--aw-text-muted)]">{entry.category}</p>
-                  </div>
                   <span className="text-sm text-[var(--aw-text-muted)]">{fmtDate(entry.occurredAt)}</span>
-                  <span className="aw-number text-right text-sm text-[var(--aw-text)]">
+                  <span
+                    className={`aw-number text-right text-sm ${
+                      entry.type === "income" ? "text-[var(--aw-success)]" : "text-[var(--aw-text)]"
+                    }`}
+                  >
                     {fmt(entry.amount)}
                   </span>
                 </div>

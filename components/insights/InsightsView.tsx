@@ -6,10 +6,15 @@ import { Lightbulb, Loader2 } from "lucide-react";
 import { fmt } from "@/lib/utils";
 import type { Insight } from "@/lib/types";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
-import { MANUAL_STORAGE_KEYS, type ManualAccountRecord } from "@/lib/manualMode";
+import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
 import type { StatementTransaction } from "@/services/statements";
 import { normalizeTransactionType } from "@/lib/manualTransactions";
 import { useFinancialData } from "@/lib/useFinancialData";
+import {
+  WorkspaceEmpty,
+  WorkspaceHeader,
+  WorkspacePanel,
+} from "@/components/finance/WorkspacePrimitives";
 
 interface LocalInsight {
   id: string;
@@ -20,7 +25,7 @@ interface LocalInsight {
 }
 
 function generateLocalInsights(
-  accounts: ManualAccountRecord[],
+  accounts: Array<{ balance?: number | null }>,
   transactions: StatementTransaction[],
   goals: Array<{ name?: string; label?: string; targetAmount?: number; currentSavedAmount?: number; saved?: number }>,
 ): LocalInsight[] {
@@ -93,8 +98,8 @@ function generateLocalInsights(
   }
 
   // Liability awareness
-  const liabilities = accounts.filter((a) => a.balance < 0);
-  const totalDebt = liabilities.reduce((sum, a) => sum + Math.abs(a.balance), 0);
+  const liabilities = accounts.filter((a) => Number(a.balance ?? 0) < 0);
+  const totalDebt = liabilities.reduce((sum, a) => sum + Math.abs(Number(a.balance ?? 0)), 0);
   if (totalDebt > 0) {
     insights.push({
       id: "local-debt-awareness",
@@ -169,8 +174,8 @@ export function InsightsView() {
   // Use ALL merged transactions (connected + manual + cashflow + reports)
   // and ALL merged accounts for insight generation
   const localInsights = useMemo(
-    () => generateLocalInsights(financialData.manualAccounts, financialData.allTransactions, storedGoals),
-    [financialData.manualAccounts, financialData.allTransactions, storedGoals],
+    () => generateLocalInsights(financialData.allAccounts, financialData.allTransactions, storedGoals),
+    [financialData.allAccounts, financialData.allTransactions, storedGoals],
   );
 
   const activeServerInsights = serverInsights
@@ -186,7 +191,7 @@ export function InsightsView() {
     return [
       ...activeServerInsights.map((i) => ({ id: i.id, title: i.title, summary: i.summary, severity: i.severity, amountImpact: i.amountImpact, isServer: true })),
       ...uniqueLocal.map((i) => ({ ...i, isServer: false })),
-    ];
+    ].slice(0, 6);
   }, [activeLocalInsights, activeServerInsights]);
 
   const dismiss = async (id: string, isServer: boolean) => {
@@ -216,73 +221,72 @@ export function InsightsView() {
   };
 
   return (
-    <div className="aw-page">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--aw-text)]">What Calico Noticed</h1>
-        <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Patterns and suggestions based on your accounts, transactions, and goals.
-        </p>
-      </div>
+    <div className="aw-workspace-page">
+      <WorkspaceHeader
+        title="What Calico Noticed"
+        subtitle="Patterns and suggestions based on your accounts, transactions, and goals."
+      />
 
       {loading ? (
         <div className="flex justify-center py-20">
           <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
         </div>
       ) : allInsights.length === 0 ? (
-        <div className="flex flex-col items-center py-20 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--aw-surface-subtle)]">
-            <Lightbulb size={24} className="text-[var(--aw-text-muted)]" />
-          </div>
-          <p className="text-sm font-semibold text-[var(--aw-text)]">Nothing to report yet</p>
-          <p className="mt-1 max-w-xs text-sm leading-relaxed text-[var(--aw-text-muted)]">
-            Calico generates insights from your accounts, transactions, and goals. Add more data and check back.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            <Link
-              href="/accounts"
-              className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-6 text-sm font-semibold"
-            >
-              Add an account
-            </Link>
-            <Link
-              href="/transactions"
-              className="aw-button-primary inline-flex h-11 items-center rounded-xl px-6 text-sm font-semibold"
-            >
-              Add a transaction
-            </Link>
-          </div>
-        </div>
+        <WorkspaceEmpty
+          icon={<Lightbulb size={24} />}
+          title="Nothing to report yet"
+          description="Calico generates insights from your accounts, transactions, and goals. Add more data and check back."
+          action={(
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Link
+                href="/connect"
+                className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-6 text-sm font-semibold"
+              >
+                Connect an account
+              </Link>
+              <Link
+                href="/transactions"
+                className="aw-button-primary inline-flex h-11 items-center rounded-xl px-6 text-sm font-semibold"
+              >
+                Add a transaction
+              </Link>
+            </div>
+          )}
+          className="min-h-[260px]"
+        />
       ) : (
-        <div className="space-y-3">
-          {allInsights.map((insight) => (
-            <article
-              key={insight.id}
-              className={`rounded-xl border px-4 py-3.5 ${severityStyle(insight.severity)}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-[var(--aw-text)]">{insight.title}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-[var(--aw-text-muted)]">
-                    {insight.summary}
-                  </p>
-                  {insight.amountImpact ? (
-                    <p className="mt-1.5 text-xs font-semibold text-[var(--aw-text)]">
-                      {fmt(insight.amountImpact)}
+        <WorkspacePanel title="Highlights">
+          <div className="space-y-3">
+            {allInsights.map((insight) => (
+              <article
+                key={insight.id}
+                className={`rounded-xl border px-4 py-3.5 ${severityStyle(insight.severity)}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[var(--aw-text)]">{insight.title}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-[var(--aw-text-muted)]">
+                      {insight.summary}
                     </p>
-                  ) : null}
+                    {insight.amountImpact ? (
+                      <p className="mt-1.5 text-xs font-semibold text-[var(--aw-text)]">
+                        {fmt(insight.amountImpact)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { void dismiss(insight.id, insight.isServer); }}
+                    disabled={dismissing === insight.id}
+                    className="shrink-0 rounded-lg bg-[var(--aw-surface-subtle)] px-2.5 py-1 text-[11px] font-medium text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-border)]"
+                  >
+                    Dismiss
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => { void dismiss(insight.id, insight.isServer); }}
-                  disabled={dismissing === insight.id}
-                  className="shrink-0 rounded-lg bg-[var(--aw-surface-subtle)] px-2.5 py-1 text-[11px] font-medium text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-border)]"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
+              </article>
+            ))}
+          </div>
+        </WorkspacePanel>
       )}
     </div>
   );

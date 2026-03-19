@@ -32,9 +32,11 @@ export function TutorialOrchestrator({ children }: { children: React.ReactNode }
       {children}
       {tutorial.visible && tutorial.steps.length > 0 && (
         <PlanTutorial
+          key={`${tutorial.heading}-${tutorial.steps.length}`}
           heading={tutorial.heading}
           steps={tutorial.steps}
           onComplete={tutorial.dismiss}
+          onSkip={tutorial.skip}
         />
       )}
     </TutorialContext.Provider>
