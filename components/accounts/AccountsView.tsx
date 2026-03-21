@@ -4,6 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Landmark, Loader2, Plus, RefreshCw } from "lucide-react";
 import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import {
   dismissFinancialNotification,
   fetchFinancialOsDashboard,
 } from "@/services/financialOs";
@@ -154,184 +162,112 @@ function recordHistoryPoint(
   return next.sort((a, b) => a.dayKey.localeCompare(b.dayKey)).slice(-90);
 }
 
-function toSmoothPath(points: Array<{ x: number; y: number }>): string {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0].x},${points[0].y}`;
-  if (points.length === 2) return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
+// ── Recharts-based net worth chart ───────────────────────────────────────────
 
-  const tension = 0.3;
-  let path = `M ${points[0].x},${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(i - 1, 0)];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[Math.min(i + 2, points.length - 1)];
-    const cp1x = p1.x + (p2.x - p0.x) * tension;
-    const cp1y = p1.y + (p2.y - p0.y) * tension;
-    const cp2x = p2.x - (p3.x - p1.x) * tension;
-    const cp2y = p2.y - (p3.y - p1.y) * tension;
-    path += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
-  }
-  return path;
+function fmtCompact(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 10_000) return `${(value / 1_000).toFixed(0)}k`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return fmt(value);
+}
+
+function ChartTooltipContent(props: {
+  active?: boolean;
+  payload?: Array<{ value?: number }>;
+  label?: string | number;
+}) {
+  if (!props.active || !props.payload?.length) return null;
+  const value = props.payload[0].value;
+  if (typeof value !== "number") return null;
+  return (
+    <div className="rounded-lg border border-[var(--aw-border)] bg-white px-3 py-2 shadow-md">
+      <p className="text-[11px] text-[var(--aw-text-muted)]">{props.label}</p>
+      <p className="aw-number mt-0.5 text-sm font-semibold text-[var(--aw-text)]">
+        {fmt(value)}
+      </p>
+    </div>
+  );
 }
 
 function NetWorthTrendChart(props: { data: TrendPoint[] }) {
-  const chartWidth = 400;
-  const chartHeight = 200;
-  const paddingLeft = 52;
-  const paddingRight = 16;
-  const paddingTop = 20;
-  const paddingBottom = 28;
-  const values = props.data.map((point) => point.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const hasVariance = maxValue !== minValue;
-  // Add 8% domain padding so the line never touches edges
-  const domainPad = hasVariance ? (maxValue - minValue) * 0.08 : Math.max(Math.abs(minValue) * 0.06, 50);
-  const domainMin = minValue - domainPad;
-  const domainMax = maxValue + domainPad;
-  const range = Math.max(domainMax - domainMin, 1);
-  const tickCount = 4;
-  const ticks = Array.from({ length: tickCount }, (_, index) => {
-    const ratio = index / (tickCount - 1);
-    return domainMax - ratio * range;
-  });
-  const usableWidth = chartWidth - paddingLeft - paddingRight;
-  const usableHeight = chartHeight - paddingTop - paddingBottom;
-  const points = props.data.map((point, index) => {
-    const x = props.data.length === 1
-      ? paddingLeft + usableWidth / 2
-      : paddingLeft + (usableWidth * index) / (props.data.length - 1);
-    const y = paddingTop + ((domainMax - point.value) / range) * usableHeight;
-    return { ...point, x, y };
-  });
-  const smoothPath = toSmoothPath(points);
-  const baselineY = paddingTop + usableHeight;
-  const lastPoint = points[points.length - 1];
-  const firstPoint = points[0];
-  const areaPath = points.length >= 2
-    ? `${smoothPath} L ${lastPoint.x},${baselineY} L ${firstPoint.x},${baselineY} Z`
-    : "";
+  const data = props.data;
+
+  if (data.length === 0) return null;
+
+  // Single point: show a minimal centered indicator
+  if (data.length === 1) {
+    return (
+      <div className="flex h-[180px] flex-col items-center justify-center">
+        <p className="aw-number text-2xl font-semibold text-[var(--aw-primary)]">
+          {fmt(data[0].value)}
+        </p>
+        <p className="mt-1 text-xs text-[var(--aw-text-muted)]">{data[0].label}</p>
+        <p className="mt-3 text-[11px] text-[var(--aw-text-muted)]">
+          More history will appear as your balances update over time.
+        </p>
+      </div>
+    );
+  }
+
+  // Compute clean domain with padding
+  const values = data.map((d) => d.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const isFlat = max === min;
+  const pad = isFlat ? Math.max(Math.abs(min) * 0.05, 100) : (max - min) * 0.1;
+  const domainMin = Math.floor((min - pad) / 100) * 100;
+  const domainMax = Math.ceil((max + pad) / 100) * 100;
 
   return (
-    <svg
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-      className="h-[220px] w-full"
-      aria-label="Net worth trend"
-      role="img"
-    >
-      <defs>
-        <linearGradient id="nw-area-gradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--aw-primary)" stopOpacity="0.12" />
-          <stop offset="100%" stopColor="var(--aw-primary)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      {/* Gridlines */}
-      {ticks.map((tick) => {
-        const y = paddingTop + ((domainMax - tick) / range) * usableHeight;
-        return (
-          <g key={tick}>
-            <line
-              x1={paddingLeft}
-              x2={chartWidth - paddingRight}
-              y1={y}
-              y2={y}
-              stroke="var(--aw-border)"
-              strokeWidth="0.5"
-              strokeDasharray="3 3"
-              opacity="0.5"
-            />
-            <text
-              x={paddingLeft - 8}
-              y={y + 1}
-              textAnchor="end"
-              dominantBaseline="middle"
-              fill="var(--aw-text-muted)"
-              fontSize="9"
-              fontFamily="inherit"
-              opacity="0.5"
-            >
-              {fmt(Math.round(tick))}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Area fill */}
-      {areaPath && (
-        <path d={areaPath} fill="url(#nw-area-gradient)" />
-      )}
-
-      {/* Line */}
-      <path
-        d={smoothPath}
-        fill="none"
-        stroke="var(--aw-primary)"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-
-      {/* Data points (subtle) */}
-      {points.map((point, i) => (
-        <circle
-          key={`${point.label}-${i}`}
-          cx={point.x}
-          cy={point.y}
-          r={i === points.length - 1 ? 3 : 1.5}
-          fill={i === points.length - 1 ? "var(--aw-primary)" : "white"}
-          stroke="var(--aw-primary)"
-          strokeWidth={i === points.length - 1 ? 0 : 1}
+    <ResponsiveContainer width="100%" height={180}>
+      <AreaChart
+        data={data}
+        margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+      >
+        <defs>
+          <linearGradient id="nw-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#FDBA74" stopOpacity={0.08} />
+            <stop offset="100%" stopColor="#FDBA74" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <XAxis
+          dataKey="label"
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 10, fill: "#6B5B4B", opacity: 0.5 }}
+          dy={6}
         />
-      ))}
-
-      {/* Last point value label */}
-      {lastPoint && points.length > 1 && (
-        <text
-          x={lastPoint.x}
-          y={lastPoint.y - 8}
-          textAnchor="middle"
-          fill="var(--aw-primary)"
-          fontSize="10"
-          fontWeight="600"
-          fontFamily="inherit"
-        >
-          {fmt(lastPoint.value)}
-        </text>
-      )}
-
-      {/* X-axis labels */}
-      {points.map((point, i) => (
-        <text
-          key={`label-${point.label}-${i}`}
-          x={point.x}
-          y={chartHeight - 6}
-          textAnchor="middle"
-          fill="var(--aw-text-muted)"
-          fontSize="9"
-          fontFamily="inherit"
-          opacity="0.5"
-        >
-          {point.label}
-        </text>
-      ))}
-
-      {/* Single-point state: centered value */}
-      {points.length === 1 && firstPoint && (
-        <text
-          x={firstPoint.x}
-          y={firstPoint.y - 10}
-          textAnchor="middle"
-          fill="var(--aw-primary)"
-          fontSize="11"
-          fontWeight="600"
-          fontFamily="inherit"
-        >
-          {fmt(firstPoint.value)}
-        </text>
-      )}
-    </svg>
+        <YAxis
+          domain={[domainMin, domainMax]}
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 10, fill: "#6B5B4B", opacity: 0.5 }}
+          tickFormatter={fmtCompact}
+          width={48}
+          tickCount={3}
+        />
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <Tooltip
+          content={ChartTooltipContent as any}
+          cursor={{ stroke: "#F2DECC", strokeWidth: 1 }}
+        />
+        <Area
+          type="monotoneX"
+          dataKey="value"
+          stroke="#FDBA74"
+          strokeWidth={1.5}
+          fill="url(#nw-fill)"
+          dot={false}
+          activeDot={{
+            r: 3.5,
+            fill: "#FDBA74",
+            stroke: "white",
+            strokeWidth: 2,
+          }}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -692,29 +628,27 @@ export function AccountsView() {
         </WorkspacePanel>
       ) : null}
 
-      <WorkspacePanel title="Net worth chart">
-        <div className="mb-5 flex flex-wrap items-end gap-3">
-          <p className="aw-number text-4xl tracking-[-0.04em] text-[var(--aw-text)]">
+      <WorkspacePanel title="Net worth">
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <p className="aw-number text-3xl font-semibold tracking-[-0.03em] text-[var(--aw-text)]">
             {fmt(summary.netWorth)}
           </p>
-          <p className="pb-1 text-sm text-[var(--aw-text-muted)]">
-            {accountRows.length > 0
-              ? "Unified account history"
-              : "Add an account to begin tracking"}
-          </p>
+          {accountRows.length > 0 ? (
+            <p className="pb-0.5 text-xs text-[var(--aw-text-muted)]">
+              Unified history
+            </p>
+          ) : null}
         </div>
 
-        <div className="min-w-0 rounded-[16px] border border-[var(--aw-border)] bg-white px-3 py-4">
-          {chartData.length === 0 ? (
-            <div className="flex h-[248px] flex-col items-center justify-center text-center">
-              <p className="text-sm text-[var(--aw-text-muted)]">
-                Add an account to start tracking your net worth over time.
-              </p>
-            </div>
-          ) : (
-            <NetWorthTrendChart data={chartData} />
-          )}
-        </div>
+        {chartData.length === 0 ? (
+          <div className="flex h-[180px] flex-col items-center justify-center text-center">
+            <p className="text-sm text-[var(--aw-text-muted)]">
+              Add an account to start tracking your net worth over time.
+            </p>
+          </div>
+        ) : (
+          <NetWorthTrendChart data={chartData} />
+        )}
       </WorkspacePanel>
 
       <div className="aw-workspace-grid mt-4" data-columns="2-1">
