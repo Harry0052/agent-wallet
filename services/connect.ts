@@ -86,6 +86,7 @@ interface PlaidExitMetadata {
 
 interface PlaidCreateConfig {
   token: string;
+  receivedRedirectUri?: string;
   onSuccess: (publicToken: string) => void;
   onExit: (error: PlaidLinkError | null, metadata: PlaidExitMetadata) => void;
 }
@@ -169,7 +170,10 @@ async function ensurePlaidScriptLoaded(): Promise<void> {
   return plaidScriptPromise;
 }
 
-async function openPlaidProviderFlow(linkToken: string): Promise<string> {
+async function openPlaidProviderFlow(
+  linkToken: string,
+  receivedRedirectUri?: string,
+): Promise<string> {
   await ensurePlaidScriptLoaded();
 
   const plaid = window.Plaid;
@@ -179,17 +183,15 @@ async function openPlaidProviderFlow(linkToken: string): Promise<string> {
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;
-    const handler = plaid.create({
+    let handler: PlaidLinkHandler;
+
+    const config: PlaidCreateConfig = {
       token: linkToken,
       onSuccess: (publicToken: string) => {
         if (settled) return;
         settled = true;
         resolve(publicToken);
-        try {
-          handler.destroy?.();
-        } catch {
-          // Best-effort cleanup only.
-        }
+        try { handler.destroy?.(); } catch { /* best-effort */ }
       },
       onExit: (error, metadata) => {
         if (settled) return;
@@ -223,14 +225,15 @@ async function openPlaidProviderFlow(linkToken: string): Promise<string> {
           }));
         }
 
-        try {
-          handler.destroy?.();
-        } catch {
-          // Best-effort cleanup only.
-        }
+        try { handler.destroy?.(); } catch { /* best-effort */ }
       },
-    });
+    };
 
+    if (receivedRedirectUri) {
+      config.receivedRedirectUri = receivedRedirectUri;
+    }
+
+    handler = plaid.create(config);
     handler.open();
   });
 }
@@ -323,9 +326,23 @@ export async function exchangeConnectedAccountPublicToken(
   };
 }
 
+export function consumePlaidOAuthStateId(): string | null {
+  if (typeof window === "undefined") return null;
+  const stateId = sessionStorage.getItem("plaid_oauth_state_id");
+  if (stateId) {
+    sessionStorage.removeItem("plaid_oauth_state_id");
+  }
+  return stateId;
+}
+
 export async function connectAccountsViaSupportedFlow(): Promise<ConnectedAccountExchangeResult> {
+  const oauthStateId = consumePlaidOAuthStateId();
   const token = await createConnectedAccountLinkToken();
-  const publicToken = await openPlaidProviderFlow(token.linkToken);
+
+  // If resuming after an OAuth redirect, pass the current page URL so Plaid
+  // Link can match it against the registered redirect URI.
+  const redirectUri = oauthStateId ? window.location.href : undefined;
+  const publicToken = await openPlaidProviderFlow(token.linkToken, redirectUri);
   return exchangeConnectedAccountPublicToken(publicToken);
 }
 

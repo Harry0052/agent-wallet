@@ -109,7 +109,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (error instanceof PlaidApiError) {
-      const userMessage = error.displayMessage || "Unable to start account linking. Please try again.";
       logServerEvent("error", "connect.create_link_token.failed", {
         status: 502,
         plaidErrorCode: error.errorCode,
@@ -117,8 +116,31 @@ export async function POST(req: NextRequest) {
         plaidRequestId: error.requestId,
         internalMessage: error.message,
       });
+
+      // Map known Plaid error codes to safe, user-friendly messages
+      let userMessage = error.displayMessage;
+      if (!userMessage) {
+        switch (error.errorCode) {
+          case "INVALID_API_KEYS":
+            userMessage = "Account linking is temporarily unavailable. Please contact support.";
+            break;
+          case "INVALID_FIELD":
+          case "MISSING_FIELDS":
+            userMessage = "Account linking configuration error. Please contact support.";
+            break;
+          case "INSTITUTION_NOT_FOUND":
+          case "INSTITUTION_NOT_RESPONDING":
+          case "INSTITUTION_DOWN":
+            userMessage = "This bank is temporarily unavailable. Please try again later.";
+            break;
+          default:
+            userMessage = "Unable to start account linking. Please try again.";
+        }
+      }
+
+      const recoverable = error.errorCode !== "INVALID_API_KEYS";
       return NextResponse.json(
-        { ...apiError("UNKNOWN_FAILURE", userMessage, true), plaidErrorCode: error.errorCode },
+        { ...apiError("UNKNOWN_FAILURE", userMessage, recoverable), plaidErrorCode: error.errorCode },
         { status: 502 },
       );
     }
