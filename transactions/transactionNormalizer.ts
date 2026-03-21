@@ -17,7 +17,14 @@ export interface NormalizedTransactionRecord {
   amount: number;
   currency: string;
   category: string;
+  category_detailed: string | null;
   pending: boolean;
+  pending_transaction_id: string | null;
+  payment_channel: string | null;
+  authorized_date: string | null;
+  original_description: string | null;
+  logo_url: string | null;
+  merchant_entity_id: string | null;
   occurred_at: string;
 }
 
@@ -77,7 +84,14 @@ export function normalizePlaidTransaction(
       input.raw.unofficial_currency_code,
     ),
     category: normalizeCategory(input.raw),
+    category_detailed: input.raw.personal_finance_category?.detailed?.toLowerCase() ?? null,
     pending: Boolean(input.raw.pending),
+    pending_transaction_id: input.raw.pending_transaction_id ?? null,
+    payment_channel: input.raw.payment_channel ?? null,
+    authorized_date: input.raw.authorized_date ?? null,
+    original_description: input.raw.name ?? null,
+    logo_url: input.raw.logo_url ?? null,
+    merchant_entity_id: input.raw.merchant_entity_id ?? null,
     occurred_at: normalizeOccurredAt(input.raw),
   };
 }

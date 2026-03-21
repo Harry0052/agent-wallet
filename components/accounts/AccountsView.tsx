@@ -176,33 +176,37 @@ function toSmoothPath(points: Array<{ x: number; y: number }>): string {
 }
 
 function NetWorthTrendChart(props: { data: TrendPoint[] }) {
-  const chartWidth = 100;
-  const chartHeight = 64;
-  const paddingX = 8;
-  const paddingY = 6;
+  const chartWidth = 400;
+  const chartHeight = 200;
+  const paddingLeft = 52;
+  const paddingRight = 16;
+  const paddingTop = 20;
+  const paddingBottom = 28;
   const values = props.data.map((point) => point.value);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const hasVariance = maxValue !== minValue;
-  const domainMin = hasVariance ? minValue : minValue - Math.max(Math.abs(minValue) * 0.04, 1);
-  const domainMax = hasVariance ? maxValue : maxValue + Math.max(Math.abs(maxValue) * 0.04, 1);
+  // Add 8% domain padding so the line never touches edges
+  const domainPad = hasVariance ? (maxValue - minValue) * 0.08 : Math.max(Math.abs(minValue) * 0.06, 50);
+  const domainMin = minValue - domainPad;
+  const domainMax = maxValue + domainPad;
   const range = Math.max(domainMax - domainMin, 1);
-  const tickCount = 3;
+  const tickCount = 4;
   const ticks = Array.from({ length: tickCount }, (_, index) => {
     const ratio = index / (tickCount - 1);
     return domainMax - ratio * range;
   });
-  const usableWidth = chartWidth - paddingX * 2;
-  const usableHeight = chartHeight - paddingY * 2;
+  const usableWidth = chartWidth - paddingLeft - paddingRight;
+  const usableHeight = chartHeight - paddingTop - paddingBottom;
   const points = props.data.map((point, index) => {
     const x = props.data.length === 1
-      ? chartWidth / 2
-      : paddingX + (usableWidth * index) / (props.data.length - 1);
-    const y = paddingY + ((domainMax - point.value) / range) * usableHeight;
+      ? paddingLeft + usableWidth / 2
+      : paddingLeft + (usableWidth * index) / (props.data.length - 1);
+    const y = paddingTop + ((domainMax - point.value) / range) * usableHeight;
     return { ...point, x, y };
   });
   const smoothPath = toSmoothPath(points);
-  const baselineY = chartHeight - paddingY;
+  const baselineY = paddingTop + usableHeight;
   const lastPoint = points[points.length - 1];
   const firstPoint = points[0];
   const areaPath = points.length >= 2
@@ -210,79 +214,124 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
     : "";
 
   return (
-    <div className="grid md:grid-cols-[40px_minmax(0,1fr)]">
-      <div className="hidden h-[248px] flex-col justify-between py-1 text-[9px] tabular-nums text-[var(--aw-text-muted)]/40 md:flex">
-        {ticks.map((tick) => (
-          <span key={tick} className="aw-number">
-            {fmt(tick)}
-          </span>
-        ))}
-      </div>
+    <svg
+      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+      className="h-[220px] w-full"
+      aria-label="Net worth trend"
+      role="img"
+    >
+      <defs>
+        <linearGradient id="nw-area-gradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--aw-primary)" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="var(--aw-primary)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
 
-      <div className="min-w-0">
-        <svg
-          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          preserveAspectRatio="none"
-          className="h-[248px] w-full"
-          aria-label="Net worth trend"
-          role="img"
-        >
-          <defs>
-            <linearGradient id="nw-area-gradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--aw-chart-primary)" stopOpacity="0.24" />
-              <stop offset="50%" stopColor="var(--aw-chart-primary)" stopOpacity="0.06" />
-              <stop offset="100%" stopColor="var(--aw-chart-primary)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {ticks.map((tick) => {
-            const y = paddingY + ((domainMax - tick) / range) * usableHeight;
-            return (
-              <line
-                key={tick}
-                x1={paddingX}
-                x2={chartWidth - paddingX}
-                y1={y}
-                y2={y}
-                stroke="var(--aw-chart-grid)"
-                strokeWidth="0.25"
-                opacity="0.5"
-              />
-            );
-          })}
-          {areaPath && (
-            <path d={areaPath} fill="url(#nw-area-gradient)" />
-          )}
-          <path
-            d={smoothPath}
-            fill="none"
-            stroke="var(--aw-chart-primary)"
-            strokeWidth="1.6"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-          {/* Minimal last-point indicator */}
-          {lastPoint && (
-            <g>
-              <circle cx={lastPoint.x} cy={lastPoint.y} r="1.5" fill="white" stroke="var(--aw-chart-primary)" strokeWidth="0.7" />
-              <text x={lastPoint.x} y={lastPoint.y - 3} textAnchor="middle" fill="var(--aw-chart-primary)" fontSize="2.8" fontWeight="600" fontFamily="inherit">
-                {fmt(lastPoint.value)}
-              </text>
-            </g>
-          )}
-        </svg>
+      {/* Gridlines */}
+      {ticks.map((tick) => {
+        const y = paddingTop + ((domainMax - tick) / range) * usableHeight;
+        return (
+          <g key={tick}>
+            <line
+              x1={paddingLeft}
+              x2={chartWidth - paddingRight}
+              y1={y}
+              y2={y}
+              stroke="var(--aw-border)"
+              strokeWidth="0.5"
+              strokeDasharray="3 3"
+              opacity="0.5"
+            />
+            <text
+              x={paddingLeft - 8}
+              y={y + 1}
+              textAnchor="end"
+              dominantBaseline="middle"
+              fill="var(--aw-text-muted)"
+              fontSize="9"
+              fontFamily="inherit"
+              opacity="0.5"
+            >
+              {fmt(Math.round(tick))}
+            </text>
+          </g>
+        );
+      })}
 
-        <div
-          className="grid pt-1 text-[9px] text-[var(--aw-text-muted)]/40"
-          style={{ gridTemplateColumns: `repeat(${props.data.length}, minmax(0, 1fr))` }}
+      {/* Area fill */}
+      {areaPath && (
+        <path d={areaPath} fill="url(#nw-area-gradient)" />
+      )}
+
+      {/* Line */}
+      <path
+        d={smoothPath}
+        fill="none"
+        stroke="var(--aw-primary)"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+
+      {/* Data points (subtle) */}
+      {points.map((point, i) => (
+        <circle
+          key={`${point.label}-${i}`}
+          cx={point.x}
+          cy={point.y}
+          r={i === points.length - 1 ? 3 : 1.5}
+          fill={i === points.length - 1 ? "var(--aw-primary)" : "white"}
+          stroke="var(--aw-primary)"
+          strokeWidth={i === points.length - 1 ? 0 : 1}
+        />
+      ))}
+
+      {/* Last point value label */}
+      {lastPoint && points.length > 1 && (
+        <text
+          x={lastPoint.x}
+          y={lastPoint.y - 8}
+          textAnchor="middle"
+          fill="var(--aw-primary)"
+          fontSize="10"
+          fontWeight="600"
+          fontFamily="inherit"
         >
-          {props.data.map((point) => (
-            <span key={`${point.label}-${point.value}`} className="truncate text-center">
-              {point.label}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
+          {fmt(lastPoint.value)}
+        </text>
+      )}
+
+      {/* X-axis labels */}
+      {points.map((point, i) => (
+        <text
+          key={`label-${point.label}-${i}`}
+          x={point.x}
+          y={chartHeight - 6}
+          textAnchor="middle"
+          fill="var(--aw-text-muted)"
+          fontSize="9"
+          fontFamily="inherit"
+          opacity="0.5"
+        >
+          {point.label}
+        </text>
+      ))}
+
+      {/* Single-point state: centered value */}
+      {points.length === 1 && firstPoint && (
+        <text
+          x={firstPoint.x}
+          y={firstPoint.y - 10}
+          textAnchor="middle"
+          fill="var(--aw-primary)"
+          fontSize="11"
+          fontWeight="600"
+          fontFamily="inherit"
+        >
+          {fmt(firstPoint.value)}
+        </text>
+      )}
+    </svg>
   );
 }
 
@@ -344,11 +393,16 @@ export function AccountsView() {
   const error = financialData.error;
   const connectedAccounts = financialData.connectedAccounts;
 
-  const connectedKnownBalanceSum = connectedAccounts.reduce(
+  // Exclude accounts that need relinking from balance aggregates
+  const activeConnectedAccounts = connectedAccounts.filter(
+    (a) => a.item_status !== "relink_required" && a.item_status !== "error",
+  );
+
+  const connectedKnownBalanceSum = activeConnectedAccounts.reduce(
     (sum, account) => sum + (typeof account.balance === "number" ? account.balance : 0),
     0,
   );
-  const connectedKnownBalanceCount = connectedAccounts.filter(
+  const connectedKnownBalanceCount = activeConnectedAccounts.filter(
     (account) => typeof account.balance === "number",
   ).length;
 
@@ -361,9 +415,9 @@ export function AccountsView() {
       : 0;
 
   const summary = useMemo(() => summarizeAccounts([
-    ...connectedAccounts,
+    ...activeConnectedAccounts,
     ...manualAccounts.map(manualAccountToConnected),
-  ]), [connectedAccounts, manualAccounts]);
+  ]), [activeConnectedAccounts, manualAccounts]);
   const manualTotalBalance = summary.manualBalance;
   const combinedNetWorth = summary.netWorth;
 

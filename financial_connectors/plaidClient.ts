@@ -39,6 +39,14 @@ export class PlaidApiError extends Error {
   }
 }
 
+export interface PlaidAccountBalance {
+  available: number | null;
+  current: number | null;
+  limit: number | null;
+  iso_currency_code: string | null;
+  unofficial_currency_code: string | null;
+}
+
 export interface PlaidAccount {
   account_id: string;
   name: string;
@@ -46,6 +54,7 @@ export interface PlaidAccount {
   mask: string | null;
   type: string;
   subtype: string | null;
+  balances?: PlaidAccountBalance;
 }
 
 interface LinkTokenCreateResponse {
@@ -85,12 +94,22 @@ export interface PlaidSyncTransaction {
   iso_currency_code: string | null;
   unofficial_currency_code: string | null;
   pending: boolean;
+  pending_transaction_id: string | null;
   date: string;
   authorized_date: string | null;
   category: string[] | null;
   personal_finance_category?: {
     primary?: string;
     detailed?: string;
+  } | null;
+  payment_channel?: string | null;
+  logo_url?: string | null;
+  website?: string | null;
+  merchant_entity_id?: string | null;
+  location?: {
+    city?: string | null;
+    region?: string | null;
+    country?: string | null;
   } | null;
 }
 
@@ -147,6 +166,7 @@ export class PlaidClient {
     countryCodes?: string[];
     language?: string;
     products?: string[];
+    accessToken?: string;
     webhook?: string;
     redirectUri?: string;
   }): Promise<{
@@ -161,8 +181,14 @@ export class PlaidClient {
       client_name: input.clientName ?? "Calico",
       language: input.language ?? "en",
       country_codes: input.countryCodes ?? ["US"],
-      products: input.products ?? ["auth", "transactions"],
     };
+
+    // Update mode: pass access_token instead of products
+    if (input.accessToken) {
+      payload.access_token = input.accessToken;
+    } else {
+      payload.products = input.products ?? ["auth", "transactions"];
+    }
 
     if (input.webhook) {
       payload.webhook = input.webhook;
@@ -212,6 +238,30 @@ export class PlaidClient {
     return {
       accounts: response.accounts,
       institutionId: response.item.institution_id,
+      requestId: response.request_id,
+    };
+  }
+
+  async getBalances(accessToken: string, options?: {
+    accountIds?: string[];
+  }): Promise<{
+    accounts: PlaidAccount[];
+    requestId: string;
+  }> {
+    const payload: Record<string, unknown> = {
+      access_token: accessToken,
+    };
+    if (options?.accountIds?.length) {
+      payload.options = { account_ids: options.accountIds };
+    }
+
+    const response = await this.request<AccountsGetResponse>(
+      "/accounts/balance/get",
+      payload,
+    );
+
+    return {
+      accounts: response.accounts,
       requestId: response.request_id,
     };
   }

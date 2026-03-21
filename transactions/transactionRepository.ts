@@ -15,6 +15,13 @@ interface StoredTransactionRow {
   pending: boolean;
   occurred_at: string;
   category: string;
+  category_detailed: string | null;
+  pending_transaction_id: string | null;
+  payment_channel: string | null;
+  authorized_date: string | null;
+  original_description: string | null;
+  logo_url: string | null;
+  merchant_entity_id: string | null;
 }
 
 interface SyncCursorRow {
@@ -30,7 +37,14 @@ export interface StatementTransaction {
   amount: number;
   currency: string;
   category: string;
+  category_detailed?: string | null;
   pending: boolean;
+  pending_transaction_id?: string | null;
+  payment_channel?: string | null;
+  authorized_date?: string | null;
+  original_description?: string | null;
+  logo_url?: string | null;
+  merchant_entity_id?: string | null;
   occurred_at: string;
 }
 
@@ -48,7 +62,14 @@ function rowToStatementTransaction(row: StoredTransactionRow): StatementTransact
     amount: Number(row.amount),
     currency: row.currency,
     category: row.category,
+    category_detailed: row.category_detailed ?? null,
     pending: row.pending,
+    pending_transaction_id: row.pending_transaction_id ?? null,
+    payment_channel: row.payment_channel ?? null,
+    authorized_date: row.authorized_date ?? null,
+    original_description: row.original_description ?? null,
+    logo_url: row.logo_url ?? null,
+    merchant_entity_id: row.merchant_entity_id ?? null,
     occurred_at: row.occurred_at,
   };
 }
@@ -70,13 +91,37 @@ export async function ensureTransactionSchema(): Promise<void> {
         amount NUMERIC(14, 2) NOT NULL,
         currency TEXT NOT NULL,
         pending BOOLEAN NOT NULL,
+        pending_transaction_id TEXT,
         occurred_at TIMESTAMPTZ NOT NULL,
+        authorized_date TEXT,
         category TEXT NOT NULL,
+        category_detailed TEXT,
+        payment_channel TEXT,
+        original_description TEXT,
+        logo_url TEXT,
+        merchant_entity_id TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE (user_id, provider_transaction_id)
       );
     `);
+
+    // Add columns that may not exist on older schemas
+    const txNewColumns = [
+      { name: "pending_transaction_id", definition: "TEXT" },
+      { name: "authorized_date", definition: "TEXT" },
+      { name: "category_detailed", definition: "TEXT" },
+      { name: "payment_channel", definition: "TEXT" },
+      { name: "original_description", definition: "TEXT" },
+      { name: "logo_url", definition: "TEXT" },
+      { name: "merchant_entity_id", definition: "TEXT" },
+    ];
+    for (const col of txNewColumns) {
+      await query(`
+        ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS ${col.name} ${col.definition};
+      `).catch(() => { /* column may already exist */ });
+    }
 
     await query(`
       CREATE INDEX IF NOT EXISTS idx_transactions_user_occurred_at
@@ -168,10 +213,17 @@ export async function upsertNormalizedTransactions(
           amount,
           currency,
           pending,
+          pending_transaction_id,
           occurred_at,
-          category
+          authorized_date,
+          category,
+          category_detailed,
+          payment_channel,
+          original_description,
+          logo_url,
+          merchant_entity_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::timestamptz, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::timestamptz, $12, $13, $14, $15, $16, $17, $18)
         ON CONFLICT (user_id, provider_transaction_id)
         DO UPDATE SET
           linked_account_id = EXCLUDED.linked_account_id,
@@ -180,8 +232,15 @@ export async function upsertNormalizedTransactions(
           amount = EXCLUDED.amount,
           currency = EXCLUDED.currency,
           pending = EXCLUDED.pending,
+          pending_transaction_id = EXCLUDED.pending_transaction_id,
           occurred_at = EXCLUDED.occurred_at,
+          authorized_date = EXCLUDED.authorized_date,
           category = EXCLUDED.category,
+          category_detailed = EXCLUDED.category_detailed,
+          payment_channel = EXCLUDED.payment_channel,
+          original_description = EXCLUDED.original_description,
+          logo_url = EXCLUDED.logo_url,
+          merchant_entity_id = EXCLUDED.merchant_entity_id,
           updated_at = NOW()
       `,
       [
@@ -194,8 +253,15 @@ export async function upsertNormalizedTransactions(
         row.amount,
         row.currency,
         row.pending,
+        row.pending_transaction_id,
         row.occurred_at,
+        row.authorized_date,
         row.category,
+        row.category_detailed,
+        row.payment_channel,
+        row.original_description,
+        row.logo_url,
+        row.merchant_entity_id,
       ],
     );
   }
@@ -223,6 +289,23 @@ export async function removeTransactionsByProviderIds(input: {
   return result.rows.length;
 }
 
+export async function removeTransactionsByLinkedAccount(input: {
+  userId: string;
+  linkedAccountId: string;
+}): Promise<number> {
+  await ensureTransactionSchema();
+  const result = await query<{ id: string }>(
+    `
+      DELETE FROM transactions
+      WHERE user_id = $1
+        AND linked_account_id = $2
+      RETURNING id
+    `,
+    [input.userId, input.linkedAccountId],
+  );
+  return result.rows.length;
+}
+
 export async function listNormalizedTransactions(input: {
   userId: string;
   limit?: number;
@@ -242,7 +325,14 @@ export async function listNormalizedTransactions(input: {
         currency,
         pending,
         occurred_at::text,
-        category
+        category,
+        category_detailed,
+        pending_transaction_id,
+        payment_channel,
+        authorized_date,
+        original_description,
+        logo_url,
+        merchant_entity_id
       FROM transactions
       WHERE user_id = $1
       ORDER BY occurred_at DESC

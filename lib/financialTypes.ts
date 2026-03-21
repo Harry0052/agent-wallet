@@ -110,7 +110,7 @@ export interface BudgetCategoryProgress {
   progress: number;
 }
 
-const LIABILITY_ACCOUNT_TYPES = new Set<ConnectedAccountRecord["account_type"]>([
+const LIABILITY_ACCOUNT_TYPES: ReadonlySet<string> = new Set([
   "credit",
   "loan",
 ]);
@@ -149,7 +149,14 @@ export function summarizeAccounts(accounts: ConnectedAccountRecord[]): Pick<
   let totalLiabilities = 0;
 
   for (const account of accounts) {
-    const balance = safeAmount(account.balance);
+    // For connected accounts, prefer balance_current from Plaid; fall back to balance
+    const rawBalance = account.balance_current != null
+      ? safeAmount(account.balance_current)
+      : safeAmount(account.balance);
+    // For credit cards, Plaid reports positive = owed. Normalize to negative for liabilities.
+    const isLiabilityType = LIABILITY_ACCOUNT_TYPES.has(account.account_type);
+    const balance = isLiabilityType && rawBalance > 0 ? -rawBalance : rawBalance;
+
     const sourceType = account.sourceType ?? "connected";
 
     if (sourceType === "manual") {
@@ -158,8 +165,7 @@ export function summarizeAccounts(accounts: ConnectedAccountRecord[]): Pick<
       connectedBalance += balance;
     }
 
-    const isLiability = LIABILITY_ACCOUNT_TYPES.has(account.account_type) || balance < 0;
-    if (isLiability) {
+    if (isLiabilityType || balance < 0) {
       totalLiabilities += Math.abs(balance);
     } else {
       totalAssets += balance;
@@ -406,8 +412,8 @@ export function manualAccountToConnected(
     cash: "cash",
     checking: "checking",
     savings: "savings",
-    investment: "savings",
-    other_asset: "savings",
+    investment: "investment",
+    other_asset: "other",
     other_liability: "loan",
   };
   return {

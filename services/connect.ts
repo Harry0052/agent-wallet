@@ -8,12 +8,22 @@ export type SourceState = "Synced" | "Imported" | "Inferred" | "Manual";
 export interface ConnectedAccountRecord {
   id: string;
   user_id: string;
+  plaid_item_id?: string;
   institution_name: string;
-  account_type: "credit" | "checking" | "savings" | "cash" | "loan";
+  account_type: "credit" | "checking" | "savings" | "cash" | "loan" | "investment" | "other";
+  subtype?: string | null;
   mask: string;
   nickname: string;
+  official_name?: string | null;
   last_synced_at: string | null;
   balance?: number;
+  balance_available?: number | null;
+  balance_current?: number | null;
+  balance_limit?: number | null;
+  balance_currency?: string;
+  balance_refreshed_at?: string | null;
+  item_status?: "good" | "error" | "relink_required";
+  item_error_code?: string | null;
   sourceType?: RecordSourceType;
 }
 
@@ -263,6 +273,8 @@ export async function fetchConnectedAccountsBundle(): Promise<{
     accounts: Array.isArray(payload.accounts)
       ? payload.accounts.map((account) => ({
         ...account,
+        // Derive balance from Plaid balance fields for consistent display
+        balance: account.balance ?? account.balance_current ?? account.balance_available ?? undefined,
         sourceType: normalizeRecordSourceType(account.sourceType, "connected"),
       }))
       : [],
@@ -369,6 +381,109 @@ export async function syncConnectedTransactions(): Promise<ConnectedTransactions
     sync: payload.sync,
     transactions: payload.transactions,
   };
+}
+
+export interface BalanceRefreshResult {
+  refresh: Array<{
+    user_id: string;
+    plaid_item_id: string;
+    accounts_updated: number;
+    status: "completed" | "failed" | "relink_required";
+    error_message?: string;
+  }>;
+  accounts: ConnectedAccountRecord[];
+}
+
+export async function refreshConnectedBalances(): Promise<BalanceRefreshResult> {
+  const response = await fetch("/api/connect/balances", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+
+  const payload = await safeJson<{
+    ok?: boolean;
+    refresh?: BalanceRefreshResult["refresh"];
+    accounts?: ConnectedAccountRecord[];
+    error?: string;
+    errorCode?: string;
+  }>(response);
+
+  if (!response.ok || !payload.ok) {
+    throw toError(payload);
+  }
+
+  return {
+    refresh: Array.isArray(payload.refresh) ? payload.refresh : [],
+    accounts: Array.isArray(payload.accounts)
+      ? payload.accounts.map((account) => ({
+        ...account,
+        sourceType: normalizeRecordSourceType(account.sourceType, "connected"),
+      }))
+      : [],
+  };
+}
+
+export async function createRelinkToken(plaidItemId: string): Promise<{
+  linkToken: string;
+  expiration: string;
+}> {
+  const response = await fetch("/api/connect/relink", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plaid_item_id: plaidItemId, action: "create_token" }),
+  });
+
+  const payload = await safeJson<{
+    ok?: boolean;
+    link_token?: string;
+    expiration?: string;
+    error?: string;
+    errorCode?: string;
+  }>(response);
+
+  if (!response.ok || !payload.ok || !payload.link_token) {
+    throw toError(payload);
+  }
+
+  return {
+    linkToken: payload.link_token,
+    expiration: payload.expiration || "",
+  };
+}
+
+export async function completeRelink(plaidItemId: string): Promise<ConnectedAccountExchangeResult> {
+  const response = await fetch("/api/connect/relink", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plaid_item_id: plaidItemId, action: "complete" }),
+  });
+
+  const payload = await safeJson<{
+    ok?: boolean;
+    accounts?: ConnectedAccountRecord[];
+    institutions?: ConnectedInstitutionRecord[];
+    error?: string;
+    errorCode?: string;
+  }>(response);
+
+  if (!response.ok || !payload.ok) {
+    throw toError(payload);
+  }
+
+  return {
+    accounts: Array.isArray(payload.accounts) ? payload.accounts : [],
+    institutions: Array.isArray(payload.institutions) ? payload.institutions : [],
+  };
+}
+
+/**
+ * Full relink flow: create update-mode link token → open Plaid Link → complete relink.
+ */
+export async function relinkAccount(plaidItemId: string): Promise<ConnectedAccountExchangeResult> {
+  const token = await createRelinkToken(plaidItemId);
+  await openPlaidProviderFlow(token.linkToken);
+  return completeRelink(plaidItemId);
 }
 
 export async function removeConnectedAccount(accountId: string): Promise<{

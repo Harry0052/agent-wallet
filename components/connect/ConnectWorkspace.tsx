@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Landmark, Loader2, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Landmark, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
   ConnectApiError,
   connectAccountsViaSupportedFlow,
   fetchConnectedAccountsBundle,
+  refreshConnectedBalances,
+  relinkAccount,
   removeConnectedAccount,
   syncConnectedTransactions,
   type ConnectedAccountRecord,
@@ -33,10 +35,29 @@ const MANUAL_ACCOUNT_OPTIONS: Array<{ value: ManualAccountType; label: string }>
   { value: "loan", label: "Loan" },
 ];
 
-function accountHealth(account: ConnectedAccountRecord): "healthy" | "stale" {
+function accountHealth(account: ConnectedAccountRecord): "healthy" | "stale" | "relink_required" | "error" {
+  if (account.item_status === "relink_required") return "relink_required";
+  if (account.item_status === "error") return "error";
   if (!account.last_synced_at) return "stale";
   const ageMs = Date.now() - Date.parse(account.last_synced_at);
   return ageMs <= 1000 * 60 * 60 * 24 * 3 ? "healthy" : "stale";
+}
+
+function healthDotColor(health: ReturnType<typeof accountHealth>): string {
+  switch (health) {
+    case "healthy": return "bg-[var(--aw-success)]";
+    case "stale": return "bg-amber-400";
+    case "relink_required": return "bg-[var(--aw-danger)]";
+    case "error": return "bg-[var(--aw-danger)]";
+  }
+}
+
+function healthLabel(health: ReturnType<typeof accountHealth>): string | null {
+  switch (health) {
+    case "relink_required": return "Reconnect required";
+    case "error": return "Connection lost";
+    default: return null;
+  }
 }
 
 function toConnectionFlowError(error: unknown): {
@@ -74,6 +95,7 @@ export function ConnectWorkspace() {
   const [errorCanRetry, setErrorCanRetry] = useState(false);
   const [accounts, setAccounts] = useState<ConnectedAccountRecord[]>([]);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [relinkingItemId, setRelinkingItemId] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -125,7 +147,11 @@ export function ConnectWorkspace() {
         );
         setSyncing(true);
         try {
-          await syncConnectedTransactions();
+          // Sync transactions + refresh balances after new link
+          await Promise.allSettled([
+            syncConnectedTransactions(),
+            refreshConnectedBalances(),
+          ]);
         } catch {
           // sync can fail silently
         }
@@ -156,6 +182,40 @@ export function ConnectWorkspace() {
       setRemovingId(null);
     }
   };
+
+  const onRelink = async (account: ConnectedAccountRecord) => {
+    if (!account.plaid_item_id) return;
+    setError(null);
+    setNotice(null);
+    setRelinkingItemId(account.plaid_item_id);
+    try {
+      await relinkAccount(account.plaid_item_id);
+      setNotice("Account reconnected successfully.");
+      setSyncing(true);
+      try {
+        await Promise.allSettled([
+          syncConnectedTransactions(),
+          refreshConnectedBalances(),
+        ]);
+      } catch {
+        // sync can fail silently
+      }
+      setSyncing(false);
+      await load();
+    } catch (e) {
+      const parsed = toConnectionFlowError(e);
+      if (parsed.message !== "Account linking was canceled.") {
+        setError(parsed.message);
+      }
+      setErrorCanRetry(parsed.canRetry);
+    } finally {
+      setRelinkingItemId(null);
+    }
+  };
+
+  const relinkRequiredAccounts = accounts.filter(
+    (a) => a.item_status === "relink_required" || a.item_status === "error",
+  );
 
   const addManualAccount = () => {
     setManualError(null);
@@ -231,6 +291,22 @@ export function ConnectWorkspace() {
           </ManualEntryButton>
         </div>
       </div>
+
+      {relinkRequiredAccounts.length > 0 && sourceMode === "connected" ? (
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-300/40 bg-amber-50 px-4 py-3">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-amber-900">
+              {relinkRequiredAccounts.length === 1
+                ? "1 account needs to be reconnected"
+                : `${relinkRequiredAccounts.length} accounts need to be reconnected`}
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700">
+              Your bank requires you to re-authenticate. Tap Reconnect next to the affected account below.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {notice ? (
         <div className="mt-4 rounded-xl border border-[var(--aw-success)]/20 bg-[var(--aw-success)]/10 px-4 py-3 text-sm text-[var(--aw-success)]">
@@ -353,35 +429,61 @@ export function ConnectWorkspace() {
             const health = accountHealth(account);
             const label =
               account.nickname || `${account.institution_name} ••••${account.mask}`;
+            const needsRelink = health === "relink_required" || health === "error";
+            const isRelinking = relinkingItemId === account.plaid_item_id;
+            const statusLabel = healthLabel(health);
+
             return (
-              <div key={account.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
+              <div
+                key={account.id}
+                className={`flex items-center justify-between gap-3 px-4 py-3.5 ${
+                  needsRelink ? "bg-amber-50/60" : ""
+                }`}
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="text-[13px] font-medium text-[var(--aw-text)]">{label}</p>
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        health === "healthy" ? "bg-[var(--aw-success)]" : "bg-[var(--aw-warning)]"
-                      }`}
-                    />
+                    <span className={`h-1.5 w-1.5 rounded-full ${healthDotColor(health)}`} />
+                    {statusLabel ? (
+                      <span className="rounded-md bg-[var(--aw-danger)]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--aw-danger)]">
+                        {statusLabel}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
                     {account.account_type}
+                    {typeof account.balance === "number" ? ` · ${fmt(account.balance)}` : ""}
                     {account.last_synced_at
                       ? ` · Synced ${fmtDate(account.last_synced_at)}`
                       : " · Not yet synced"}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onRemove(account);
-                  }}
-                  disabled={removingId === account.id}
-                  className="rounded-lg p-2 text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-danger)]/10 hover:text-[var(--aw-danger)] disabled:opacity-40"
-                  title="Remove account"
-                >
-                  <Trash2 size={14} />
-                </button>
+                <div className="flex items-center gap-1">
+                  {needsRelink && account.plaid_item_id ? (
+                    <button
+                      type="button"
+                      onClick={() => { void onRelink(account); }}
+                      disabled={isRelinking}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      {isRelinking ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={12} />
+                      )}
+                      {isRelinking ? "Reconnecting..." : "Reconnect"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => { void onRemove(account); }}
+                    disabled={removingId === account.id}
+                    className="rounded-lg p-2 text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-danger)]/10 hover:text-[var(--aw-danger)] disabled:opacity-40"
+                    title="Remove account"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             );
           })}

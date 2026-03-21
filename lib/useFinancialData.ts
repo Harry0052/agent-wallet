@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchConnectedAccountsBundle,
+  refreshConnectedBalances,
   type ConnectedAccountRecord,
 } from "@/services/connect";
 import {
@@ -129,6 +130,17 @@ export function useFinancialData(): FinancialData {
 
   // ── Fetch connected data from APIs ──────────────────────────────────────
   const fetchConnectedData = useCallback(async () => {
+    // Refresh balances first, then fetch the bundle so we get fresh numbers.
+    // Balance refresh is best-effort — if it fails, we still show cached balances.
+    try {
+      const refreshResult = await refreshConnectedBalances();
+      if (refreshResult.accounts.length > 0) {
+        setConnectedAccounts(refreshResult.accounts);
+      }
+    } catch {
+      // Non-fatal: fall through to fetchConnectedAccountsBundle
+    }
+
     const [accountsResult, statementResult, recurringResult] = await Promise.allSettled([
       fetchConnectedAccountsBundle(),
       fetchUnifiedStatement({ page_size: 160 }),

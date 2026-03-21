@@ -13,7 +13,14 @@ export interface StatementTransaction {
   amount: number;
   currency: string;
   category: string;
+  category_detailed?: string | null;
   pending: boolean;
+  pending_transaction_id?: string | null;
+  payment_channel?: string | null;
+  authorized_date?: string | null;
+  original_description?: string | null;
+  logo_url?: string | null;
+  merchant_entity_id?: string | null;
   occurred_at: string;
   transaction_type?: "income" | "expense" | "transfer";
   account_name?: string;

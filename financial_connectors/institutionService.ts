@@ -31,6 +31,7 @@ export async function removeConnectedAccount(input: {
 }): Promise<{
   removed: boolean;
   removedItem: boolean;
+  transactionsRemoved: number;
 }> {
   assertNoAiFinancialConnectorAccess("/financial_connectors/institutionService.ts");
   return removeStoredConnectedAccount(input);
