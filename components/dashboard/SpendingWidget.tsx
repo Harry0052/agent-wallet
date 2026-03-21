@@ -33,8 +33,8 @@ export function SpendingWidget(props: DashboardWidgetProps & { dragHandleProps?:
                 data={summary.spending}
                 xKey="day"
                 series={[
-                  { key: "lastMonth", stroke: calicoTheme.primarySoft, strokeWidth: 2.2 },
-                  { key: "thisMonth", stroke: calicoTheme.primary, strokeWidth: 2.8 },
+                  { key: "lastMonth", stroke: calicoTheme.primarySoft, strokeWidth: 1 },
+                  { key: "thisMonth", stroke: calicoTheme.primary, strokeWidth: 1.2 },
                 ]}
                 formatValue={toCurrency}
                 maxXAxisLabels={5}

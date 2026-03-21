@@ -195,39 +195,39 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
 
   if (data.length === 0) return null;
 
-  // Single point: show a minimal centered indicator
+  // Single point: minimal centered state
   if (data.length === 1) {
     return (
-      <div className="flex h-[180px] flex-col items-center justify-center">
-        <p className="aw-number text-2xl font-semibold text-[var(--aw-primary)]">
+      <div className="flex h-[200px] flex-col items-center justify-center">
+        <p className="aw-number text-2xl font-semibold text-[var(--aw-text)]">
           {fmt(data[0].value)}
         </p>
-        <p className="mt-1 text-xs text-[var(--aw-text-muted)]">{data[0].label}</p>
-        <p className="mt-3 text-[11px] text-[var(--aw-text-muted)]">
-          More history will appear as your balances update over time.
+        <p className="mt-1.5 text-[11px] text-[var(--aw-text-muted)]">{data[0].label}</p>
+        <p className="mt-4 text-[11px] text-[var(--aw-text-muted)]/60">
+          More history will appear as balances update.
         </p>
       </div>
     );
   }
 
-  // Compute clean domain with padding
+  // Domain: use auto with generous padding
   const values = data.map((d) => d.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const isFlat = max === min;
-  const pad = isFlat ? Math.max(Math.abs(min) * 0.05, 100) : (max - min) * 0.1;
-  const domainMin = Math.floor((min - pad) / 100) * 100;
-  const domainMax = Math.ceil((max + pad) / 100) * 100;
+  const pad = isFlat ? Math.max(Math.abs(min) * 0.08, 200) : (max - min) * 0.15;
+  const domainMin = min - pad;
+  const domainMax = max + pad;
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
+    <ResponsiveContainer width="100%" height={200}>
       <AreaChart
         data={data}
-        margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+        margin={{ top: 16, right: 12, bottom: 4, left: -8 }}
       >
         <defs>
           <linearGradient id="nw-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#FDBA74" stopOpacity={0.08} />
+            <stop offset="0%" stopColor="#FDBA74" stopOpacity={0.06} />
             <stop offset="100%" stopColor="#FDBA74" stopOpacity={0} />
           </linearGradient>
         </defs>
@@ -235,35 +235,36 @@ function NetWorthTrendChart(props: { data: TrendPoint[] }) {
           dataKey="label"
           axisLine={false}
           tickLine={false}
-          tick={{ fontSize: 10, fill: "#6B5B4B", opacity: 0.5 }}
-          dy={6}
+          tick={{ fontSize: 10, fill: "#9B8B7B" }}
+          dy={8}
+          interval="preserveStartEnd"
         />
         <YAxis
           domain={[domainMin, domainMax]}
           axisLine={false}
           tickLine={false}
-          tick={{ fontSize: 10, fill: "#6B5B4B", opacity: 0.5 }}
+          tick={{ fontSize: 10, fill: "#9B8B7B" }}
           tickFormatter={fmtCompact}
-          width={48}
-          tickCount={3}
+          width={52}
+          tickCount={4}
         />
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <Tooltip
           content={ChartTooltipContent as any}
-          cursor={{ stroke: "#F2DECC", strokeWidth: 1 }}
+          cursor={{ stroke: "#E7C6A3", strokeWidth: 0.5, strokeDasharray: "3 3" }}
         />
         <Area
-          type="monotoneX"
+          type="linear"
           dataKey="value"
-          stroke="#FDBA74"
-          strokeWidth={1.5}
+          stroke="#E8A45E"
+          strokeWidth={1}
           fill="url(#nw-fill)"
           dot={false}
           activeDot={{
-            r: 3.5,
-            fill: "#FDBA74",
+            r: 2.5,
+            fill: "#E8A45E",
             stroke: "white",
-            strokeWidth: 2,
+            strokeWidth: 1.5,
           }}
         />
       </AreaChart>

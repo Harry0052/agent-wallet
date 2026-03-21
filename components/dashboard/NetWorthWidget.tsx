@@ -63,7 +63,7 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
                 key: "value",
                 stroke: calicoTheme.primary,
                 fill: calicoTheme.primary,
-                strokeWidth: 2.8,
+                strokeWidth: 1.2,
               }]}
               formatValue={toCurrency}
               maxXAxisLabels={6}
