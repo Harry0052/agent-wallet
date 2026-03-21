@@ -3,9 +3,9 @@ import { z } from "zod";
 import { isAuthError } from "@/lib/server/auth";
 import {
   apiError,
-  classifyTaskError,
   logServerEvent,
 } from "@/lib/server/observability";
+import { PlaidApiError } from "@/financial_connectors/plaidClient";
 import { createUserLinkToken } from "@/financial_connectors/linkService";
 import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
@@ -98,29 +98,44 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const rawMessage = error instanceof z.ZodError
-      ? error.issues.map((issue) => issue.message).join("; ")
-      : error instanceof Error
-        ? error.message
-        : "Failed to create Plaid link token.";
+    if (error instanceof z.ZodError) {
+      const message = error.issues.map((issue) => issue.message).join("; ");
+      logServerEvent("error", "connect.create_link_token.failed", {
+        status: 400,
+        errorCode: "VALIDATION_ERROR",
+        message,
+      });
+      return NextResponse.json(apiError("VALIDATION_ERROR", message, true), { status: 400 });
+    }
 
-    // Do not leak secret/config details to the client
-    const isConfigError = /missing required secret|plaid_client_id|plaid_secret/i.test(rawMessage);
+    if (error instanceof PlaidApiError) {
+      const userMessage = error.displayMessage || "Unable to start account linking. Please try again.";
+      logServerEvent("error", "connect.create_link_token.failed", {
+        status: 502,
+        plaidErrorCode: error.errorCode,
+        plaidErrorType: error.errorType,
+        plaidRequestId: error.requestId,
+        internalMessage: error.message,
+      });
+      return NextResponse.json(
+        { ...apiError("UNKNOWN_FAILURE", userMessage, true), plaidErrorCode: error.errorCode },
+        { status: 502 },
+      );
+    }
+
+    const rawMessage = error instanceof Error ? error.message : "Failed to create link token.";
+    const isConfigError = /missing required secret|invalid or missing plaid_env/i.test(rawMessage);
     const message = isConfigError
       ? "Account linking is not available. Please contact support."
       : rawMessage;
-    const status = error instanceof z.ZodError ? 400 : isConfigError ? 503 : 500;
-    const errorCode = classifyTaskError({
-      message,
-      validation: error instanceof z.ZodError,
-    });
+    const status = isConfigError ? 503 : 500;
 
     logServerEvent("error", "connect.create_link_token.failed", {
       status,
-      errorCode,
-      message,
+      errorCode: "UNKNOWN_FAILURE",
+      internalMessage: rawMessage,
     });
 
-    return NextResponse.json(apiError(errorCode, message, true), { status });
+    return NextResponse.json(apiError("UNKNOWN_FAILURE", message, !isConfigError), { status });
   }
 }

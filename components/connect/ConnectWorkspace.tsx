@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Landmark, Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
+  ConnectApiError,
   connectAccountsViaSupportedFlow,
   fetchConnectedAccountsBundle,
   removeConnectedAccount,
@@ -41,25 +42,23 @@ function accountHealth(account: ConnectedAccountRecord): "healthy" | "stale" {
 function toConnectionFlowError(error: unknown): {
   message: string;
   isConfig: boolean;
+  canRetry: boolean;
 } {
+  if (error instanceof ConnectApiError) {
+    if (error.errorCode === "USER_CANCELED") {
+      return { message: "Account linking was canceled.", isConfig: false, canRetry: true };
+    }
+    return { message: error.message, isConfig: false, canRetry: true };
+  }
+
   const raw = error instanceof Error ? error.message : "Account linking failed.";
-  const lower = raw.toLowerCase();
-  if (
-    lower.includes("plaid") ||
-    lower.includes("link token") ||
-    lower.includes("client_id") ||
-    lower.includes("secret") ||
-    lower.includes("missing required")
-  ) {
-    return {
-      message: "Account linking isn't available right now. Please try again later.",
-      isConfig: true,
-    };
+
+  // Only treat missing-secret / startup errors as config issues
+  if (/not available.*contact support/i.test(raw)) {
+    return { message: raw, isConfig: true, canRetry: false };
   }
-  if (lower.includes("canceled")) {
-    return { message: "Account linking was canceled.", isConfig: false };
-  }
-  return { message: raw, isConfig: false };
+
+  return { message: raw, isConfig: false, canRetry: true };
 }
 
 function normalizeManualBalance(type: ManualAccountType, amount: number): number {
@@ -72,6 +71,7 @@ function normalizeManualBalance(type: ManualAccountType, amount: number): number
 export function ConnectWorkspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCanRetry, setErrorCanRetry] = useState(false);
   const [accounts, setAccounts] = useState<ConnectedAccountRecord[]>([]);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
@@ -137,6 +137,7 @@ export function ConnectWorkspace() {
     } catch (e) {
       const parsed = toConnectionFlowError(e);
       setError(parsed.message);
+      setErrorCanRetry(parsed.canRetry);
     } finally {
       setLinking(false);
     }
@@ -238,8 +239,21 @@ export function ConnectWorkspace() {
       ) : null}
 
       {error ? (
-        <div className="mt-4 rounded-xl border border-[var(--aw-danger)]/20 bg-[var(--aw-danger)]/10 px-4 py-3 text-sm text-[var(--aw-danger)]">
-          {error}
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--aw-danger)]/20 bg-[var(--aw-danger)]/10 px-4 py-3 text-sm text-[var(--aw-danger)]">
+          <span>{error}</span>
+          {errorCanRetry && !linking ? (
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setErrorCanRetry(false);
+                void onLink();
+              }}
+              className="shrink-0 rounded-lg border border-[var(--aw-danger)]/30 px-3 py-1 text-xs font-medium transition hover:bg-[var(--aw-danger)]/10"
+            >
+              Try again
+            </button>
+          ) : null}
         </div>
       ) : null}
 

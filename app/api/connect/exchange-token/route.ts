@@ -3,9 +3,9 @@ import { z } from "zod";
 import { isAuthError } from "@/lib/server/auth";
 import {
   apiError,
-  classifyTaskError,
   logServerEvent,
 } from "@/lib/server/observability";
+import { PlaidApiError } from "@/financial_connectors/plaidClient";
 import { exchangePublicTokenForAccounts } from "@/financial_connectors/linkService";
 import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
@@ -96,30 +96,44 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const rawMessage =
-      error instanceof z.ZodError
-        ? error.issues.map((issue) => issue.message).join("; ")
-        : error instanceof Error
-          ? error.message
-          : "Failed to exchange Plaid public token.";
+    if (error instanceof z.ZodError) {
+      const message = error.issues.map((issue) => issue.message).join("; ");
+      logServerEvent("error", "connect.exchange_token.failed", {
+        status: 400,
+        errorCode: "VALIDATION_ERROR",
+        message,
+      });
+      return NextResponse.json(apiError("VALIDATION_ERROR", message, true), { status: 400 });
+    }
 
-    // Sanitize internal/config errors before returning to the client.
-    const isInternalError = /plaid|access_token|item_id|secret|client_id|missing required/i.test(rawMessage);
-    const message = isInternalError
-      ? "Account linking failed. Please try again or contact support."
+    if (error instanceof PlaidApiError) {
+      const userMessage = error.displayMessage || "Account linking failed. Please try again.";
+      logServerEvent("error", "connect.exchange_token.failed", {
+        status: 502,
+        plaidErrorCode: error.errorCode,
+        plaidErrorType: error.errorType,
+        plaidRequestId: error.requestId,
+        internalMessage: error.message,
+      });
+      return NextResponse.json(
+        { ...apiError("UNKNOWN_FAILURE", userMessage, true), plaidErrorCode: error.errorCode },
+        { status: 502 },
+      );
+    }
+
+    const rawMessage = error instanceof Error ? error.message : "Failed to exchange token.";
+    const isConfigError = /missing required secret/i.test(rawMessage);
+    const message = isConfigError
+      ? "Account linking is not available. Please contact support."
       : rawMessage;
-    const status = error instanceof z.ZodError ? 400 : isInternalError ? 502 : 500;
-    const errorCode = classifyTaskError({
-      message: rawMessage,
-      validation: error instanceof z.ZodError,
-    });
+    const status = isConfigError ? 503 : 500;
 
     logServerEvent("error", "connect.exchange_token.failed", {
       status,
-      errorCode,
-      message: rawMessage,
+      errorCode: "UNKNOWN_FAILURE",
+      internalMessage: rawMessage,
     });
 
-    return NextResponse.json(apiError(errorCode, message, true), { status });
+    return NextResponse.json(apiError("UNKNOWN_FAILURE", message, !isConfigError), { status });
   }
 }

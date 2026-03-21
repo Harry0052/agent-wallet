@@ -70,10 +70,24 @@ interface PlaidLinkHandler {
   destroy?: () => void;
 }
 
+interface PlaidLinkError {
+  error_message?: string;
+  error_code?: string;
+  error_type?: string;
+  display_message?: string;
+}
+
+interface PlaidExitMetadata {
+  institution?: { name?: string; institution_id?: string };
+  link_session_id?: string;
+  request_id?: string;
+  status?: string;
+}
+
 interface PlaidCreateConfig {
   token: string;
   onSuccess: (publicToken: string) => void;
-  onExit: (error: { error_message?: string; error_code?: string } | null) => void;
+  onExit: (error: PlaidLinkError | null, metadata: PlaidExitMetadata) => void;
 }
 
 interface PlaidRuntime {
@@ -89,9 +103,20 @@ declare global {
 const PLAID_LINK_SCRIPT_URL = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
 let plaidScriptPromise: Promise<void> | null = null;
 
-function toError(payload: { error?: string; errorCode?: string }): Error {
-  if (payload.errorCode && payload.error) return new Error(`${payload.errorCode}: ${payload.error}`);
-  return new Error(payload.error || "Request failed");
+export class ConnectApiError extends Error {
+  readonly errorCode: string;
+  readonly plaidErrorCode: string | null;
+
+  constructor(payload: { error?: string; errorCode?: string; plaidErrorCode?: string }) {
+    super(payload.error || "Request failed");
+    this.name = "ConnectApiError";
+    this.errorCode = payload.errorCode || "UNKNOWN_FAILURE";
+    this.plaidErrorCode = payload.plaidErrorCode || null;
+  }
+}
+
+function toError(payload: { error?: string; errorCode?: string; plaidErrorCode?: string }): ConnectApiError {
+  return new ConnectApiError(payload);
 }
 
 function normalizeSourceState(value: unknown): SourceState {
@@ -166,11 +191,38 @@ async function openPlaidProviderFlow(linkToken: string): Promise<string> {
           // Best-effort cleanup only.
         }
       },
-      onExit: (error) => {
+      onExit: (error, metadata) => {
         if (settled) return;
         settled = true;
-        const message = error?.error_message || error?.error_code || "Account linking was canceled.";
-        reject(new Error(message));
+
+        if (!error) {
+          reject(new ConnectApiError({
+            error: "Account linking was canceled.",
+            errorCode: "USER_CANCELED",
+          }));
+        } else {
+          const userMessage = error.display_message
+            || error.error_message
+            || "Account linking failed.";
+
+          if (typeof console !== "undefined") {
+            console.warn("[Plaid Link onExit]", {
+              errorCode: error.error_code,
+              errorType: error.error_type,
+              message: error.error_message,
+              institution: metadata?.institution?.name,
+              linkSessionId: metadata?.link_session_id,
+              status: metadata?.status,
+            });
+          }
+
+          reject(new ConnectApiError({
+            error: userMessage,
+            errorCode: error.error_type || "PLAID_LINK_ERROR",
+            plaidErrorCode: error.error_code,
+          }));
+        }
+
         try {
           handler.destroy?.();
         } catch {
@@ -228,6 +280,7 @@ export async function createConnectedAccountLinkToken(): Promise<ConnectedAccoun
     expiration?: string;
     error?: string;
     errorCode?: string;
+    plaidErrorCode?: string;
   }>(response);
 
   if (!response.ok || !payload.ok || !payload.link_token || !payload.expiration) {
@@ -257,6 +310,7 @@ export async function exchangeConnectedAccountPublicToken(
     institutions?: ConnectedInstitutionRecord[];
     error?: string;
     errorCode?: string;
+    plaidErrorCode?: string;
   }>(response);
 
   if (!response.ok || !payload.ok) {

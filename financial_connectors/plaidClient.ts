@@ -14,9 +14,29 @@ interface PlaidConfig {
 
 interface PlaidApiErrorResponse {
   error_code?: string;
+  error_type?: string;
   error_message?: string;
   display_message?: string | null;
   request_id?: string;
+}
+
+export class PlaidApiError extends Error {
+  readonly errorCode: string;
+  readonly errorType: string;
+  readonly displayMessage: string | null;
+  readonly requestId: string;
+
+  constructor(response: PlaidApiErrorResponse, httpStatus: number) {
+    const userMessage = response.display_message
+      || response.error_message
+      || `Plaid API request failed (${httpStatus}).`;
+    super(userMessage);
+    this.name = "PlaidApiError";
+    this.errorCode = response.error_code || "UNKNOWN";
+    this.errorType = response.error_type || "API_ERROR";
+    this.displayMessage = response.display_message ?? null;
+    this.requestId = response.request_id || "unknown";
+  }
 }
 
 export interface PlaidAccount {
@@ -270,11 +290,10 @@ export class PlaidClient {
       | (T & PlaidApiErrorResponse)
       | null;
     if (!response.ok || !parsed) {
-      const message =
-        parsed?.display_message
-        || parsed?.error_message
-        || `Plaid API request failed (${response.status}).`;
-      throw new Error(message);
+      if (parsed?.error_code || parsed?.error_message) {
+        throw new PlaidApiError(parsed, response.status);
+      }
+      throw new Error(`Plaid API request failed (${response.status}).`);
     }
 
     return parsed as T;
