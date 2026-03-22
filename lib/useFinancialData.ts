@@ -129,33 +129,47 @@ export function useFinancialData(): FinancialData {
   }, []);
 
   // ── Fetch connected data from APIs ──────────────────────────────────────
-  // Calls are sequential to avoid overwhelming Supabase session mode pooler
-  // (max 1 connection). Each call is individually fault-tolerant.
+  // Calls are sequential to avoid overwhelming Supabase session mode pooler.
+  // Each call is individually fault-tolerant — a DB error on one call
+  // should not prevent the others from loading.
   const fetchConnectedData = useCallback(async () => {
+    // Accounts first — fastest, needed for other displays
     try {
       const bundle = await fetchConnectedAccountsBundle();
       setConnectedAccounts(bundle.accounts);
     } catch {
-      setConnectedAccounts([]);
+      // Keep existing accounts if we have them, only clear if first load
+      setConnectedAccounts((prev) => prev.length > 0 ? prev : []);
     }
 
+    // Transactions — the main data users care about
     try {
       const statement = await fetchUnifiedStatement({ page_size: 160 });
       setConnectedTransactions(statement.transactions ?? []);
     } catch (err) {
-      setConnectedTransactions([]);
-      const message = err instanceof Error ? err.message : "Failed to load transactions.";
-      const isNoDataError = /no\s+connected|no\s+account|not\s+connected|empty/i.test(message);
-      if (!isNoDataError) {
-        setError(message);
-      }
+      // Keep existing transactions if available — don't show "0 transactions"
+      // just because the DB was temporarily unreachable
+      setConnectedTransactions((prev) => {
+        if (prev.length > 0) return prev;
+        const message = err instanceof Error ? err.message : "Failed to load transactions.";
+        const isNoDataError = /no\s+connected|no\s+account|not\s+connected|empty/i.test(message);
+        const isDbError = /maxclient|max clients|pool|connection/i.test(message);
+        if (!isNoDataError && !isDbError) {
+          setError(message);
+        }
+        if (isDbError) {
+          setError("Temporarily unable to load transactions. Try refreshing in a moment.");
+        }
+        return [];
+      });
     }
 
+    // Recurring — least critical, load last
     try {
       const subs = await fetchSuspectedSubscriptions();
       setConnectedRecurring(subs);
     } catch {
-      setConnectedRecurring([]);
+      setConnectedRecurring((prev) => prev.length > 0 ? prev : []);
     }
   }, []);
 

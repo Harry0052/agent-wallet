@@ -52,20 +52,18 @@ function isMissingSchemaError(error: unknown): boolean {
 
 function resolvePoolConfig(connectionString: string): PoolConfig {
   const configuredMax = parsePositiveInt(process.env.DATABASE_POOL_MAX);
-  // Supabase session mode pooler limits clients to pool_size (typically 1-2).
-  // Using max=1 avoids MaxClientsInSessionMode errors. Queries within a single
-  // function invocation serialize through this connection, but with our other
-  // optimizations (deferred Plaid, cached subscriptions, reduced tx limit)
-  // the total query count is small enough that serialization is acceptable.
-  const max = configuredMax
-    ?? (connectionString.includes('pooler.supabase.com') || process.env.VERCEL
-      ? 1
-      : 10);
+  const isServerless = connectionString.includes('pooler.supabase.com') || process.env.VERCEL;
+
+  // Supabase session mode: each serverless function invocation gets its own
+  // Pool instance. Keep max=1 so each invocation holds at most 1 session.
+  // Idle timeout is very short (2s) so the connection is released back to
+  // Supabase's pooler as fast as possible after queries complete.
+  const max = configuredMax ?? (isServerless ? 1 : 10);
 
   const idleTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_IDLE_TIMEOUT_MS)
-    ?? (process.env.VERCEL ? 5_000 : 30_000);
+    ?? (isServerless ? 2_000 : 30_000);
   const connectionTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_CONNECTION_TIMEOUT_MS)
-    ?? 10_000;
+    ?? (isServerless ? 8_000 : 10_000);
 
   return {
     connectionString,
@@ -100,6 +98,13 @@ function getPool(): Pool {
 
   const connectionString = getDatabaseConnectionString();
   pool = new Pool(resolvePoolConfig(connectionString));
+
+  // Handle pool-level errors so crashed connections don't leak.
+  // Without this, a connection that errors mid-query stays "checked out" forever.
+  pool.on('error', (err) => {
+    console.error('[DB_POOL] Idle client error (connection released):', err.message);
+  });
+
   globalThis.__agentWalletPgPool = pool;
   return pool;
 }
@@ -108,21 +113,27 @@ async function executeQueryWithRetry<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[],
 ): Promise<QueryResult<T>> {
-  try {
-    return await executeDbQuery<T>(getPool(), text, params, {
-      context: 'lib/server/db.query',
-    });
-  } catch (error) {
-    if (!isRetryableMaxClientsError(error)) {
-      throw error;
-    }
+  // Retry with progressive backoff when Supabase session mode is saturated.
+  // Multiple serverless function invocations compete for a limited pool_size.
+  const maxRetries = 3;
+  const baseDelayMs = 200;
 
-    // Brief backoff helps when Supabase session mode is saturated momentarily.
-    await wait(150);
-    return executeDbQuery<T>(getPool(), text, params, {
-      context: 'lib/server/db.query.retry',
-    });
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await executeDbQuery<T>(getPool(), text, params, {
+        context: attempt === 0 ? 'lib/server/db.query' : `lib/server/db.query.retry-${attempt}`,
+      });
+    } catch (error) {
+      if (!isRetryableMaxClientsError(error) || attempt === maxRetries) {
+        throw error;
+      }
+      // Progressive backoff: 200ms, 500ms, 1200ms
+      await wait(baseDelayMs * Math.pow(2.5, attempt));
+    }
   }
+
+  // Unreachable, but TypeScript needs it
+  throw new Error('Query retry loop exhausted');
 }
 
 export async function query<T extends QueryResultRow = QueryResultRow>(

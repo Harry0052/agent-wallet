@@ -109,7 +109,17 @@ export async function enforceApiAuth(
     if (response) {
       return { ok: false, response };
     }
-    throw error;
+    // Handle non-auth errors (DB connection errors, pool exhaustion, etc.)
+    // instead of rethrowing — prevents empty 500 responses on Vercel.
+    const message = error instanceof Error ? error.message : 'Authentication service unavailable';
+    console.error('[AUTH_GUARD] Non-auth error during authentication:', message);
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { ok: false, error: 'Service temporarily unavailable. Please try again.', errorCode: 'SERVICE_UNAVAILABLE' },
+        { status: 503 },
+      ),
+    };
   }
 }
 
