@@ -130,17 +130,8 @@ export function useFinancialData(): FinancialData {
 
   // ── Fetch connected data from APIs ──────────────────────────────────────
   const fetchConnectedData = useCallback(async () => {
-    // Refresh balances first, then fetch the bundle so we get fresh numbers.
-    // Balance refresh is best-effort — if it fails, we still show cached balances.
-    try {
-      const refreshResult = await refreshConnectedBalances();
-      if (refreshResult.accounts.length > 0) {
-        setConnectedAccounts(refreshResult.accounts);
-      }
-    } catch {
-      // Non-fatal: fall through to fetchConnectedAccountsBundle
-    }
-
+    // Fetch cached data immediately in parallel. Balance refresh happens in
+    // the background AFTER the initial data is displayed — never blocks first paint.
     const [accountsResult, statementResult, recurringResult] = await Promise.allSettled([
       fetchConnectedAccountsBundle(),
       fetchUnifiedStatement({ page_size: 160 }),
@@ -175,6 +166,19 @@ export function useFinancialData(): FinancialData {
     }
   }, []);
 
+  // ── Background balance refresh (non-blocking) ─────────────────────────
+  const backgroundRefreshBalances = useCallback(async () => {
+    try {
+      const result = await refreshConnectedBalances();
+      if (mountedRef.current && result.accounts.length > 0) {
+        setConnectedAccounts(result.accounts);
+        setEpoch((prev) => prev + 1);
+      }
+    } catch {
+      // Silent — cached balances are already displayed
+    }
+  }, []);
+
   // ── Full refresh ────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -188,7 +192,9 @@ export function useFinancialData(): FinancialData {
     if (mountedRef.current) {
       setLoading(false);
     }
-  }, [fetchConnectedData, readManualData]);
+    // Refresh balances in background after cached data is displayed
+    void backgroundRefreshBalances();
+  }, [fetchConnectedData, readManualData, backgroundRefreshBalances]);
 
   // ── Initial load ────────────────────────────────────────────────────────
   useEffect(() => {

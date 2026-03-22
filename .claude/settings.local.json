@@ -37,7 +37,8 @@
       "mcp__claude-flow__browser_open",
       "Bash(grep:*)",
       "Bash(npx tsx:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(wc -l components/dashboard/*.tsx)"
     ]
   },
   "enableAllProjectMcpServers": true,

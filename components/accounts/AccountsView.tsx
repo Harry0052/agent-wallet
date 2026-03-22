@@ -166,10 +166,10 @@ function recordHistoryPoint(
 
 function fmtCompact(value: number): string {
   const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (abs >= 10_000) return `${(value / 1_000).toFixed(0)}k`;
-  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
-  return fmt(value);
+  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 10_000) return `$${(value / 1_000).toFixed(0)}k`;
+  if (abs >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
+  return `$${Math.round(value).toLocaleString()}`;
 }
 
 function ChartTooltipContent(props: {
@@ -536,7 +536,7 @@ export function AccountsView() {
 
       {(financialInfra || financialInfraLoading) ? (
         <WorkspacePanel
-          title="Financial OS Infrastructure"
+          title="Account Overview"
           action={financialInfraLoading ? (
             <div className="inline-flex items-center gap-2 text-xs text-[var(--aw-text-muted)]">
               <Loader2 size={12} className="animate-spin" />
@@ -546,7 +546,7 @@ export function AccountsView() {
         >
           {financialInfra ? (
             <>
-              <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                 <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
                   <p className="text-xs text-[var(--aw-text-muted)]">Connected accounts</p>
                   <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
@@ -554,28 +554,22 @@ export function AccountsView() {
                   </p>
                 </article>
                 <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-                  <p className="text-xs text-[var(--aw-text-muted)]">Fresh sync</p>
+                  <p className="text-xs text-[var(--aw-text-muted)]">Up to date</p>
                   <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
                     {financialInfra.sync.freshAccountCount}
                   </p>
                 </article>
                 <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-                  <p className="text-xs text-[var(--aw-text-muted)]">Internal transfers</p>
+                  <p className="text-xs text-[var(--aw-text-muted)]">Transfers this month</p>
                   <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
                     {fmt(financialInfra.moneyFlow.internalTransferAmount)}
-                  </p>
-                </article>
-                <article className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-                  <p className="text-xs text-[var(--aw-text-muted)]">Task center active</p>
-                  <p className="mt-1 text-xl font-semibold text-[var(--aw-text)]">
-                    {financialInfra.taskCenter.activeCount}
                   </p>
                 </article>
               </div>
 
               {topNotifications.length > 0 ? (
                 <div className="mb-4 rounded-xl border border-[var(--aw-border)] bg-white p-3">
-                  <p className="text-xs font-semibold text-[var(--aw-text)]">Actionable notifications</p>
+                  <p className="text-xs font-semibold text-[var(--aw-text)]">Important updates</p>
                   <div className="mt-2 space-y-2">
                     {topNotifications.map((item) => (
                       <div key={item.id} className="rounded-lg border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2">
@@ -598,13 +592,11 @@ export function AccountsView() {
                 </div>
               ) : null}
 
-              <div className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
-                <p className="text-xs font-semibold text-[var(--aw-text)]">Financial timeline</p>
-                <div className="mt-2 space-y-2">
-                  {topTimeline.length === 0 ? (
-                    <p className="text-xs text-[var(--aw-text-muted)]">No timeline events yet.</p>
-                  ) : (
-                    topTimeline.map((event) => (
+              {topTimeline.length > 0 ? (
+                <div className="rounded-xl border border-[var(--aw-border)] bg-white p-3">
+                  <p className="text-xs font-semibold text-[var(--aw-text)]">Recent activity</p>
+                  <div className="mt-2 space-y-2">
+                    {topTimeline.map((event) => (
                       <a
                         key={event.id}
                         href={event.deepLink}
@@ -613,30 +605,30 @@ export function AccountsView() {
                         <p className="text-xs font-semibold text-[var(--aw-text)]">{event.title}</p>
                         <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">{event.summary}</p>
                         <p className="mt-0.5 text-[11px] text-[var(--aw-text-muted)]">
-                          {new Date(event.occurredAt).toLocaleDateString()} · {event.priority.toUpperCase()}
+                          {new Date(event.occurredAt).toLocaleDateString()}
                         </p>
                       </a>
-                    ))
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </>
           ) : (
             <div className="rounded-xl border border-[var(--aw-border)] bg-white px-4 py-3 text-sm text-[var(--aw-text-muted)]">
-              Loading background sync status...
+              Loading account data...
             </div>
           )}
         </WorkspacePanel>
       ) : null}
 
-      <WorkspacePanel title="Net worth">
+      <WorkspacePanel title="Net Worth Over Time">
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <p className="aw-number text-3xl font-semibold tracking-[-0.03em] text-[var(--aw-text)]">
             {fmt(summary.netWorth)}
           </p>
-          {accountRows.length > 0 ? (
-            <p className="pb-0.5 text-xs text-[var(--aw-text-muted)]">
-              Unified history
+          {accountRows.length > 0 && chartData.length > 1 ? (
+            <p className="pb-0.5 text-[11px] text-[var(--aw-text-muted)]">
+              Last {chartData.length} days
             </p>
           ) : null}
         </div>

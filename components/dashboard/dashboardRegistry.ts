@@ -3,16 +3,16 @@ import type { DashboardPreferences, DashboardWidgetDefinition, DashboardWidgetId
 export const DASHBOARD_STORAGE_KEY = "calico.custom-dashboard.v1";
 
 export const dashboardWidgets: DashboardWidgetDefinition[] = [
-  { id: "netWorth", label: "Net Worth", description: "Everything you have minus what you owe", span: "wide" },
-  { id: "spending", label: "Spending", description: "This month vs. last month", span: "wide" },
-  { id: "budget", label: "Spending Plan", description: "How much you planned to spend this month", span: "compact" },
-  { id: "transactions", label: "Money Moves", description: "Your recent activity", span: "full" },
-  { id: "goals", label: "Money Goals", description: "What you're saving for", span: "compact" },
+  { id: "netWorth", label: "Net Worth", description: "Your total balance across all accounts", span: "wide" },
+  { id: "spending", label: "Spending", description: "This month compared to last month", span: "wide" },
+  { id: "okayToSpend", label: "Safe to Spend", description: "What you have left after bills", span: "compact" },
+  { id: "recurring", label: "Upcoming Bills", description: "Bills and subscriptions due soon", span: "compact" },
+  { id: "budget", label: "Spending Plan", description: "How your spending compares to your plan", span: "compact" },
+  { id: "transactions", label: "Recent Activity", description: "Your latest transactions", span: "full" },
   { id: "gettingStarted", label: "Getting Started", description: "Finish setting up Calico", span: "compact" },
-  { id: "okayToSpend", label: "Okay to Spend", description: "Money you can use right now", span: "compact" },
-  { id: "recurring", label: "Repeating Payments", description: "Bills and subscriptions coming up", span: "compact" },
-  { id: "investments", label: "Investments", description: "Your holdings and how they're doing", span: "compact" },
-  { id: "advice", label: "What Calico Noticed", description: "Tips and suggestions just for you", span: "wide" },
+  { id: "goals", label: "Money Goals", description: "What you're saving for", span: "compact" },
+  { id: "advice", label: "Tips from Calico", description: "Helpful suggestions based on your activity", span: "wide" },
+  { id: "investments", label: "Investments", description: "Your holdings and performance", span: "compact" },
   { id: "creditScore", label: "Credit Score", description: "Your credit score at a glance", span: "compact" },
 ];
 
@@ -20,10 +20,10 @@ const defaultVisibility = dashboardWidgets.reduce<Record<DashboardWidgetId, bool
   acc[widget.id] = [
     "netWorth",
     "spending",
+    "okayToSpend",
+    "recurring",
     "budget",
     "transactions",
-    "goals",
-    "gettingStarted",
   ].includes(widget.id);
   return acc;
 }, {} as Record<DashboardWidgetId, boolean>);

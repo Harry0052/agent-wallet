@@ -143,7 +143,15 @@ function toError(payload: { error?: string; errorCode?: string }): Error {
   return new Error(payload.error || "Request failed");
 }
 
+let smartHomeCacheEntry: { data: SmartHomePayload; fetchedAt: number } | null = null;
+const SMART_HOME_CACHE_TTL_MS = 30_000; // 30 seconds
+
 export async function fetchSmartHomePayload(): Promise<SmartHomePayload> {
+  // Return cached payload if fresh enough — prevents re-fetching on rapid navigation
+  if (smartHomeCacheEntry && Date.now() - smartHomeCacheEntry.fetchedAt < SMART_HOME_CACHE_TTL_MS) {
+    return smartHomeCacheEntry.data;
+  }
+
   const response = await fetch("/api/smart/home", {
     method: "GET",
     cache: "no-store",
@@ -160,7 +168,13 @@ export async function fetchSmartHomePayload(): Promise<SmartHomePayload> {
     throw toError(payload);
   }
 
+  smartHomeCacheEntry = { data: payload.home, fetchedAt: Date.now() };
   return payload.home;
+}
+
+/** Invalidate the smart home cache (e.g. after account add/remove/relink) */
+export function invalidateSmartHomeCache(): void {
+  smartHomeCacheEntry = null;
 }
 
 export async function runSmartSurfacePrompt(prompt: string): Promise<SmartSurfaceResult> {

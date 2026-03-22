@@ -13,8 +13,8 @@ export function TransactionsWidget(props: DashboardWidgetProps & { dragHandlePro
 
   return (
     <WidgetContainer
-      title="Money Moves"
-      subtitle={items.length > 0 ? "Your most recent spending and income in one calm feed." : "Connect an account or add a transaction to start your activity feed."}
+      title="Recent Activity"
+      subtitle={items.length > 0 ? "Your latest transactions." : "Connect an account to see your recent activity here."}
       dragHandleProps={props.dragHandleProps}
       action={
         <Link href="/transactions" className="inline-flex rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1 text-xs font-semibold text-[var(--calico-text)] transition hover:bg-[var(--calico-card)]">

@@ -362,6 +362,20 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                 >
                   {isLoading ? (isSignup ? 'Creating account...' : 'Logging in...') : (isSignup ? 'Create account' : 'Log in')}
                 </button>
+
+                {isSignup ? (
+                  <p className="mt-3 text-center text-[11px] leading-relaxed text-[var(--aw-text-muted)]">
+                    By creating an account, you agree to our{' '}
+                    <a
+                      href="https://www.freeprivacypolicy.com/live/ab2b2a8a-1946-4178-ad49-1cde9a62f587"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2 hover:text-[var(--aw-text)]"
+                    >
+                      Privacy Policy
+                    </a>.
+                  </p>
+                ) : null}
               </motion.form>
 
               <motion.p

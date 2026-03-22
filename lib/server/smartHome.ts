@@ -3,7 +3,10 @@ import 'server-only';
 import { getWallet } from '@/lib/server/ledger';
 import { listConnectedAccounts } from '@/financial_connectors/institutionService';
 import { listConnectedApps } from '@/lib/server/connectedApps';
-import { detectAndPersistRecurringSubscriptions } from '@/subscription_intelligence/subscriptionService';
+import {
+  detectAndPersistRecurringSubscriptions,
+  listSubscriptions,
+} from '@/subscription_intelligence/subscriptionService';
 import { listNormalizedTransactions } from '@/transactions/transactionRepository';
 import { buildSafeSpendingDataset } from '@/security/aiSanitizer';
 import { analyzeSpending } from '@/ai_spend_intelligence/spendAnalyzer';
@@ -154,12 +157,15 @@ function resolveLowDataMode(input: {
 }
 
 export async function buildSmartHomePayload(userId: string): Promise<SmartHomePayload> {
+  // Fast path: read cached subscriptions + all other data in parallel.
+  // Subscription detection (expensive: reads all txns, runs algorithm, writes N rows)
+  // runs in background after the response is sent.
   const [wallet, connectedAccounts, connectedApps, recurring, transactions, paymentMethods, categoryRules, automationSummaryResult] = await Promise.all([
     getWallet(userId),
     listConnectedAccounts(userId),
     listConnectedApps(userId),
-    detectAndPersistRecurringSubscriptions(userId),
-    listNormalizedTransactions({ userId, limit: 500 }),
+    listSubscriptions({ userId, status: "suspected" }),
+    listNormalizedTransactions({ userId, limit: 250 }),
     listSavedFundingMethods(userId),
     listCategoryLearningRules(userId),
     getAutomationSummaryForUser({ userId }).catch((error) => {
@@ -171,6 +177,14 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
       return null;
     }),
   ]);
+
+  // Trigger subscription detection in background (non-blocking).
+  void detectAndPersistRecurringSubscriptions(userId).catch((error) => {
+    logServerEvent('warn', 'smart.home.subscription_detection.background_failed', {
+      userId,
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+  });
 
   const activeAccountIds = new Set(connectedAccounts.map((account) => account.id));
   const activeTransactions = transactions.filter((tx) => activeAccountIds.has(tx.linked_account_id));

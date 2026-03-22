@@ -15,6 +15,10 @@ interface SimpleTrendChartProps<T extends object = Record<string, unknown>> {
   maxXAxisLabels?: number;
   showYAxis?: boolean;
   formatValue?: (value: number) => string;
+  /** Optional Y-axis unit label shown at the top of the Y axis (e.g. "$") */
+  yAxisUnit?: string;
+  /** Optional X-axis context label shown at the bottom-right (e.g. "Day of month") */
+  xAxisLabel?: string;
 }
 
 function getRowValue(row: object, key: string): unknown {
@@ -41,9 +45,10 @@ function sampleXAxisLabels<T extends object>(data: T[], xKey: string, maxLabels:
 
 function fmtAxisValue(value: number): string {
   const abs = Math.abs(value);
-  if (abs >= 10_000) return `${(value / 1_000).toFixed(0)}k`;
-  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
-  return String(Math.round(value));
+  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 10_000) return `$${(value / 1_000).toFixed(0)}k`;
+  if (abs >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
+  return `$${Math.round(value)}`;
 }
 
 export function SimpleTrendChart<T extends object>({
@@ -54,6 +59,8 @@ export function SimpleTrendChart<T extends object>({
   maxXAxisLabels = 6,
   showYAxis = true,
   formatValue: _formatValue = (value: number) => String(Math.round(value)),
+  yAxisUnit,
+  xAxisLabel,
 }: SimpleTrendChartProps<T>) {
   if (data.length === 0) return null;
 
@@ -227,6 +234,35 @@ export function SimpleTrendChart<T extends object>({
             </text>
           );
         })}
+
+        {/* Y-axis unit label (top of Y axis) */}
+        {yAxisUnit && showYAxis ? (
+          <text
+            x={paddingLeft - 6}
+            y={paddingTop - 6}
+            textAnchor="end"
+            fontSize="8"
+            fill="#B0A090"
+            fontFamily="inherit"
+            fontWeight="500"
+          >
+            {yAxisUnit}
+          </text>
+        ) : null}
+
+        {/* X-axis context label (bottom-right) */}
+        {xAxisLabel ? (
+          <text
+            x={chartWidth - paddingRight}
+            y={chartHeight - 4}
+            textAnchor="end"
+            fontSize="8"
+            fill="#B0A090"
+            fontFamily="inherit"
+          >
+            {xAxisLabel}
+          </text>
+        ) : null}
       </svg>
     </div>
   );

@@ -41,16 +41,23 @@ export function LandingFooter() {
             <p style={{ margin: "0 0 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.textMuted }}>
               Company
             </p>
-            {["About", "Security", "Privacy", "Terms"].map((l) => (
+            {[
+              { label: "About", href: "#" },
+              { label: "Security", href: "#" },
+              { label: "Privacy Policy", href: "https://www.freeprivacypolicy.com/live/ab2b2a8a-1946-4178-ad49-1cde9a62f587" },
+              { label: "Terms", href: "#" },
+            ].map((l) => (
               <a
-                key={l}
-                href="#"
+                key={l.label}
+                href={l.href}
+                target={l.href.startsWith("http") ? "_blank" : undefined}
+                rel={l.href.startsWith("http") ? "noopener noreferrer" : undefined}
                 className="mb-2 block text-sm transition-colors"
                 style={{ color: C.textSecondary }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = C.textPrimary)}
                 onMouseLeave={(e) => (e.currentTarget.style.color = C.textSecondary)}
               >
-                {l}
+                {l.label}
               </a>
             ))}
           </div>
@@ -80,11 +87,18 @@ export function LandingFooter() {
         >
           <p style={{ margin: 0, fontSize: 12, color: C.textMuted }}>&copy; 2025 Calico. All rights reserved.</p>
           <div className="flex gap-4">
-            {["Privacy", "Terms"].map((l) => (
-              <a key={l} href="#" className="text-xs" style={{ color: C.textMuted }}>
-                {l}
-              </a>
-            ))}
+            <a
+              href="https://www.freeprivacypolicy.com/live/ab2b2a8a-1946-4178-ad49-1cde9a62f587"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs"
+              style={{ color: C.textMuted }}
+            >
+              Privacy Policy
+            </a>
+            <a href="#" className="text-xs" style={{ color: C.textMuted }}>
+              Terms
+            </a>
           </div>
         </div>
       </div>

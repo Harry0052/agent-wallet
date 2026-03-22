@@ -3,13 +3,6 @@
 import { useMemo } from "react";
 import { fmt } from "@/lib/utils";
 
-interface SankeyFlow {
-  from: string;
-  to: string;
-  value: number;
-  color: string;
-}
-
 interface SankeyNode {
   id: string;
   label: string;
@@ -24,47 +17,41 @@ interface SankeyNode {
 interface SankeyProps {
   income: number;
   expenses: number;
-  /** Category breakdown: { category: string; amount: number }[] */
   categoryBreakdown: Array<{ category: string; amount: number }>;
-  /** Income source breakdown (optional) */
   incomeBreakdown?: Array<{ source: string; amount: number }>;
 }
 
 const COLORS = {
   income: "#16A34A",
-  incomeSoft: "rgba(22, 163, 74, 0.12)",
-  expense: "#FDBA74",
-  expenseSoft: "rgba(253, 186, 116, 0.10)",
+  expense: "#E8A45E",
   savings: "#60A5FA",
-  savingsSoft: "rgba(96, 165, 250, 0.12)",
-  hub: "#FDBA74",
-  hubSoft: "rgba(253, 186, 116, 0.15)",
+  hub: "#9B8B7B",
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "food & dining": "#F59E0B",
-  "food": "#F59E0B",
-  "dining": "#F59E0B",
-  "groceries": "#F59E0B",
-  "housing": "#8B5CF6",
-  "rent": "#8B5CF6",
-  "mortgage": "#8B5CF6",
-  "transportation": "#3B82F6",
-  "transport": "#3B82F6",
-  "shopping": "#EC4899",
-  "entertainment": "#EC4899",
-  "utilities": "#6366F1",
-  "bills": "#6366F1",
-  "health": "#10B981",
-  "healthcare": "#10B981",
-  "education": "#14B8A6",
-  "personal": "#F97316",
-  "transfer": "#94A3B8",
-  "savings": "#60A5FA",
-  "investment": "#60A5FA",
-  "insurance": "#8B5CF6",
-  "subscriptions": "#A855F7",
-  "travel": "#0EA5E9",
+  "food & dining": "#D97706",
+  food: "#D97706",
+  dining: "#D97706",
+  groceries: "#D97706",
+  housing: "#7C3AED",
+  rent: "#7C3AED",
+  mortgage: "#7C3AED",
+  transportation: "#2563EB",
+  transport: "#2563EB",
+  shopping: "#DB2777",
+  entertainment: "#DB2777",
+  utilities: "#4F46E5",
+  bills: "#4F46E5",
+  health: "#059669",
+  healthcare: "#059669",
+  education: "#0D9488",
+  personal: "#EA580C",
+  transfer: "#94A3B8",
+  savings: "#60A5FA",
+  investment: "#60A5FA",
+  insurance: "#7C3AED",
+  subscriptions: "#9333EA",
+  travel: "#0284C7",
 };
 
 function getCategoryColor(category: string): string {
@@ -72,97 +59,101 @@ function getCategoryColor(category: string): string {
   for (const [key, color] of Object.entries(CATEGORY_COLORS)) {
     if (lower.includes(key)) return color;
   }
-  return "#FDBA74";
+  return "#C4A882";
 }
 
-function buildCubicPath(
-  x1: number, y1: number,
-  x2: number, y2: number,
+function formatLabel(label: string): string {
+  return label
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function buildFlowPath(
+  x1: number,
+  y1Top: number,
+  y1Bottom: number,
+  x2: number,
+  y2Top: number,
+  y2Bottom: number,
 ): string {
   const midX = (x1 + x2) / 2;
-  return `M ${x1},${y1} C ${midX},${y1} ${midX},${y2} ${x2},${y2}`;
+  return [
+    `M ${x1},${y1Top}`,
+    `C ${midX},${y1Top} ${midX},${y2Top} ${x2},${y2Top}`,
+    `L ${x2},${y2Bottom}`,
+    `C ${midX},${y2Bottom} ${midX},${y1Bottom} ${x1},${y1Bottom}`,
+    "Z",
+  ].join(" ");
 }
 
 export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreakdown }: SankeyProps) {
   const data = useMemo(() => {
     const savings = Math.max(income - expenses, 0);
-    const totalOut = expenses + savings;
-
-    // Sort categories by amount descending, cap at top 6
-    const sorted = [...categoryBreakdown]
-      .sort((a, b) => b.amount - a.amount);
-    const topCategories = sorted.slice(0, 6);
-    const otherAmount = sorted.slice(6).reduce((s, c) => s + c.amount, 0);
+    const sorted = [...categoryBreakdown].sort((a, b) => b.amount - a.amount);
+    const topCategories = sorted.slice(0, 5);
+    const otherAmount = sorted.slice(5).reduce((s, c) => s + c.amount, 0);
     if (otherAmount > 0) {
       topCategories.push({ category: "Other", amount: otherAmount });
     }
 
-    // Income sources (top 4 or "All Income")
-    const incomeSources = incomeBreakdown && incomeBreakdown.length > 1
-      ? incomeBreakdown.sort((a, b) => b.amount - a.amount).slice(0, 4)
-      : [{ source: "Income", amount: income }];
+    const incomeSources =
+      incomeBreakdown && incomeBreakdown.length > 1
+        ? incomeBreakdown.sort((a, b) => b.amount - a.amount).slice(0, 3)
+        : [{ source: "Income", amount: income }];
 
-    return { savings, totalOut, topCategories, incomeSources };
+    return { savings, topCategories, incomeSources };
   }, [income, expenses, categoryBreakdown, incomeBreakdown]);
 
-  // SVG dimensions
-  const width = 760;
-  const height = 380;
-  const padding = { top: 20, bottom: 20, left: 20, right: 20 };
-  const nodeWidth = 8;
-  const nodeRadius = 4;
-  const colLeft = padding.left;
-  const colCenter = width / 2 - nodeWidth / 2;
-  const colRight = width - padding.right - nodeWidth;
-  const usableHeight = height - padding.top - padding.bottom;
+  // Layout constants — refined proportions
+  const width = 720;
+  const height = 340;
+  const pad = { top: 28, bottom: 16, left: 16, right: 16 };
+  const nodeW = 4;
+  const nodeR = 2;
+  const colLeft = pad.left;
+  const colCenter = width / 2 - nodeW / 2;
+  const colRight = width - pad.right - nodeW;
+  const usableH = height - pad.top - pad.bottom;
 
-  const { nodes, flows } = useMemo(() => {
+  const { nodes, flowPaths } = useMemo(() => {
     const nodeList: SankeyNode[] = [];
-    const flowList: SankeyFlow[] = [];
 
-    if (income <= 0 && expenses <= 0) return { nodes: nodeList, flows: flowList };
+    if (income <= 0 && expenses <= 0) return { nodes: nodeList, flowPaths: [] as JSX.Element[] };
 
-    // Center hub node
-    const hubHeight = usableHeight * 0.6;
-    const hubY = padding.top + (usableHeight - hubHeight) / 2;
+    // Center hub
+    const hubH = usableH * 0.55;
+    const hubY = pad.top + (usableH - hubH) / 2;
     nodeList.push({
       id: "hub",
       label: "Total",
       value: income,
       x: colCenter,
       y: hubY,
-      height: hubHeight,
+      height: hubH,
       color: COLORS.hub,
       side: "center",
     });
 
     // Left: income sources
-    const leftGap = 8;
+    const leftGap = 10;
     const leftTotalGap = leftGap * (data.incomeSources.length - 1);
-    const leftAvailableHeight = hubHeight;
-    const leftNodeTotalHeight = leftAvailableHeight - leftTotalGap;
+    const leftNodeTotal = hubH - leftTotalGap;
     let leftY = hubY;
 
     for (const source of data.incomeSources) {
       const ratio = income > 0 ? source.amount / income : 0;
-      const nodeHeight = Math.max(leftNodeTotalHeight * ratio, 6);
+      const h = Math.max(leftNodeTotal * ratio, 4);
       nodeList.push({
         id: `income-${source.source}`,
         label: source.source,
         value: source.amount,
         x: colLeft,
         y: leftY,
-        height: nodeHeight,
+        height: h,
         color: COLORS.income,
         side: "left",
       });
-      flowList.push({
-        from: `income-${source.source}`,
-        to: "hub",
-        value: source.amount,
-        color: COLORS.income,
-      });
-      leftY += nodeHeight + leftGap;
+      leftY += h + leftGap;
     }
 
     // Right: expense categories + savings
@@ -174,210 +165,195 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
         color: getCategoryColor(c.category),
       })),
       ...(data.savings > 0
-        ? [{
-          id: "savings",
-          label: "Savings",
-          value: data.savings,
-          color: COLORS.savings,
-        }]
+        ? [{ id: "savings", label: "Net Remaining", value: data.savings, color: COLORS.savings }]
         : []),
     ];
 
-    const rightGap = 6;
+    const rightGap = 8;
     const rightTotalGap = rightGap * Math.max(rightItems.length - 1, 0);
-    const rightAvailableHeight = usableHeight - 16;
-    const rightNodeTotalHeight = rightAvailableHeight - rightTotalGap;
-    const rightTotal = rightItems.reduce((s, i) => s + i.value, 0);
-    let rightY = padding.top + 8;
+    const rightAvailH = usableH - 8;
+    const rightNodeTotal = rightAvailH - rightTotalGap;
+    const rightSum = rightItems.reduce((s, i) => s + i.value, 0);
+    let rightY = pad.top + 4;
 
     for (const item of rightItems) {
-      const ratio = rightTotal > 0 ? item.value / rightTotal : 0;
-      const nodeHeight = Math.max(rightNodeTotalHeight * ratio, 6);
+      const ratio = rightSum > 0 ? item.value / rightSum : 0;
+      const h = Math.max(rightNodeTotal * ratio, 4);
       nodeList.push({
         id: item.id,
         label: item.label,
         value: item.value,
         x: colRight,
         y: rightY,
-        height: nodeHeight,
+        height: h,
         color: item.color,
         side: "right",
       });
-      flowList.push({
-        from: "hub",
-        to: item.id,
-        value: item.value,
-        color: item.color,
-      });
-      rightY += nodeHeight + rightGap;
+      rightY += h + rightGap;
     }
 
-    return { nodes: nodeList, flows: flowList };
-  }, [data, income, expenses, usableHeight, colLeft, colCenter, colRight, padding.top]);
+    // Build flow paths with proper thickness
+    const nodeMap = new Map(nodeList.map((n) => [n.id, n]));
+    const hub = nodeMap.get("hub")!;
+    let hubLeftOff = 0;
+    let hubRightOff = 0;
 
-  // Render flow paths
-  const flowPaths = useMemo(() => {
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const paths: JSX.Element[] = [];
 
-    // Track cumulative offsets for stacking flows on the hub
-    const hubLeftOffset = { current: 0 };
-    const hubRightOffset = { current: 0 };
-    const hub = nodeMap.get("hub");
+    // Income flows (left → center)
+    for (const source of data.incomeSources) {
+      const from = nodeMap.get(`income-${source.source}`);
+      if (!from) continue;
+      const thickness = Math.max((source.amount / (income || 1)) * hub.height * 0.6, 1);
 
-    return flows.map((flow) => {
-      const fromNode = nodeMap.get(flow.from);
-      const toNode = nodeMap.get(flow.to);
-      if (!fromNode || !toNode || !hub) return null;
-
-      const total = flow.from === "hub" ? (nodes.filter((n) => n.side === "right").reduce((s, n) => s + n.value, 0) || 1) : income || 1;
-      const thickness = Math.max((flow.value / total) * hub.height * 0.7, 1.5);
-
-      let x1: number, y1: number, x2: number, y2: number;
-
-      if (flow.to === "hub") {
-        // Left → Center
-        x1 = fromNode.x + nodeWidth;
-        y1 = fromNode.y + fromNode.height / 2;
-        x2 = hub.x;
-        y2 = hub.y + hubLeftOffset.current + thickness / 2;
-        hubLeftOffset.current += thickness + 2;
-      } else {
-        // Center → Right
-        x1 = hub.x + nodeWidth;
-        y1 = hub.y + hubRightOffset.current + thickness / 2;
-        x2 = toNode.x;
-        y2 = toNode.y + toNode.height / 2;
-        hubRightOffset.current += thickness + 2;
-      }
-
-      const pathD = buildCubicPath(x1, y1, x2, y2);
-
-      return (
-        <g key={`${flow.from}-${flow.to}`}>
-          <path
-            d={pathD}
-            fill="none"
-            stroke={flow.color}
-            strokeWidth={thickness}
-            strokeOpacity={0.1}
-            strokeLinecap="round"
-          />
-          <path
-            d={pathD}
-            fill="none"
-            stroke={flow.color}
-            strokeWidth={Math.max(thickness * 0.35, 1)}
-            strokeOpacity={0.4}
-            strokeLinecap="round"
-          />
-        </g>
+      const path = buildFlowPath(
+        from.x + nodeW,
+        from.y + from.height / 2 - thickness / 2,
+        from.y + from.height / 2 + thickness / 2,
+        hub.x,
+        hub.y + hubLeftOff,
+        hub.y + hubLeftOff + thickness,
       );
-    });
-  }, [flows, nodes, income]);
+      hubLeftOff += thickness + 1.5;
 
-  if (income <= 0 && expenses <= 0) {
-    return null;
-  }
+      paths.push(
+        <path
+          key={`flow-income-${source.source}`}
+          d={path}
+          fill={COLORS.income}
+          fillOpacity={0.07}
+          stroke={COLORS.income}
+          strokeWidth={0.5}
+          strokeOpacity={0.15}
+        />,
+      );
+    }
+
+    // Expense + savings flows (center → right)
+    for (const item of rightItems) {
+      const to = nodeMap.get(item.id);
+      if (!to) continue;
+      const thickness = Math.max((item.value / (rightSum || 1)) * hub.height * 0.6, 1);
+
+      const path = buildFlowPath(
+        hub.x + nodeW,
+        hub.y + hubRightOff,
+        hub.y + hubRightOff + thickness,
+        to.x,
+        to.y + to.height / 2 - thickness / 2,
+        to.y + to.height / 2 + thickness / 2,
+      );
+      hubRightOff += thickness + 1.5;
+
+      paths.push(
+        <path
+          key={`flow-${item.id}`}
+          d={path}
+          fill={item.color}
+          fillOpacity={0.06}
+          stroke={item.color}
+          strokeWidth={0.5}
+          strokeOpacity={0.12}
+        />,
+      );
+    }
+
+    return { nodes: nodeList, flowPaths: paths };
+  }, [data, income, expenses, usableH, colLeft, colCenter, colRight, pad.top]);
+
+  if (income <= 0 && expenses <= 0) return null;
 
   return (
     <div className="overflow-x-auto">
+      {/* Stage headers */}
+      <div className="mb-2 grid grid-cols-3 px-4 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">
+        <span>Income</span>
+        <span className="text-center">Total</span>
+        <span className="text-right">Where it goes</span>
+      </div>
+
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="w-full"
-        style={{ minHeight: 300, maxHeight: 420 }}
-        aria-label="Cash flow Sankey diagram"
+        style={{ minHeight: 260, maxHeight: 380 }}
+        aria-label="Cash flow diagram"
         role="img"
       >
-        <defs>
-          {nodes.map((node) => (
-            <linearGradient
-              key={`grad-${node.id}`}
-              id={`sankey-grad-${node.id}`}
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="1"
-            >
-              <stop offset="0%" stopColor={node.color} stopOpacity="0.75" />
-              <stop offset="100%" stopColor={node.color} stopOpacity="0.45" />
-            </linearGradient>
-          ))}
-        </defs>
-
-        {/* Flow paths */}
+        {/* Flow bands */}
         {flowPaths}
 
-        {/* Nodes */}
+        {/* Node pillars */}
         {nodes.map((node) => (
           <g key={node.id}>
             <rect
               x={node.x}
               y={node.y}
-              width={nodeWidth}
+              width={nodeW}
               height={node.height}
-              rx={nodeRadius}
-              fill={`url(#sankey-grad-${node.id})`}
+              rx={nodeR}
+              fill={node.color}
+              fillOpacity={node.side === "center" ? 0.25 : 0.5}
             />
-            {/* Label */}
+
+            {/* Left labels: right of node */}
             {node.side === "left" && (
               <>
                 <text
-                  x={node.x + nodeWidth + 10}
-                  y={node.y + node.height / 2 - 6}
+                  x={node.x + nodeW + 8}
+                  y={node.y + node.height / 2 - 5}
                   fill="var(--aw-text)"
-                  fontSize="9"
-                  fontWeight="400"
-                  dominantBaseline="auto"
+                  fontSize="10"
+                  fontWeight="500"
                 >
-                  {node.label}
+                  {formatLabel(node.label)}
                 </text>
                 <text
-                  x={node.x + nodeWidth + 10}
+                  x={node.x + nodeW + 8}
                   y={node.y + node.height / 2 + 8}
                   fill="var(--aw-text-muted)"
-                  fontSize="9"
-                  fontWeight="400"
-                  dominantBaseline="auto"
+                  fontSize="10"
+                  className="tabular-nums"
                 >
                   {fmt(node.value)}
                 </text>
               </>
             )}
+
+            {/* Center label: above node */}
             {node.side === "center" && (
-              <>
-                <text
-                  x={node.x + nodeWidth / 2}
-                  y={node.y - 8}
-                  fill="var(--aw-text)"
-                  fontSize="9"
-                  fontWeight="600"
-                  textAnchor="middle"
-                >
-                  {fmt(node.value)}
-                </text>
-              </>
+              <text
+                x={node.x + nodeW / 2}
+                y={node.y - 8}
+                fill="var(--aw-text)"
+                fontSize="11"
+                fontWeight="600"
+                textAnchor="middle"
+                className="tabular-nums"
+              >
+                {fmt(node.value)}
+              </text>
             )}
+
+            {/* Right labels: left of node */}
             {node.side === "right" && (
               <>
                 <text
-                  x={node.x - 10}
-                  y={node.y + node.height / 2 - 6}
+                  x={node.x - 8}
+                  y={node.y + node.height / 2 - 5}
                   fill="var(--aw-text)"
                   fontSize="10"
                   fontWeight="500"
                   textAnchor="end"
-                  dominantBaseline="auto"
                 >
-                  {node.label}
+                  {formatLabel(node.label)}
                 </text>
                 <text
-                  x={node.x - 10}
+                  x={node.x - 8}
                   y={node.y + node.height / 2 + 8}
                   fill="var(--aw-text-muted)"
                   fontSize="10"
-                  fontWeight="500"
                   textAnchor="end"
-                  dominantBaseline="auto"
+                  className="tabular-nums"
                 >
                   {fmt(node.value)}
                 </text>

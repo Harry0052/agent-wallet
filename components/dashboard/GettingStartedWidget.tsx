@@ -24,10 +24,10 @@ export function GettingStartedWidget(props: GettingStartedWidgetProps) {
   );
   const hasGoals = props.dataSource.goals.length > 0;
   const steps = [
-    { label: "Connect an account", complete: props.dataSource.accounts.length > 0, href: "/connect" },
-    { label: "Set up your spending groups", complete: getCategoryCompletion(props.dataSource.transactions), href: "/transactions" },
-    { label: "Set your first money goal", complete: hasGoals, href: "/goals" },
-    { label: "Create a spending plan", complete: budgetCategories.length > 0 || summary.monthlyBudget > 0, href: "/budgets" },
+    { label: "Link your bank account", complete: props.dataSource.accounts.length > 0, href: "/connect" },
+    { label: "Review your spending categories", complete: getCategoryCompletion(props.dataSource.transactions), href: "/transactions" },
+    { label: "Set a savings goal", complete: hasGoals, href: "/goals" },
+    { label: "Create a monthly spending plan", complete: budgetCategories.length > 0 || summary.monthlyBudget > 0, href: "/budgets" },
   ];
   const completed = steps.filter((step) => step.complete).length;
   const progress = Math.round((completed / steps.length) * 100);

@@ -320,7 +320,7 @@ export function CashFlowView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title="Cash Flow"
-        subtitle="Actual posted money in and out, plus your next recurring items."
+        subtitle="Where your money comes from and where it goes."
         actions={(
           <button
             type="button"
@@ -332,25 +332,29 @@ export function CashFlowView() {
         )}
       />
 
-      {/* KPI cards */}
+      {/* Summary cards */}
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Income</p>
           <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-success)]">{fmt(rangeIncome)}</p>
+          <p className="mt-1 text-[10px] text-[var(--aw-text-muted)]">Money in {rangeLabel}</p>
         </div>
         <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Expenses</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Spending</p>
           <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-text)]">{fmt(rangeExpenses)}</p>
+          <p className="mt-1 text-[10px] text-[var(--aw-text-muted)]">Money out {rangeLabel}</p>
         </div>
         <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Net</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Remaining</p>
           <p className={`aw-number mt-2 text-xl font-semibold ${rangeNet >= 0 ? "text-[var(--aw-success)]" : "text-[var(--aw-danger)]"}`}>
             {fmt(rangeNet)}
           </p>
+          <p className="mt-1 text-[10px] text-[var(--aw-text-muted)]">{rangeNet >= 0 ? "You kept more than you spent" : "You spent more than you earned"}</p>
         </div>
         <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Savings rate</p>
           <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-text)]">{rangeSavingsRate}%</p>
+          <p className="mt-1 text-[10px] text-[var(--aw-text-muted)]">Portion of income kept</p>
         </div>
       </div>
 
@@ -369,21 +373,23 @@ export function CashFlowView() {
       >
         {actualRangeEntries.length === 0 ? (
           <WorkspaceEmpty
-            title="No cash flow data yet"
+            title="See where your money goes"
             description={connectedAccountCount === 0
-              ? "Connect an account or start adding manual income and expenses."
-              : "No cash flow data for this range yet. Add manual entries to continue."}
+              ? "Connect a bank account and Calico will map your income to your spending categories automatically."
+              : "Once transactions come in for this period, you'll see how your income flows into spending."}
             action={(
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <Link href="/connect" className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm">
-                  Connect an account
-                </Link>
+                {connectedAccountCount === 0 ? (
+                  <Link href="/connect" className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm">
+                    Connect an account
+                  </Link>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => openManualEntry()}
                   className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm"
                 >
-                  Add transaction manually
+                  Add an entry
                 </button>
               </div>
             )}
@@ -392,7 +398,7 @@ export function CashFlowView() {
         ) : (
           <>
             <p className="mb-4 text-sm text-[var(--aw-text-muted)]">
-              Showing cash flow for {rangeLabel}. Income flows left to right into your spending categories.
+              Your income {rangeLabel} and where it went. Wider bands mean more money flowing to that category.
             </p>
             <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
               <SankeyDiagram
@@ -406,14 +412,14 @@ export function CashFlowView() {
         )}
       </WorkspacePanel>
 
-      <WorkspacePanel className="mt-4" title="Upcoming recurring">
+      <WorkspacePanel className="mt-4" title="Upcoming bills and income">
         <div className="aw-card-table">
           {upcomingForecastEntries.length === 0 ? (
             <WorkspaceEmpty
-              title="No upcoming recurring items"
+              title="Nothing scheduled yet"
               description={connectedAccountCount === 0
-                ? "Connect an account or add recurring bills and paychecks to preview what is coming next."
-                : "Recurring bills and paychecks will appear here when Calico detects them or when you add them manually."}
+                ? "Connect an account and Calico will detect your recurring bills and paychecks automatically."
+                : "As Calico detects patterns in your spending, recurring items will appear here."}
               action={(
                 <div className="flex flex-wrap items-center gap-2">
                   {connectedAccountCount === 0 ? (
@@ -429,7 +435,7 @@ export function CashFlowView() {
                     className="aw-button-primary inline-flex h-11 items-center rounded-xl px-5 text-sm"
                     onClick={() => openManualEntry()}
                   >
-                    Add cash flow entry
+                    Add a recurring item
                   </button>
                 </div>
               )}

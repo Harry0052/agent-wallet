@@ -401,14 +401,16 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
   const session = await findSessionByToken(token);
   if (!session) return null;
 
-  await query(
+  // Update last_seen_at in background — never block the auth response.
+  // This is non-critical metadata used for session management, not auth decisions.
+  void query(
     `
       UPDATE app_user_sessions
       SET last_seen_at = NOW()
       WHERE id = $1
     `,
     [session.session_id],
-  );
+  ).catch(() => { /* non-critical */ });
 
   return {
     appUserId: session.user_id,

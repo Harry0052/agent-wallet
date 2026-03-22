@@ -18,16 +18,16 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
 
   return (
     <WidgetContainer
-      title="Repeating Payments"
-      subtitle="Bills and subscriptions coming up soon."
+      title="Upcoming Bills"
+      subtitle="Bills and subscriptions due soon."
       dragHandleProps={props.dragHandleProps}
     >
       {recurring.length === 0 ? (
         <div style={dashboardDashedStyle} className="flex h-full flex-col justify-between rounded-[20px] p-4">
           <div>
-            <p className="text-lg font-semibold text-[var(--calico-text)]">No repeating payments yet</p>
+            <p className="text-lg font-semibold text-[var(--calico-text)]">No upcoming bills yet</p>
             <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
-              Connect an account and Calico will find your bills and subscriptions, or add them yourself.
+              Connect an account and Calico will find your bills and subscriptions automatically.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -61,7 +61,7 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
             </div>
           ))}
           <Link href="/transactions" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
-            See all repeating payments
+            See all bills
             <ArrowRight size={15} />
           </Link>
         </div>

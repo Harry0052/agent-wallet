@@ -52,13 +52,16 @@ function isMissingSchemaError(error: unknown): boolean {
 
 function resolvePoolConfig(connectionString: string): PoolConfig {
   const configuredMax = parsePositiveInt(process.env.DATABASE_POOL_MAX);
+  // Vercel serverless functions can use multiple connections per invocation.
+  // Supabase pooler in session mode supports this if the pool is sized correctly.
+  // 5 connections allows the Promise.all in smartHome.ts to parallelize properly.
   const max = configuredMax
     ?? (connectionString.includes('pooler.supabase.com') || process.env.VERCEL
-      ? 1
+      ? 5
       : 10);
 
   const idleTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_IDLE_TIMEOUT_MS)
-    ?? (process.env.VERCEL ? 5_000 : 30_000);
+    ?? (process.env.VERCEL ? 10_000 : 30_000);
   const connectionTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_CONNECTION_TIMEOUT_MS)
     ?? 10_000;
 

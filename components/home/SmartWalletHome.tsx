@@ -1,6 +1,5 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { CustomizableDashboard } from "@/components/dashboard/CustomizableDashboard";
@@ -24,7 +23,6 @@ function getGreeting(): string {
 }
 
 export function SmartWalletHome() {
-  const pathname = usePathname();
   const financialData = useFinancialData();
   const [home, setHome] = useState<SmartHomePayload | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -71,10 +69,10 @@ export function SmartWalletHome() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (pathname !== "/home") return;
-    void financialData.refresh();
-  }, [financialData.refresh, pathname]);
+  // Skip redundant financialData.refresh() on /home — SmartHome API already
+  // loads accounts, transactions, and recurring in buildSmartHomePayload().
+  // The useFinancialData hook's initial mount load covers this page adequately.
+  // Calling refresh() here would duplicate all API calls and double load time.
 
   const investments = useMemo<DashboardInvestmentHolding[]>(
     () => manualInvestments.map((holding) => ({

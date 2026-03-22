@@ -18,6 +18,7 @@ import {
   Settings,
   Gift,
   Eye,
+  Scale,
 } from "lucide-react";
 import { EditProfileModal } from "@/modals/EditProfileModal";
 import { NotificationSettingsModal } from "@/modals/NotificationSettingsModal";
@@ -47,7 +48,8 @@ type SettingsSection =
   | "preferences"
   | "institutions"
   | "billing"
-  | "referrals";
+  | "referrals"
+  | "legal";
 
 function readStoredJson<T>(key: string, fallback: T): T {
   try {
@@ -98,6 +100,7 @@ function Sidebar({
     { id: "general", label: "General", icon: Settings, group: "household" },
     { id: "preferences", label: "Preferences", icon: Eye, group: "household" },
     { id: "referrals", label: "Invite Friends", icon: Gift, group: "household" },
+    { id: "legal", label: "Privacy & Legal", icon: Scale, group: "household" },
   ];
 
   const accountSections = sections.filter((s) => s.group === "account");
@@ -1315,6 +1318,42 @@ export function SettingsPage() {
               <BillingSection billing={billing} onManage={handleManageBilling} />
             )}
             {activeSection === "referrals" && <ReferralsSection account={account} />}
+
+            {activeSection === "legal" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--aw-text)]">Privacy & Legal</h3>
+                  <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
+                    How Calico handles your data and your rights.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <a
+                    href="https://www.freeprivacypolicy.com/live/ab2b2a8a-1946-4178-ad49-1cde9a62f587"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-xl border border-[var(--aw-border)] bg-white px-4 py-3.5 transition hover:border-[var(--aw-primary)]/30 hover:bg-[var(--aw-primary-soft)]/20"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-[var(--aw-text)]">Privacy Policy</p>
+                      <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">How we collect, use, and protect your information.</p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-[var(--aw-text-muted)]">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                      <polyline points="15 3 21 3 21 9" />
+                      <line x1="10" y1="14" x2="21" y2="3" />
+                    </svg>
+                  </a>
+                </div>
+
+                <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-4 py-3">
+                  <p className="text-xs text-[var(--aw-text-muted)]">
+                    Calico uses bank-level encryption to protect your financial data. Your credentials are never stored on our servers — all connections are handled securely through Plaid.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Logout & Danger Zone - Always visible */}
             {activeSection === "profile" && (

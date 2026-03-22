@@ -51,9 +51,9 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
       ) : (
         <div style={dashboardDashedStyle} className="flex h-full flex-col justify-between rounded-[20px] p-4">
           <div>
-            <p className="text-lg font-semibold text-[var(--calico-text)]">No spending plan yet</p>
+            <p className="text-lg font-semibold text-[var(--calico-text)]">Know where your money goes</p>
             <p className="mt-2 max-w-[18rem] text-sm leading-6 text-[var(--calico-text-muted)]">
-              Create a plan so Calico can help you track where your money goes each month.
+              Set monthly limits for your top spending categories and Calico will track how you're doing.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">

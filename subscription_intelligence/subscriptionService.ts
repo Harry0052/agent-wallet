@@ -131,23 +131,40 @@ async function loadCandidateTransactions(userId: string): Promise<TransactionSou
   return result.rows;
 }
 
-async function upsertSuspectedSubscription(
+async function batchUpsertSuspectedSubscriptions(
   userId: string,
-  candidate: RecurringSubscriptionCandidate,
+  candidates: RecurringSubscriptionCandidate[],
 ): Promise<void> {
+  if (candidates.length === 0) return;
+
+  // Build a single multi-row INSERT ... ON CONFLICT for all candidates
+  const values: unknown[] = [];
+  const placeholders: string[] = [];
+  let idx = 1;
+
+  for (const c of candidates) {
+    placeholders.push(
+      `($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}, $${idx + 5}, $${idx + 6}::timestamptz, 'suspected')`,
+    );
+    values.push(
+      randomUUID(),
+      userId,
+      c.merchant,
+      c.estimated_monthly_cost,
+      c.recurrence_interval,
+      c.confidence,
+      c.last_seen,
+    );
+    idx += 7;
+  }
+
   await query(
     `
       INSERT INTO subscriptions (
-        id,
-        user_id,
-        merchant,
-        estimated_monthly_cost,
-        recurrence_interval,
-        confidence,
-        last_seen,
-        status
+        id, user_id, merchant, estimated_monthly_cost,
+        recurrence_interval, confidence, last_seen, status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, 'suspected')
+      VALUES ${placeholders.join(", ")}
       ON CONFLICT (user_id, merchant)
       DO UPDATE SET
         estimated_monthly_cost = EXCLUDED.estimated_monthly_cost,
@@ -160,15 +177,7 @@ async function upsertSuspectedSubscription(
         END,
         updated_at = NOW()
     `,
-    [
-      randomUUID(),
-      userId,
-      candidate.merchant,
-      candidate.estimated_monthly_cost,
-      candidate.recurrence_interval,
-      candidate.confidence,
-      candidate.last_seen,
-    ],
+    values,
   );
 }
 
@@ -222,8 +231,9 @@ export async function detectAndPersistRecurringSubscriptions(
   const grouped = groupTransactionsByMerchant(signals);
   const detected = detectRecurringSubscriptions(grouped);
 
-  for (const subscription of detected) {
-    await upsertSuspectedSubscription(userId, subscription);
+  // Batch upsert all detected subscriptions in one query instead of N sequential writes
+  if (detected.length > 0) {
+    await batchUpsertSuspectedSubscriptions(userId, detected);
   }
 
   await markMissingSuspectedAsInactive({

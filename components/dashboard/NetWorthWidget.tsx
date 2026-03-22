@@ -18,8 +18,8 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
     <WidgetContainer
       title="Net Worth"
       subtitle={hasData
-        ? "Everything you have minus what you owe across connected and manual accounts."
-        : "Connect an account or add one manually to see your real net worth here."}
+        ? "Your total balance over time, across all accounts."
+        : "See how your money grows once you connect an account."}
       dragHandleProps={props.dragHandleProps}
     >
       <div className="flex flex-col gap-5">
@@ -30,8 +30,8 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
             </p>
             <p className="mt-2 text-sm text-[var(--calico-text-muted)]">
               {hasData
-                ? `${summary.netWorthDelta >= 0 ? "+" : ""}${toCurrency(summary.netWorthDelta)} versus the prior month`
-                : "We'll show the trend once Calico has account balances to track."}
+                ? `${summary.netWorthDelta >= 0 ? "+" : ""}${toCurrency(summary.netWorthDelta)} from last month`
+                : "Your net worth trend will appear here once you add an account."}
             </p>
           </div>
           <div style={dashboardChipStyle} className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]">
@@ -43,9 +43,9 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
             <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgba(253,186,116,0.15)] text-[var(--calico-primary)]">
               <TrendingUp size={20} />
             </div>
-            <p className="mt-4 text-sm font-semibold text-[var(--calico-text)]">No net worth data yet</p>
+            <p className="mt-4 text-sm font-semibold text-[var(--calico-text)]">See the full picture</p>
             <p className="mt-1.5 max-w-[16rem] text-xs leading-5 text-[var(--calico-text-muted)]">
-              Connect an account or add one manually to start tracking your net worth.
+              Link your accounts and Calico will show your net worth and how it changes over time.
             </p>
             <Link
               href="/accounts"
@@ -67,6 +67,7 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
               }]}
               formatValue={toCurrency}
               maxXAxisLabels={6}
+              yAxisUnit="Net worth"
             />
           </motion.div>
         )}

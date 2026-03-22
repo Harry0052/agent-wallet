@@ -5,7 +5,6 @@ import { Receipt } from "lucide-react";
 import { SimpleTrendChart } from "@/components/dashboard/SimpleTrendChart";
 import { WidgetContainer } from "@/components/dashboard/WidgetContainer";
 import { buildDashboardSummary, toCurrency } from "@/components/dashboard/dashboardData";
-import { dashboardChipStyle } from "@/components/dashboard/dashboardStyles";
 import { calicoTheme } from "@/styles/theme";
 import type { DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 
@@ -15,18 +14,24 @@ export function SpendingWidget(props: DashboardWidgetProps & { dragHandleProps?:
 
   return (
     <WidgetContainer
-      title="Spending"
+      title="Cumulative Spending"
       subtitle={hasData
-        ? `You've spent ${toCurrency(summary.monthExpenses)} across ${summary.monthTransactionCount} transaction${summary.monthTransactionCount === 1 ? "" : "s"} this month.`
-        : "How this month's spending compares with last month once activity starts coming in."}
+        ? `${toCurrency(summary.monthExpenses)} spent this month across ${summary.monthTransactionCount} transaction${summary.monthTransactionCount === 1 ? "" : "s"}.`
+        : "Compare this month's spending pace with last month."}
       dragHandleProps={props.dragHandleProps}
     >
       <div className="space-y-5">
         {hasData ? (
           <>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--calico-text-muted)]">
-              <span style={dashboardChipStyle} className="rounded-full px-3 py-1">This month</span>
-              <span style={dashboardChipStyle} className="rounded-full px-3 py-1">Last month</span>
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-[2px] w-3 rounded-full" style={{ backgroundColor: calicoTheme.primary }} />
+                <span className="text-[var(--calico-text-muted)]">This month</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-[2px] w-3 rounded-full" style={{ backgroundColor: calicoTheme.primarySoft }} />
+                <span className="text-[var(--calico-text-muted)]">Last month</span>
+              </span>
             </div>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <SimpleTrendChart
@@ -38,6 +43,8 @@ export function SpendingWidget(props: DashboardWidgetProps & { dragHandleProps?:
                 ]}
                 formatValue={toCurrency}
                 maxXAxisLabels={5}
+                yAxisUnit="Cumulative"
+                xAxisLabel="Day of month"
               />
             </motion.div>
           </>
@@ -46,9 +53,9 @@ export function SpendingWidget(props: DashboardWidgetProps & { dragHandleProps?:
             <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgba(253,186,116,0.15)] text-[var(--calico-primary)]">
               <Receipt size={20} />
             </div>
-            <p className="mt-4 text-sm font-semibold text-[var(--calico-text)]">No spending data yet</p>
+            <p className="mt-4 text-sm font-semibold text-[var(--calico-text)]">Track your spending pace</p>
             <p className="mt-1.5 max-w-[16rem] text-xs leading-5 text-[var(--calico-text-muted)]">
-              Connect an account or add a transaction to see your spending trends.
+              Once you connect an account, Calico will compare this month's spending with last month so you can see if you're on track.
             </p>
             <Link
               href="/transactions"
