@@ -401,16 +401,10 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
   const session = await findSessionByToken(token);
   if (!session) return null;
 
-  // Update last_seen_at in background — never block the auth response.
-  // This is non-critical metadata used for session management, not auth decisions.
-  void query(
-    `
-      UPDATE app_user_sessions
-      SET last_seen_at = NOW()
-      WHERE id = $1
-    `,
-    [session.session_id],
-  ).catch(() => { /* non-critical */ });
+  // Intentionally skip updating last_seen_at on every request.
+  // In serverless + Supabase session mode, fire-and-forget queries create
+  // orphaned connections that exhaust the pool. last_seen_at is updated
+  // on session creation and is not needed for auth decisions.
 
   return {
     appUserId: session.user_id,

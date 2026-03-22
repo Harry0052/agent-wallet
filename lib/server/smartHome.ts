@@ -4,7 +4,6 @@ import { getWallet } from '@/lib/server/ledger';
 import { listConnectedAccounts } from '@/financial_connectors/institutionService';
 import { listConnectedApps } from '@/lib/server/connectedApps';
 import {
-  detectAndPersistRecurringSubscriptions,
   listSubscriptions,
 } from '@/subscription_intelligence/subscriptionService';
 import { listNormalizedTransactions } from '@/transactions/transactionRepository';
@@ -189,13 +188,9 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     safe(getAutomationSummaryForUser({ userId }), null, 'automation'),
   ]);
 
-  // Trigger subscription detection in background (non-blocking).
-  void detectAndPersistRecurringSubscriptions(userId).catch((error) => {
-    logServerEvent('warn', 'smart.home.subscription_detection.background_failed', {
-      userId,
-      message: error instanceof Error ? error.message : 'unknown',
-    });
-  });
+  // Subscription detection is deferred — it runs on the next /api/subscriptions
+  // call or webhook, not inline during the home page load. This avoids creating
+  // orphaned DB connections in Supabase session mode.
 
   const activeAccountIds = new Set(connectedAccounts.map((account) => account.id));
   const activeTransactions = transactions.filter((tx) => activeAccountIds.has(tx.linked_account_id));
