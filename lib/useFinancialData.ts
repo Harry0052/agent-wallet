@@ -129,45 +129,40 @@ export function useFinancialData(): FinancialData {
   }, []);
 
   // ── Fetch connected data from APIs ──────────────────────────────────────
+  // Calls are sequential to avoid overwhelming Supabase session mode pooler
+  // (max 1 connection). Each call is individually fault-tolerant.
   const fetchConnectedData = useCallback(async () => {
-    // Fetch cached data immediately in parallel. Balance refresh happens in
-    // the background AFTER the initial data is displayed — never blocks first paint.
-    const [accountsResult, statementResult, recurringResult] = await Promise.allSettled([
-      fetchConnectedAccountsBundle(),
-      fetchUnifiedStatement({ page_size: 160 }),
-      fetchSuspectedSubscriptions(),
-    ]);
-
-    if (accountsResult.status === "fulfilled") {
-      setConnectedAccounts(accountsResult.value.accounts);
-    } else {
+    try {
+      const bundle = await fetchConnectedAccountsBundle();
+      setConnectedAccounts(bundle.accounts);
+    } catch {
       setConnectedAccounts([]);
     }
 
-    if (statementResult.status === "fulfilled") {
-      setConnectedTransactions(statementResult.value.transactions ?? []);
-    } else {
+    try {
+      const statement = await fetchUnifiedStatement({ page_size: 160 });
+      setConnectedTransactions(statement.transactions ?? []);
+    } catch (err) {
       setConnectedTransactions([]);
-      // Only set error for real failures, not "no accounts connected"
-      const message =
-        statementResult.reason instanceof Error
-          ? statementResult.reason.message
-          : "Failed to load transactions.";
+      const message = err instanceof Error ? err.message : "Failed to load transactions.";
       const isNoDataError = /no\s+connected|no\s+account|not\s+connected|empty/i.test(message);
       if (!isNoDataError) {
         setError(message);
       }
     }
 
-    if (recurringResult.status === "fulfilled") {
-      setConnectedRecurring(recurringResult.value);
-    } else {
+    try {
+      const subs = await fetchSuspectedSubscriptions();
+      setConnectedRecurring(subs);
+    } catch {
       setConnectedRecurring([]);
     }
   }, []);
 
   // ── Background balance refresh (non-blocking) ─────────────────────────
   const backgroundRefreshBalances = useCallback(async () => {
+    // Skip if no accounts are connected — avoids unnecessary Plaid call + DB session
+    if (connectedAccounts.length === 0) return;
     try {
       const result = await refreshConnectedBalances();
       if (mountedRef.current && result.accounts.length > 0) {
@@ -177,7 +172,7 @@ export function useFinancialData(): FinancialData {
     } catch {
       // Silent — cached balances are already displayed
     }
-  }, []);
+  }, [connectedAccounts.length]);
 
   // ── Full refresh ────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
