@@ -6,6 +6,16 @@ import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observ
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
 
 export async function GET(req: NextRequest) {
   const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'smart_home' });
@@ -15,12 +25,17 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
-    const payload = await buildSmartHomePayload(auth.auth.walletUserId);
+    const payload = await withTimeout(
+      buildSmartHomePayload(auth.auth.walletUserId),
+      25_000,
+      'buildSmartHomePayload',
+    );
     return NextResponse.json({ ok: true, home: payload });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load Calico home';
+    const stack = error instanceof Error ? error.stack?.slice(0, 500) : undefined;
     const errorCode = classifyTaskError({ message });
-    logServerEvent('error', 'smart.home.failed', { errorCode, message });
+    logServerEvent('error', 'smart.home.failed', { errorCode, message, stack });
     return NextResponse.json(apiError(errorCode, message, true), { status: 500 });
   }
 }

@@ -160,22 +160,33 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
   // Fast path: read cached subscriptions + all other data in parallel.
   // Subscription detection (expensive: reads all txns, runs algorithm, writes N rows)
   // runs in background after the response is sent.
-  const [wallet, connectedAccounts, connectedApps, recurring, transactions, paymentMethods, categoryRules, automationSummaryResult] = await Promise.all([
-    getWallet(userId),
-    listConnectedAccounts(userId),
-    listConnectedApps(userId),
-    listSubscriptions({ userId, status: "suspected" }),
-    listNormalizedTransactions({ userId, limit: 250 }),
-    listSavedFundingMethods(userId),
-    listCategoryLearningRules(userId),
-    getAutomationSummaryForUser({ userId }).catch((error) => {
-      const message = error instanceof Error ? error.message : 'unknown';
-      logServerEvent('warn', 'smart.home.automation_summary.unavailable', {
+  // Each data source is individually fault-tolerant so a single failure
+  // doesn't crash the entire dashboard load.
+  function safe<T>(promise: Promise<T>, fallback: T, label: string): Promise<T> {
+    return promise.catch((error) => {
+      logServerEvent('warn', `smart.home.${label}.unavailable`, {
         userId,
-        message,
+        message: error instanceof Error ? error.message : 'unknown',
       });
-      return null;
-    }),
+      return fallback;
+    });
+  }
+
+  const [wallet, connectedAccounts, connectedApps, recurring, transactions, paymentMethods, categoryRules, automationSummaryResult] = await Promise.all([
+    safe(getWallet(userId), {
+      balance: 0,
+      currency: 'USD',
+      transactions: [],
+      settings: { maxTransaction: 1000, dailyLimit: 5000, monthlyBudget: 0, approvalThreshold: 500, requireLocation: false, allowedMerchants: [], blockedMerchants: [] },
+      recipients: [],
+    }, 'wallet'),
+    safe(listConnectedAccounts(userId), [], 'accounts'),
+    safe(listConnectedApps(userId), [], 'apps'),
+    safe(listSubscriptions({ userId, status: "suspected" }), [], 'subscriptions'),
+    safe(listNormalizedTransactions({ userId, limit: 250 }), [], 'transactions'),
+    safe(listSavedFundingMethods(userId), [], 'funding'),
+    safe(listCategoryLearningRules(userId), [], 'category_rules'),
+    safe(getAutomationSummaryForUser({ userId }), null, 'automation'),
   ]);
 
   // Trigger subscription detection in background (non-blocking).
