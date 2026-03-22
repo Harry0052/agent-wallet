@@ -150,10 +150,9 @@ export const PLAN_TUTORIALS: Record<PlanId, { heading: string; steps: TutorialSt
   autonomous: {
     heading: "Welcome to Fully Autonomous!",
     steps: [
-      { title: "Everything from Pro", body: "Plus Calico can take action on your behalf — less work for you.", icon: "Crown" },
-      { title: "Task center", body: "Calico detects money tasks and presents them for your approval. Review, approve, or dismiss.", icon: "Zap" },
-      { title: "Financial memory", body: "Calico remembers your patterns, preferences, and history to give smarter guidance over time.", icon: "Brain" },
-      { title: "Advanced intelligence", body: "Deeper analysis across your investments and full financial picture.", icon: "Target" },
+      { title: "Calico does the work for you", body: "Everything in Pro, plus Calico detects routine money tasks and handles them — you just review and approve.", icon: "Crown" },
+      { title: "Task center", body: "Calico flags things to do: clean up categories, review subscriptions, adjust budgets. Approve or dismiss with one tap.", icon: "Zap" },
+      { title: "Financial memory", body: "Over time, Calico learns your patterns and preferences so its suggestions get smarter and more personalized.", icon: "Brain" },
     ],
   },
 };

@@ -58,12 +58,10 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     trialDays: 0,
     features: [
       'Everything in Pro',
-      'Task Center and automations',
-      'Long-range outlook',
-      'Bill negotiation workflows',
-      'Custom integrations',
-      'API access',
-      'Premium intelligence',
+      'Task center — auto-detected money tasks',
+      'Action approval workflows',
+      'Financial memory — learns your patterns',
+      'Advanced intelligence and optimization',
     ],
   },
 };

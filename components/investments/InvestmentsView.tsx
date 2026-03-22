@@ -261,6 +261,7 @@ export function InvestmentsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title="Investments"
+        subtitle="Track your portfolio, see how it's allocated, and understand your long-term wealth."
         actions={(
           <button
             type="button"
@@ -300,8 +301,8 @@ export function InvestmentsView() {
       <WorkspacePanel className="mt-4" title="Holdings">
         {holdings.length === 0 ? (
           <WorkspaceEmpty
-            title="No holdings yet"
-            description="Add your investments manually to track them alongside the rest of your money."
+            title="See your full financial picture"
+            description="Add stocks, funds, crypto, or other investments. Calico tracks them alongside your cash and debt so you can see your complete net worth."
             action={(
               <div className="flex flex-wrap items-center gap-2">
                 <Link href="/connect" className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm">
@@ -377,6 +378,52 @@ export function InvestmentsView() {
                 </div>
               </div>
             ))}
+          </div>
+        </WorkspacePanel>
+      ) : null}
+
+      {holdings.length > 0 ? (
+        <WorkspacePanel className="mt-4" title="Portfolio Insights">
+          <div className="space-y-3">
+            {/* Largest holding */}
+            {allocationRows.length > 0 ? (
+              <div className="rounded-xl border border-[var(--aw-border)] bg-white px-4 py-3">
+                <p className="text-sm text-[var(--aw-text)]">
+                  <span className="font-semibold">{allocationRows[0].label}</span> is your largest holding at{" "}
+                  <span className="font-semibold">{allocationRows[0].weight.toFixed(0)}%</span> of your portfolio.
+                </p>
+              </div>
+            ) : null}
+
+            {/* Concentration check */}
+            {allocationRows.length > 0 && allocationRows[0].weight > 50 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3">
+                <p className="text-sm text-amber-900">
+                  <span className="font-semibold">Concentration risk:</span> More than half your portfolio is in {allocationRows[0].label}.
+                  Consider diversifying to reduce risk.
+                </p>
+              </div>
+            ) : allocationRows.length >= 3 ? (
+              <div className="rounded-xl border border-[var(--aw-border)] bg-white px-4 py-3">
+                <p className="text-sm text-[var(--aw-text)]">
+                  Your portfolio is spread across <span className="font-semibold">{allocationRows.length} holdings</span>.
+                  {allocationRows[0].weight < 40 ? " That's reasonably diversified." : ""}
+                </p>
+              </div>
+            ) : null}
+
+            {/* Total vs cost */}
+            {totals.totalCostBasis > 0 ? (
+              <div className="rounded-xl border border-[var(--aw-border)] bg-white px-4 py-3">
+                <p className="text-sm text-[var(--aw-text)]">
+                  You've invested <span className="font-semibold">{fmt(totals.totalCostBasis)}</span> and it's now worth{" "}
+                  <span className={`font-semibold ${totals.gainLoss >= 0 ? "text-[var(--aw-success)]" : "text-[var(--aw-danger)]"}`}>
+                    {fmt(totals.totalValue)}
+                  </span>
+                  {" "}({totals.gainLoss >= 0 ? "+" : ""}{totals.gainLossPct.toFixed(1)}%).
+                </p>
+              </div>
+            ) : null}
           </div>
         </WorkspacePanel>
       ) : null}
