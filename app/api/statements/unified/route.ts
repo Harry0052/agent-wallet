@@ -14,6 +14,7 @@ import { enforceRateLimit } from "@/security/rateLimiter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {
   const rateLimited = enforceRateLimit(req, { profile: "general", scope: "statements" });

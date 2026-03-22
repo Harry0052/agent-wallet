@@ -10,6 +10,7 @@ import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 /** POST: Create a link token in update mode for relinking */
 export async function POST(req: NextRequest) {

@@ -18,6 +18,7 @@ import {
 } from "@/security/securityMonitor";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 const BodySchema = z
   .object({

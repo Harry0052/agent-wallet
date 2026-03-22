@@ -11,6 +11,7 @@ import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   const rateLimited = enforceRateLimit(req, { profile: "general", scope: "connect" });

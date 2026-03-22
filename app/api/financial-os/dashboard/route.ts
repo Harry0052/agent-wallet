@@ -9,6 +9,7 @@ import { ensureUserSettingsRow } from "@/lib/server/userSettings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const querySchema = z.object({
   sync: z.enum(["0", "1"]).optional(),

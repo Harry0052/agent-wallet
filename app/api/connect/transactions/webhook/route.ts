@@ -12,6 +12,7 @@ import {
 import { getOptionalSecret, getRequiredSecret } from "@/security/secretsManager";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 // ── Plaid JWT Webhook Verification ──────────────────────────────────────────
 // Verifies webhooks using the `Plaid-Verification` header (JWT signed by Plaid).
