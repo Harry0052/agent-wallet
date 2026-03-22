@@ -320,7 +320,7 @@ export function CashFlowView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title="Cash Flow"
-        subtitle="Where your money comes from and where it goes."
+        subtitle="See what's coming in, what's going out, and what may need attention next."
         actions={(
           <button
             type="button"

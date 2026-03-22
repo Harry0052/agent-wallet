@@ -144,9 +144,9 @@ export function TaskCenterView() {
     <div className="aw-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--aw-text)]">To-Do</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--aw-text)]">Action Center</h1>
           <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-            Things Calico found that might save you money or need your attention.
+            Things Calico found that may save you money or need your approval.
           </p>
         </div>
         <button
@@ -211,8 +211,8 @@ export function TaskCenterView() {
                   <ListChecks size={22} className="text-[var(--aw-text-muted)]" />
                 </div>
                 <p className="text-sm font-semibold text-[var(--aw-text)]">You're all caught up</p>
-                <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-                  Calico will add items here when it spots something worth doing.
+                <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-[var(--aw-text-muted)]">
+                  Calico will add review items here when it finds something worth doing — like transfer cleanup, recurring confirmations, budget drafts, or category fixes.
                 </p>
               </div>
             ) : (
@@ -257,7 +257,7 @@ export function TaskCenterView() {
                           className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--aw-primary)] px-3 text-xs font-semibold text-[var(--aw-text)]"
                         >
                           {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                          Do it
+                          Approve
                         </button>
                       ) : null}
 
@@ -300,7 +300,7 @@ export function TaskCenterView() {
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--aw-border)] bg-white px-3 text-xs font-semibold text-[var(--aw-text-muted)]"
                       >
                         <X size={13} />
-                        Not interested
+                        Dismiss
                       </button>
                     </div>
                   </article>
@@ -308,6 +308,36 @@ export function TaskCenterView() {
               })
             )}
           </section>
+
+          {/* Completed / dismissed history */}
+          {actions.filter((a) => a.status === "completed" || a.status === "dismissed").length > 0 ? (
+            <section className="mt-6">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
+                Recently handled
+              </p>
+              <div className="space-y-2">
+                {actions
+                  .filter((a) => a.status === "completed" || a.status === "dismissed")
+                  .slice(0, 5)
+                  .map((action) => (
+                    <div
+                      key={action.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-[var(--aw-text-muted)]">{action.title}</p>
+                        <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]/60">
+                          {friendlyActionType(action.actionType)}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusBadgeClass(action.status)}`}>
+                        {action.status === "completed" ? "Done" : "Dismissed"}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </section>
+          ) : null}
         </>
       )}
     </div>

@@ -98,13 +98,13 @@ export function AutomationsView() {
     <div className="flex h-full min-h-screen flex-col gap-8 bg-[var(--aw-surface-subtle)] p-6">
       <WorkspaceHeader
         title="Automations"
-        subtitle={isAutonomous ? "Review automation-capable workflows in Task Center." : "Let Calico handle your money tasks"}
+        subtitle={isAutonomous ? "Set up automated workflows. Review active items in the Action Center." : "Let Calico handle the money busywork for you."}
         actions={isAutonomous ? (
           <Link
             href="/tasks"
             className="inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-4 py-2 text-sm font-semibold text-[var(--aw-text)] shadow-sm transition hover:opacity-90"
           >
-            Open Task Center
+            Open Action Center
             <ArrowRight size={16} />
           </Link>
         ) : null}

@@ -10,14 +10,14 @@ export type CustomLabelMap = Record<string, string>;
 const DEFAULT_LABELS: CustomLabelMap = {
   home: "Home",
   accounts: "Accounts",
-  transactions: "Money Moves",
-  tasks: "To-Do",
+  transactions: "Transactions",
+  tasks: "Action Center",
   cashflow: "Cash Flow",
   budgets: "Spending Plan",
   goals: "Money Goals",
   investments: "Investments",
   reports: "Reports",
-  insights: "Calico Noticed",
+  insights: "Insights",
   automations: "Automations",
   settings: "Settings",
 };

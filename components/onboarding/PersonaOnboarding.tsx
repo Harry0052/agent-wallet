@@ -16,32 +16,32 @@ const CALICO_QUESTIONS: { key: string; message: string }[] = [
   {
     key: "intro",
     message:
-      "Hi! Welcome to Calico \ud83d\udc31\n\nI'm your all-in-one financial system. I'm here to help you understand your money, automate tasks, and make smarter financial decisions.\n\nBefore we get started, I'd love to learn a little about you.\n\nWhat's your name?",
+      "Hi! Welcome to Calico \ud83d\udc31\n\nI'm your money system \u2014 here to help you understand your money, build good habits, and make smarter decisions.\n\nLet me learn a little about you so I can give better guidance.\n\nWhat's your name?",
   },
   {
     key: "about",
     message:
-      "Nice to meet you, {{name}}! \ud83d\udc4b\n\nTell me a little about yourself \u2014 what do you do for work, and roughly how old are you? No pressure to be exact.",
+      "Nice to meet you, {{name}}! \ud83d\udc4b\n\nTell me a bit about yourself \u2014 how old are you, and what's your situation? Student, working, freelancing? No pressure to be exact.",
   },
   {
     key: "goals",
     message:
-      "Got it! That helps me understand your situation better.\n\nWhat are your main financial goals right now? Things like saving for a trip, paying off debt, building an emergency fund, investing \u2014 anything on your mind.",
+      "Got it! That helps me tailor things for you.\n\nWhat are your main money goals right now? Things like saving for something, paying off debt, building a cushion, or learning to invest.",
   },
   {
     key: "stress",
     message:
-      "Those are great goals. \ud83d\udcaa\n\nWhat's the thing about money that stresses you out most? Be honest \u2014 I'm here to help, not judge.",
+      "Those are solid goals. \ud83d\udcaa\n\nWhat's the thing about money that feels hardest or most confusing? Be honest \u2014 I'm here to help, not judge.",
   },
   {
     key: "habits",
     message:
-      "I hear you. A lot of people feel that way.\n\nHow would you describe your spending and saving habits? For example \u2014 do you tend to spend impulsively, or are you more of a planner? Do you save regularly?",
+      "I hear you. A lot of people feel that way.\n\nHow would you describe your spending and saving habits? Do you tend to spend freely, or are you more of a planner? Do you save regularly?",
   },
   {
     key: "investing",
     message:
-      "That's really helpful context.\n\nLast couple of things \u2014 are you interested in investing, and how would you describe your risk tolerance? (Conservative, moderate, or comfortable with risk?)",
+      "That's really helpful.\n\nLast thing \u2014 are you interested in investing? And how comfortable are you with risk? (Conservative, moderate, or okay with some risk?)",
   },
 ];
 

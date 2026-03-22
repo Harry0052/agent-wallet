@@ -42,34 +42,29 @@ const BASE_TUTORIAL: { heading: string; steps: TutorialStep[] } = {
   heading: "Welcome to Calico!",
   steps: [
     {
-      title: "This is your dashboard",
-      body: "Everything starts here. Your accounts, balances, recent activity, and key insights — all in one place.",
+      title: "This is your money home base",
+      body: "Everything in one place — accounts, balances, what you've spent, what's coming up, and what's safe to spend.",
       icon: "LayoutDashboard",
     },
     {
-      title: "Connect or add accounts",
-      body: "Link your bank accounts for live data, or add accounts manually. Both work seamlessly together.",
+      title: "Link your bank accounts",
+      body: "Connect your bank or cards so Calico can see your money. We only look — we never touch your accounts.",
       icon: "Link",
     },
     {
-      title: "Track your money",
-      body: "Every transaction is organized automatically. See your spending by category, spot patterns, and stay informed.",
+      title: "Calico organizes everything",
+      body: "Transactions are categorized automatically. You'll see where your money goes without any manual work.",
       icon: "Receipt",
     },
     {
-      title: "Set budgets and goals",
-      body: "Create simple spending plans and savings goals. Calico tracks your progress and keeps you on course.",
+      title: "Your first plan and goal",
+      body: "Calico drafts a simple spending plan and suggests your first savings goal based on your situation.",
       icon: "PiggyBank",
     },
     {
-      title: "Get insights and reports",
-      body: "Calico watches your finances and surfaces what matters — spending summaries, alerts, and suggestions.",
+      title: "Guidance that fits your life",
+      body: "Calico adapts to your age, income, and goals. The more it learns, the more useful it gets.",
       icon: "Sparkles",
-    },
-    {
-      title: "Find everything in Settings",
-      body: "Manage your profile, connected banks, notifications, billing, and replay this tutorial anytime.",
-      icon: "Settings",
     },
   ],
 };

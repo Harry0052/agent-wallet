@@ -45,39 +45,39 @@ export interface FeatureDefinition {
 }
 
 export const FEATURES: FeatureDefinition[] = [
-  // ── Starter — "See all your money clearly" ──
-  // Clarity: see your money, know the basics
+  // ── Starter — "Your first money system" ──
+  // First structure: see your money, get a first plan, know what to do next
   { key: 'core_dashboard', label: 'Money Dashboard', description: 'Your full money picture in one place', minimumPlan: 'starter' },
   { key: 'limited_accounts', label: 'Up to 3 Accounts', description: 'Connect up to 3 bank or card accounts', minimumPlan: 'starter' },
   { key: 'net_worth', label: 'Net Worth', description: 'See your total balance across all accounts', minimumPlan: 'starter' },
   { key: 'basic_transactions', label: 'Transaction Feed', description: 'See spending and income as it happens', minimumPlan: 'starter' },
   { key: 'spending_categories', label: 'Auto-Categories', description: 'Transactions sorted into categories automatically', minimumPlan: 'starter' },
   { key: 'monthly_cashflow', label: 'Cash Flow', description: 'Monthly money in vs. money out', minimumPlan: 'starter' },
-  { key: 'basic_budgets', label: 'Simple Budgets', description: 'Set a basic monthly spending plan', minimumPlan: 'starter' },
-  { key: 'monthly_summaries', label: 'Monthly Summary', description: 'A clear recap of where your money went', minimumPlan: 'starter' },
+  { key: 'basic_budgets', label: 'First Budget Draft', description: 'Calico builds your first spending plan from your history', minimumPlan: 'starter' },
+  { key: 'monthly_summaries', label: 'Weekly Safe to Spend', description: 'Know how much you can comfortably spend each week', minimumPlan: 'starter' },
   { key: 'manual_entry', label: 'Manual Entry', description: 'Add accounts and transactions by hand', minimumPlan: 'starter' },
 
-  // ── Pro — "Plan your money and get useful guidance" ──
-  // Planning: budgets, goals, insights, trends, cleanup — Calico helps you decide and act
+  // ── Pro — "Your adaptive money coach" ──
+  // Coaching: personalized guidance, smart plans, purchase planning, credit, investing readiness
   { key: 'unlimited_accounts', label: 'Unlimited Accounts', description: 'Connect all your banks, cards, and loans', minimumPlan: 'pro' },
-  { key: 'simple_goals', label: 'Money Goals', description: 'Set savings targets with suggested amounts and timelines', minimumPlan: 'pro' },
+  { key: 'simple_goals', label: 'Money Goals', description: 'Goals with suggested targets, timelines, and contribution amounts', minimumPlan: 'pro' },
   { key: 'income_expense_chart', label: 'Income vs. Spending', description: 'See what you earn and spend side by side', minimumPlan: 'pro' },
   { key: 'spending_trends', label: 'Spending Trends', description: 'Track how your spending changes month to month', minimumPlan: 'pro' },
   { key: 'category_breakdowns', label: 'Category Breakdown', description: 'See exactly where your money goes by category', minimumPlan: 'pro' },
-  { key: 'recurring_detection', label: 'Bill Detection', description: 'Bills and subscriptions found and tracked automatically', minimumPlan: 'pro' },
+  { key: 'recurring_detection', label: 'Bill & Income Detection', description: 'Bills and income sources found and tracked automatically', minimumPlan: 'pro' },
   { key: 'basic_alerts', label: 'Smart Alerts', description: 'Get notified about unusual spending or important changes', minimumPlan: 'pro' },
-  { key: 'basic_insights', label: 'Insights', description: 'Personalized observations with recommended next steps', minimumPlan: 'pro' },
+  { key: 'basic_insights', label: 'Coaching Insights', description: 'Personalized guidance based on your life stage and habits', minimumPlan: 'pro' },
   { key: 'advanced_insights', label: 'Deep Analysis', description: 'Pattern explanations and spending comparisons over time', minimumPlan: 'pro' },
-  { key: 'smart_savings', label: 'Savings Suggestions', description: 'Calico finds realistic ways you could save more', minimumPlan: 'pro' },
+  { key: 'smart_savings', label: 'Savings Coaching', description: 'Calico finds realistic ways you could save more', minimumPlan: 'pro' },
   { key: 'custom_categories', label: 'Custom Categories', description: 'Organize transactions into your own groups', minimumPlan: 'pro' },
-  { key: 'ai_research', label: 'Affordability Check', description: 'Ask Calico whether a purchase fits your budget', minimumPlan: 'pro' },
+  { key: 'ai_research', label: 'Purchase Planner', description: 'Ask Calico if you can afford something and when to buy it', minimumPlan: 'pro' },
   { key: 'cashflow_forecast', label: '30-Day Forecast', description: 'See where your money will be in 30 days', minimumPlan: 'pro' },
   { key: 'priority_support', label: 'Priority Support', description: 'Faster help when you need it', minimumPlan: 'pro' },
 
   // ── Fully Autonomous — "Help me handle it" ──
   // Execution: Calico takes action and optimizes on your behalf
-  { key: 'ai_automation', label: 'Task Center', description: 'Calico detects and handles routine money tasks', minimumPlan: 'autonomous' },
-  { key: 'autonomous_actions', label: 'Action Approval', description: 'Review and approve actions — Calico executes', minimumPlan: 'autonomous' },
+  { key: 'ai_automation', label: 'Action Center', description: 'Calico detects issues, drafts fixes, and asks for your approval', minimumPlan: 'autonomous' },
+  { key: 'autonomous_actions', label: 'Learned Rules', description: 'Calico remembers corrections and applies them automatically', minimumPlan: 'autonomous' },
   { key: 'bill_negotiation', label: 'Bill Optimization', description: 'Identify opportunities to reduce recurring costs (coming soon)', minimumPlan: 'autonomous' },
   { key: 'advanced_forecasting', label: 'Extended Outlook', description: 'Longer-range financial projections (coming soon)', minimumPlan: 'autonomous' },
   { key: 'financial_memory', label: 'Financial Memory', description: 'Calico remembers your patterns and gets smarter over time', minimumPlan: 'autonomous' },
@@ -128,31 +128,31 @@ export interface TutorialStep {
 
 export const PLAN_TUTORIALS: Record<PlanId, { heading: string; steps: TutorialStep[] }> = {
   starter: {
-    heading: "Welcome to Calico!",
+    heading: "Your first money system",
     steps: [
-      { title: "Your money dashboard", body: "See your accounts, net worth, and recent activity — all in one calm place.", icon: "LayoutDashboard" },
-      { title: "Connect your accounts", body: "Link up to 3 bank accounts or cards. Calico only looks — never touches your money.", icon: "Link" },
-      { title: "Your transaction feed", body: "Every transaction appears automatically with categories. See where your money goes.", icon: "Receipt" },
-      { title: "Cash flow & budgets", body: "Track your monthly cash flow and set simple budgets to stay on track.", icon: "PiggyBank" },
+      { title: "See everything in one place", body: "Your accounts, balances, and net worth — all together. This is your financial home base.", icon: "LayoutDashboard" },
+      { title: "Link your accounts", body: "Connect up to 3 bank accounts or cards. Calico only looks — never touches your money.", icon: "Link" },
+      { title: "Know what's safe to spend", body: "Each week, Calico tells you how much is safe to spend after bills and essentials.", icon: "Sparkles" },
+      { title: "Your first budget and goal", body: "Calico drafts a simple spending plan and suggests your first savings goal. Just review and adjust.", icon: "PiggyBank" },
     ],
   },
   pro: {
-    heading: "Welcome to Calico Pro!",
+    heading: "Your adaptive money coach",
     steps: [
-      { title: "Plan your money, not just see it", body: "Pro helps you understand what's happening, plan your month, and make better decisions.", icon: "Sparkles" },
-      { title: "Smart spending plan", body: "Calico builds your first budget automatically from your spending history. Just review and adjust.", icon: "PiggyBank" },
-      { title: "Goals with guidance", body: "Set savings targets and Calico suggests realistic amounts and timelines to reach them.", icon: "Target" },
-      { title: "Bills found automatically", body: "Recurring charges are detected and tracked so you always know what's coming up.", icon: "RefreshCw" },
-      { title: "Insights that help", body: "Calico notices patterns in your spending and suggests specific things you can do about them.", icon: "CalendarCheck" },
-      { title: "Clean up your data", body: "Correct categories, mark transfers, and exclude items from your budget — your reports stay accurate.", icon: "Receipt" },
+      { title: "Guidance built for your life", body: "Pro adapts to your age, income, goals, and habits. The advice gets more relevant over time.", icon: "Sparkles" },
+      { title: "Smart spending plan", body: "Calico builds your budget from your real spending and adjusts it as things change.", icon: "PiggyBank" },
+      { title: "Goals with real timelines", body: "Set savings targets and Calico suggests how much to save each month and when you'll reach them.", icon: "Target" },
+      { title: "Purchase planner", body: "Before a big spend, ask Calico if you can afford it — and when the best time to buy would be.", icon: "CalendarCheck" },
+      { title: "Credit and investing guidance", body: "Calico helps you build credit and tells you when you're ready to start investing — no jargon.", icon: "TrendingUp" },
+      { title: "Insights and cleanup", body: "Calico spots patterns, recommends actions, and helps you keep your transaction data clean.", icon: "Receipt" },
     ],
   },
   autonomous: {
-    heading: "Welcome to Fully Autonomous!",
+    heading: "Calico handles the work",
     steps: [
-      { title: "Calico does the work for you", body: "Everything in Pro, plus Calico detects routine money tasks and handles them — you just review and approve.", icon: "Crown" },
-      { title: "Task center", body: "Calico flags things to do: clean up categories, review subscriptions, adjust budgets. Approve or dismiss with one tap.", icon: "Zap" },
-      { title: "Financial memory", body: "Over time, Calico learns your patterns and preferences so its suggestions get smarter and more personalized.", icon: "Brain" },
+      { title: "Less manual work", body: "Everything in Pro, plus Calico detects routine money tasks and prepares them for your approval.", icon: "Crown" },
+      { title: "Action Center", body: "Transfer cleanup, recurring confirmations, budget drafts, category fixes — all in one place. Approve or dismiss with one tap.", icon: "Zap" },
+      { title: "Calico learns from you", body: "Every correction you make teaches Calico. Over time, it handles more automatically and gets smarter.", icon: "Brain" },
     ],
   },
 };
