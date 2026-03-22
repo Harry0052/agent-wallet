@@ -19,7 +19,7 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
   return (
     <WidgetContainer
       title="Upcoming Bills"
-      subtitle="Bills and subscriptions due soon."
+      subtitle="Recurring charges Calico detected from your transactions."
       dragHandleProps={props.dragHandleProps}
     >
       {recurring.length === 0 ? (
@@ -48,22 +48,37 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
-          {recurring.map((item) => (
-            <div key={item.id} style={dashboardInsetStyle} className="rounded-[20px] px-4 py-3">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--calico-text)]">{item.merchant}</p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--calico-text-muted)]">{item.recurrence_interval}</p>
+        <div className="space-y-2">
+          {recurring.map((item) => {
+            const confidence = item.confidence ?? 0;
+            const confidenceLabel = confidence >= 0.8 ? "High" : confidence >= 0.5 ? "Medium" : "Low";
+            return (
+              <div key={item.id} style={dashboardInsetStyle} className="rounded-[16px] px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[var(--calico-text)]">{item.merchant}</p>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-[var(--calico-text-muted)]">
+                      <span className="capitalize">{item.recurrence_interval}</span>
+                      <span className="text-[var(--calico-border)]">·</span>
+                      <span>{confidenceLabel} confidence</span>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--calico-text)]">
+                    {toCurrency(item.estimated_monthly_cost)}/mo
+                  </span>
                 </div>
-                <span className="text-sm font-semibold text-[var(--calico-text)]">{toCurrency(item.estimated_monthly_cost)}</span>
               </div>
-            </div>
-          ))}
-          <Link href="/transactions" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
-            See all bills
-            <ArrowRight size={15} />
-          </Link>
+            );
+          })}
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs text-[var(--calico-text-muted)]">
+              {toCurrency(recurring.reduce((s, i) => s + (i.estimated_monthly_cost ?? 0), 0))}/mo total
+            </p>
+            <Link href="/recurring" className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
+              See all
+              <ArrowRight size={13} />
+            </Link>
+          </div>
         </div>
       )}
     </WidgetContainer>

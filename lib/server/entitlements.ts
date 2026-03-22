@@ -45,33 +45,33 @@ export interface FeatureDefinition {
 }
 
 export const FEATURES: FeatureDefinition[] = [
-  // ── Starter — "Help me see where I stand" ──
-  // Clarity: see your money, know the basics, no analysis or advice
-  { key: 'core_dashboard', label: 'Money Dashboard', description: 'Your whole money picture in one calm place', minimumPlan: 'starter' },
+  // ── Starter — "See all your money clearly" ──
+  // Clarity: see your money, know the basics
+  { key: 'core_dashboard', label: 'Money Dashboard', description: 'Your full money picture in one place', minimumPlan: 'starter' },
   { key: 'limited_accounts', label: 'Up to 3 Accounts', description: 'Connect up to 3 bank or card accounts', minimumPlan: 'starter' },
-  { key: 'net_worth', label: 'Net Worth Tracking', description: 'Track assets minus liabilities across all accounts', minimumPlan: 'starter' },
+  { key: 'net_worth', label: 'Net Worth', description: 'See your total balance across all accounts', minimumPlan: 'starter' },
   { key: 'basic_transactions', label: 'Transaction Feed', description: 'See spending and income as it happens', minimumPlan: 'starter' },
   { key: 'spending_categories', label: 'Auto-Categories', description: 'Transactions sorted into categories automatically', minimumPlan: 'starter' },
-  { key: 'monthly_cashflow', label: 'Cash Flow View', description: 'Monthly money in vs. money out', minimumPlan: 'starter' },
+  { key: 'monthly_cashflow', label: 'Cash Flow', description: 'Monthly money in vs. money out', minimumPlan: 'starter' },
   { key: 'basic_budgets', label: 'Simple Budgets', description: 'Set a basic monthly spending plan', minimumPlan: 'starter' },
   { key: 'monthly_summaries', label: 'Monthly Summary', description: 'A clear recap of where your money went', minimumPlan: 'starter' },
   { key: 'manual_entry', label: 'Manual Entry', description: 'Add accounts and transactions by hand', minimumPlan: 'starter' },
 
-  // ── Pro — "Help me understand what to do next" ──
-  // Guidance: goals, insights, trends, alerts — Calico explains and advises
-  { key: 'unlimited_accounts', label: 'Unlimited Accounts', description: 'Connect as many accounts as you need', minimumPlan: 'pro' },
-  { key: 'simple_goals', label: 'Money Goals', description: 'Set savings targets and track progress', minimumPlan: 'pro' },
-  { key: 'income_expense_chart', label: 'Income vs. Expense', description: 'Visual comparison of what you earn and spend', minimumPlan: 'pro' },
-  { key: 'spending_trends', label: 'Spending Trends', description: 'See how your spending changes over time', minimumPlan: 'pro' },
-  { key: 'category_breakdowns', label: 'Category Breakdown', description: 'Detailed view of where money goes by category', minimumPlan: 'pro' },
-  { key: 'recurring_detection', label: 'Recurring Detection', description: 'Bills and subscriptions found automatically', minimumPlan: 'pro' },
-  { key: 'basic_alerts', label: 'Smart Alerts', description: 'Notified about unusual spending and important changes', minimumPlan: 'pro' },
-  { key: 'basic_insights', label: 'AI Insights', description: 'AI-powered analysis and tips about your money', minimumPlan: 'pro' },
-  { key: 'advanced_insights', label: 'Deep Analysis', description: 'Deeper explanations of patterns and opportunities', minimumPlan: 'pro' },
-  { key: 'smart_savings', label: 'Savings Suggestions', description: 'Calico finds ways you could save more', minimumPlan: 'pro' },
-  { key: 'custom_categories', label: 'Custom Categories', description: 'Organize spending into your own groups', minimumPlan: 'pro' },
-  { key: 'ai_research', label: 'Affordability Check', description: 'Ask whether a purchase fits your budget', minimumPlan: 'pro' },
-  { key: 'cashflow_forecast', label: '30-Day Forecast', description: 'See what your money looks like in 30 days', minimumPlan: 'pro' },
+  // ── Pro — "Plan your money and get useful guidance" ──
+  // Planning: budgets, goals, insights, trends, cleanup — Calico helps you decide and act
+  { key: 'unlimited_accounts', label: 'Unlimited Accounts', description: 'Connect all your banks, cards, and loans', minimumPlan: 'pro' },
+  { key: 'simple_goals', label: 'Money Goals', description: 'Set savings targets with suggested amounts and timelines', minimumPlan: 'pro' },
+  { key: 'income_expense_chart', label: 'Income vs. Spending', description: 'See what you earn and spend side by side', minimumPlan: 'pro' },
+  { key: 'spending_trends', label: 'Spending Trends', description: 'Track how your spending changes month to month', minimumPlan: 'pro' },
+  { key: 'category_breakdowns', label: 'Category Breakdown', description: 'See exactly where your money goes by category', minimumPlan: 'pro' },
+  { key: 'recurring_detection', label: 'Bill Detection', description: 'Bills and subscriptions found and tracked automatically', minimumPlan: 'pro' },
+  { key: 'basic_alerts', label: 'Smart Alerts', description: 'Get notified about unusual spending or important changes', minimumPlan: 'pro' },
+  { key: 'basic_insights', label: 'Insights', description: 'Personalized observations with recommended next steps', minimumPlan: 'pro' },
+  { key: 'advanced_insights', label: 'Deep Analysis', description: 'Pattern explanations and spending comparisons over time', minimumPlan: 'pro' },
+  { key: 'smart_savings', label: 'Savings Suggestions', description: 'Calico finds realistic ways you could save more', minimumPlan: 'pro' },
+  { key: 'custom_categories', label: 'Custom Categories', description: 'Organize transactions into your own groups', minimumPlan: 'pro' },
+  { key: 'ai_research', label: 'Affordability Check', description: 'Ask Calico whether a purchase fits your budget', minimumPlan: 'pro' },
+  { key: 'cashflow_forecast', label: '30-Day Forecast', description: 'See where your money will be in 30 days', minimumPlan: 'pro' },
   { key: 'priority_support', label: 'Priority Support', description: 'Faster help when you need it', minimumPlan: 'pro' },
 
   // ── Fully Autonomous — "Help me handle it" ──
@@ -139,11 +139,12 @@ export const PLAN_TUTORIALS: Record<PlanId, { heading: string; steps: TutorialSt
   pro: {
     heading: "Welcome to Calico Pro!",
     steps: [
-      { title: "Everything from Starter", body: "Plus powerful tools to understand your money and decide what to do next.", icon: "Sparkles" },
-      { title: "Unlimited accounts", body: "Connect as many accounts as you want — no limits.", icon: "Infinity" },
-      { title: "Goals and trends", body: "Set savings targets, see spending trends over time, and track your progress.", icon: "TrendingUp" },
-      { title: "AI-powered insights", body: "Calico analyzes your spending and explains what it finds — alerts, patterns, and suggestions.", icon: "CalendarCheck" },
-      { title: "Recurring detection", body: "Bills and subscriptions are found automatically so nothing sneaks up on you.", icon: "RefreshCw" },
+      { title: "Plan your money, not just see it", body: "Pro helps you understand what's happening, plan your month, and make better decisions.", icon: "Sparkles" },
+      { title: "Smart spending plan", body: "Calico builds your first budget automatically from your spending history. Just review and adjust.", icon: "PiggyBank" },
+      { title: "Goals with guidance", body: "Set savings targets and Calico suggests realistic amounts and timelines to reach them.", icon: "Target" },
+      { title: "Bills found automatically", body: "Recurring charges are detected and tracked so you always know what's coming up.", icon: "RefreshCw" },
+      { title: "Insights that help", body: "Calico notices patterns in your spending and suggests specific things you can do about them.", icon: "CalendarCheck" },
+      { title: "Clean up your data", body: "Correct categories, mark transfers, and exclude items from your budget — your reports stay accurate.", icon: "Receipt" },
     ],
   },
   autonomous: {

@@ -510,7 +510,7 @@ export function BudgetsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title={formatMonthTitle(activeMonth)}
-        subtitle="Plan your spending by category. Calico tracks what you actually spend."
+        subtitle="Set limits for each category and Calico shows how you're tracking. Adjust anytime."
         actions={(
           <>
             <ToolbarButton icon={<ChevronLeft size={14} />} onClick={() => setActiveMonth((prev) => shiftMonth(prev, -1))} />

@@ -24,6 +24,7 @@ const defaultVisibility = dashboardWidgets.reduce<Record<DashboardWidgetId, bool
     "recurring",
     "budget",
     "transactions",
+    "advice",
   ].includes(widget.id);
   return acc;
 }, {} as Record<DashboardWidgetId, boolean>);

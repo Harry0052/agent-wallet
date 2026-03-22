@@ -53,7 +53,7 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
           <div>
             <p className="text-lg font-semibold text-[var(--calico-text)]">Know where your money goes</p>
             <p className="mt-2 max-w-[18rem] text-sm leading-6 text-[var(--calico-text-muted)]">
-              Set monthly limits for your top spending categories and Calico will track how you're doing.
+              Set monthly limits for categories like groceries, dining, and transport. Calico tracks your actual spending and shows when you're close to your limit.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">

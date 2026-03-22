@@ -30,7 +30,11 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
             </p>
             <p className="mt-2 text-sm text-[var(--calico-text-muted)]">
               {hasData
-                ? `${summary.netWorthDelta >= 0 ? "+" : ""}${toCurrency(summary.netWorthDelta)} from last month`
+                ? summary.netWorthDelta === 0
+                  ? "No change from last month"
+                  : summary.netWorthDelta > 0
+                    ? `+${toCurrency(summary.netWorthDelta)} from last month — you're building.`
+                    : `${toCurrency(summary.netWorthDelta)} from last month — worth checking your spending.`
                 : "Your net worth trend will appear here once you add an account."}
             </p>
           </div>

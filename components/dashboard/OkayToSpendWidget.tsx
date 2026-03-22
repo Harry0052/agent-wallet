@@ -41,13 +41,13 @@ export function OkayToSpendWidget(props: DashboardWidgetProps & { dragHandleProp
           </div>
           <div className="flex flex-wrap justify-center gap-2">
             <span style={dashboardChipStyle} className="rounded-full px-3 py-1 text-xs">
-              Income {toCurrency(income)}
+              Income this month {toCurrency(income)}
             </span>
             <span style={dashboardChipStyle} className="rounded-full px-3 py-1 text-xs">
-              Bills {toCurrency(recurringCost)}
+              Recurring bills {toCurrency(recurringCost)}
             </span>
             <span style={dashboardChipStyle} className="rounded-full px-3 py-1 text-xs">
-              Spent {toCurrency(totalSpend)}
+              Spent so far {toCurrency(totalSpend)}
             </span>
           </div>
         </div>

@@ -417,7 +417,7 @@ export function GoalsView() {
       <div className="px-4 py-6">
         <WorkspaceHeader
           title="Money Goals"
-          subtitle="Track what you're saving for or paying down, with progress based on the same transaction history used across Calico."
+          subtitle="Track what you're saving for or paying down. Calico updates your progress automatically from your transactions."
           actions={(
             <button
               type="button"

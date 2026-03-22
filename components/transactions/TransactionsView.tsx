@@ -294,7 +294,7 @@ export function TransactionsView() {
 
   const moneyIntelligence = statement?.money_intelligence || null;
   const topAlerts = moneyIntelligence?.alerts?.slice(0, 2) || [];
-  const tonightCard = moneyIntelligence?.studentFocus.cards.find((card) => card.id === "can_i_afford_tonight") || null;
+  // "Can I afford tonight?" card removed — replaced with calmer safe-to-spend guidance above.
   const pageLoading = financialData.loading;
   const pageError = financialData.error;
 
@@ -302,6 +302,7 @@ export function TransactionsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title="Transactions"
+        subtitle="All your spending and income. Correct categories or mark transfers to keep your data clean."
         actions={(
           <>
             <div className="relative min-w-[220px]">
@@ -348,45 +349,30 @@ export function TransactionsView() {
       </div>
 
       {moneyIntelligence ? (
-        <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-4">
+        <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
           <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Okay to spend today</p>
-            <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendToday)}</p>
-            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">After bills and essentials</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Safe to spend this month</p>
+            <p className="aw-number mt-1 text-lg font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendThisMonth)}</p>
+            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">Income minus bills and spending so far</p>
           </article>
           <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Okay to spend this week</p>
-            <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendThisWeek)}</p>
-            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">Predicted spend {fmt(moneyIntelligence.weeklyPrediction.predictedSpendNext7d)}</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Safe to spend this week</p>
+            <p className="aw-number mt-1 text-lg font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendThisWeek)}</p>
+            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">Based on your remaining budget</p>
           </article>
           <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Okay to spend this month</p>
-            <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">{fmt(moneyIntelligence.affordability.safeToSpendThisMonth)}</p>
-            <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">{moneyIntelligence.monthlySurvivalForecast.status.toUpperCase()} forecast</p>
-          </article>
-          <article className="rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Okay to spend until payday</p>
-            <p className="aw-number mt-1 text-base font-semibold text-[var(--aw-text)]">
+            <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">Until next payday</p>
+            <p className="aw-number mt-1 text-lg font-semibold text-[var(--aw-text)]">
               {moneyIntelligence.affordability.safeToSpendUntilNextIncome === null
-                ? "Unavailable"
+                ? "—"
                 : fmt(moneyIntelligence.affordability.safeToSpendUntilNextIncome)}
             </p>
             <p className="mt-1 text-[11px] text-[var(--aw-text-muted)]">
               {moneyIntelligence.affordability.incomeCadenceReliable
                 ? "Based on your income pattern"
-                : "Income pattern still learning"}
+                : "Still learning your income pattern"}
             </p>
           </article>
-        </div>
-      ) : null}
-
-      {tonightCard ? (
-        <div className="mb-4 rounded-xl border border-[var(--aw-border)] bg-white px-3 py-2.5">
-          <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--aw-text-muted)]">{tonightCard.title}</p>
-          <p className="mt-1 text-sm font-semibold text-[var(--aw-text)]">
-            {tonightCard.amount === null ? "Unavailable" : fmt(tonightCard.amount)} spending limit
-          </p>
-          <p className="mt-1 text-xs text-[var(--aw-text-soft)]">{tonightCard.summary}</p>
         </div>
       ) : null}
 
@@ -473,7 +459,7 @@ export function TransactionsView() {
                       {tx.category || "Uncategorized"}
                       {tx.notes ? ` • ${tx.notes}` : ""}
                     </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-3">
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
                       {tx.sourceType === "manual" ? (
                         <button
                           type="button"
@@ -489,8 +475,28 @@ export function TransactionsView() {
                         className="text-[11px] font-semibold text-[var(--aw-primary)] hover:text-[var(--aw-primary-strong)]"
                         onClick={() => openCategoryCorrection(tx)}
                       >
-                        Correct category
+                        Fix category
                       </button>
+                      {transactionType !== "transfer" ? (
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-[var(--aw-text-muted)] hover:text-[var(--aw-primary)]"
+                          onClick={() => openCategoryCorrection(tx)}
+                          title="Mark this as a transfer between your accounts"
+                        >
+                          Mark transfer
+                        </button>
+                      ) : null}
+                      {transactionType === "expense" ? (
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold text-[var(--aw-text-muted)] hover:text-[var(--aw-primary)]"
+                          onClick={() => openCategoryCorrection(tx)}
+                          title="Mark this as income instead of an expense"
+                        >
+                          Mark income
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   <div className="min-w-0">

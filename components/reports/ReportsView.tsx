@@ -218,7 +218,7 @@ export function ReportsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title="Reports"
-        subtitle="Summary-first view of your actual income and spending."
+        subtitle="How your money moved this period — income, spending, and what changed."
         actions={(
           <div className="aw-segmented">
             <button type="button" data-active={range === "month"} onClick={() => setRange("month")}>Month</button>

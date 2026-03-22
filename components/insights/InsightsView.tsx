@@ -16,12 +16,18 @@ import {
   WorkspacePanel,
 } from "@/components/finance/WorkspacePrimitives";
 
+interface InsightCTA {
+  label: string;
+  href: string;
+}
+
 interface LocalInsight {
   id: string;
   title: string;
   summary: string;
   severity: "info" | "warning" | "action_needed";
   amountImpact?: number;
+  cta?: InsightCTA;
 }
 
 function generateLocalInsights(
@@ -31,9 +37,9 @@ function generateLocalInsights(
 ): LocalInsight[] {
   const insights: LocalInsight[] = [];
 
-  // Spending patterns from manual transactions
   const expenses = transactions.filter((tx) => normalizeTransactionType(tx) === "expense");
   const income = transactions.filter((tx) => normalizeTransactionType(tx) === "income");
+  const transfers = transactions.filter((tx) => normalizeTransactionType(tx) === "transfer");
   const totalExpenses = expenses.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const totalIncome = income.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
@@ -42,16 +48,32 @@ function generateLocalInsights(
     if (savingsRate < 10) {
       insights.push({
         id: "local-low-savings-rate",
-        title: "Your savings rate is low",
-        summary: `You're saving about ${savingsRate}% of your income. Aim for 20% or more to build a cushion faster.`,
+        title: "Your savings rate is low this month",
+        summary: `You're saving about ${savingsRate}% of your income. Setting a savings goal can help you build a cushion.`,
         severity: "warning",
+        cta: { label: "Set a savings goal", href: "/goals" },
       });
     } else if (savingsRate >= 20) {
       insights.push({
         id: "local-good-savings-rate",
-        title: "Solid savings rate",
-        summary: `You're saving about ${savingsRate}% of your income — that's a healthy pace. Keep it up.`,
+        title: "Your savings rate looks healthy",
+        summary: `You're saving about ${savingsRate}% of your income. That's a strong pace — keep it going.`,
         severity: "info",
+      });
+    }
+  }
+
+  // Transfer pollution check
+  if (transfers.length >= 3) {
+    const transferTotal = transfers.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    if (transferTotal > totalExpenses * 0.2) {
+      insights.push({
+        id: "local-transfer-pollution",
+        title: "Transfers may be affecting your totals",
+        summary: `You have ${transfers.length} transfers totaling ${fmt(transferTotal)}. Review them to make sure they're not counted as spending.`,
+        severity: "action_needed",
+        amountImpact: transferTotal,
+        cta: { label: "Review transactions", href: "/transactions" },
       });
     }
   }
@@ -70,10 +92,11 @@ function generateLocalInsights(
       if (pct >= 40) {
         insights.push({
           id: "local-top-category-heavy",
-          title: `${topCategory[0].charAt(0).toUpperCase() + topCategory[0].slice(1)} is your biggest expense`,
-          summary: `${pct}% of your spending goes to ${topCategory[0]}. See if there's room to trim.`,
+          title: `${topCategory[0].charAt(0).toUpperCase() + topCategory[0].slice(1)} is ${pct}% of your spending`,
+          summary: `That's ${fmt(topCategory[1])} this month. You could set a budget for this category to keep it in check.`,
           severity: "info",
           amountImpact: topCategory[1],
+          cta: { label: "Set a budget", href: "/budgets" },
         });
       }
     }
@@ -104,9 +127,10 @@ function generateLocalInsights(
     insights.push({
       id: "local-debt-awareness",
       title: `You have ${fmt(totalDebt)} in tracked debt`,
-      summary: `Across ${liabilities.length} account${liabilities.length === 1 ? "" : "s"}. Consider setting a payoff goal to track progress.`,
+      summary: `Across ${liabilities.length} account${liabilities.length === 1 ? "" : "s"}. A payoff goal can help you track progress and stay motivated.`,
       severity: liabilities.length >= 3 ? "warning" : "info",
       amountImpact: totalDebt,
+      cta: { label: "Create a payoff goal", href: "/goals" },
     });
   }
 
@@ -189,9 +213,9 @@ export function InsightsView() {
     const serverIds = new Set(activeServerInsights.map((i) => i.id));
     const uniqueLocal = activeLocalInsights.filter((i) => !serverIds.has(i.id));
     return [
-      ...activeServerInsights.map((i) => ({ id: i.id, title: i.title, summary: i.summary, severity: i.severity, amountImpact: i.amountImpact, isServer: true })),
+      ...activeServerInsights.map((i) => ({ id: i.id, title: i.title, summary: i.summary, severity: i.severity, amountImpact: i.amountImpact, cta: undefined as InsightCTA | undefined, isServer: true })),
       ...uniqueLocal.map((i) => ({ ...i, isServer: false })),
-    ].slice(0, 6);
+    ].slice(0, 8);
   }, [activeLocalInsights, activeServerInsights]);
 
   const dismiss = async (id: string, isServer: boolean) => {
@@ -223,8 +247,8 @@ export function InsightsView() {
   return (
     <div className="aw-workspace-page">
       <WorkspaceHeader
-        title="What Calico Noticed"
-        subtitle="Patterns and suggestions based on your accounts, transactions, and goals."
+        title="Insights"
+        subtitle="Patterns Calico noticed in your spending, and what you can do about them."
       />
 
       {loading ? (
@@ -273,15 +297,25 @@ export function InsightsView() {
                         {fmt(insight.amountImpact)}
                       </p>
                     ) : null}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {insight.cta ? (
+                        <Link
+                          href={insight.cta.href}
+                          className="inline-flex h-7 items-center rounded-lg bg-[var(--aw-primary)] px-3 text-[11px] font-semibold text-[var(--aw-text)] transition hover:bg-[var(--aw-primary-hover)]"
+                        >
+                          {insight.cta.label}
+                        </Link>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => { void dismiss(insight.id, insight.isServer); }}
+                        disabled={dismissing === insight.id}
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-medium text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-surface-subtle)]"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => { void dismiss(insight.id, insight.isServer); }}
-                    disabled={dismissing === insight.id}
-                    className="shrink-0 rounded-lg bg-[var(--aw-surface-subtle)] px-2.5 py-1 text-[11px] font-medium text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-border)]"
-                  >
-                    Dismiss
-                  </button>
                 </div>
               </article>
             ))}
