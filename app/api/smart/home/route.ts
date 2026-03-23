@@ -27,16 +27,19 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
-    const [payload, subscription] = await Promise.all([
-      withTimeout(
-        buildSmartHomePayload(auth.auth.walletUserId),
-        25_000,
-        'buildSmartHomePayload',
-      ),
-      getUserSubscription(auth.auth.walletUserId).catch(() => null),
-    ]);
+    // Sequential: smartHome uses the DB connection intensively (8 queries).
+    // Running getUserSubscription in parallel would contend for the same connection.
+    const payload = await withTimeout(
+      buildSmartHomePayload(auth.auth.walletUserId),
+      25_000,
+      'buildSmartHomePayload',
+    );
 
-    // Append plan-gated actionable insights to the payload
+    let subscription = null;
+    try {
+      subscription = await getUserSubscription(auth.auth.walletUserId);
+    } catch { /* use null — insights will show starter-tier defaults */ }
+
     const billing = getBillingState(subscription);
     payload.actionableInsights = generateActionableInsights(payload, billing.plan);
 

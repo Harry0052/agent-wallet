@@ -35,9 +35,17 @@ function parseBoolean(value: string | undefined): boolean | null {
 }
 
 function shouldAutoEnsureSchema(): boolean {
+  // CRITICAL: Never run DDL at request time in production.
+  // ensureSchema() issues ~40 CREATE TABLE IF NOT EXISTS statements which
+  // exhaust the connection pool on concurrent serverless cold starts.
+  // On Vercel, NODE_ENV is always 'production' for production deployments,
+  // but this second guard catches misconfigured environments.
+  if (process.env.VERCEL === '1') return false;
+  if (process.env.NODE_ENV === 'production') return false;
+
   const explicit = parseBoolean(process.env.DATABASE_AUTO_ENSURE_SCHEMA);
   if (explicit !== null) return explicit;
-  return process.env.NODE_ENV !== 'production';
+  return true; // Only in local dev
 }
 
 function isMissingSchemaError(error: unknown): boolean {
@@ -60,13 +68,17 @@ function resolvePoolConfig(connectionString: string): PoolConfig {
   const isTransactionMode = connectionString.includes(':6543')
     || process.env.DATABASE_POOLER_MODE === 'transaction';
 
+  // CRITICAL: On Supabase session mode, max MUST be 1.
+  // Each serverless invocation holds its connection for the full function lifetime.
+  // max=2+ causes each invocation to hold 2+ pooler sessions, rapidly exhausting
+  // Supabase's connection pool under concurrent load.
   const max = configuredMax
-    ?? (isTransactionMode ? 5 : isServerless ? 2 : 10);
+    ?? (isTransactionMode ? 3 : isServerless ? 1 : 5);
 
   const idleTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_IDLE_TIMEOUT_MS)
-    ?? (isServerless ? 3_000 : 30_000);
+    ?? (isServerless ? 1_000 : 30_000);
   const connectionTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_CONNECTION_TIMEOUT_MS)
-    ?? (isServerless ? 12_000 : 10_000);
+    ?? (isServerless ? 10_000 : 10_000);
 
   return {
     connectionString,
@@ -116,10 +128,11 @@ async function executeQueryWithRetry<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[],
 ): Promise<QueryResult<T>> {
-  // Retry with progressive backoff when Supabase session mode is saturated.
-  // Multiple serverless function invocations compete for a limited pool_size.
-  const maxRetries = 3;
-  const baseDelayMs = 200;
+  // Single retry with short backoff when Supabase session mode is saturated.
+  // IMPORTANT: More retries = more pressure on an already-exhausted pool.
+  // One retry with 500ms delay is enough to catch brief pool saturation
+  // without amplifying the problem.
+  const maxRetries = 1;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -130,8 +143,7 @@ async function executeQueryWithRetry<T extends QueryResultRow = QueryResultRow>(
       if (!isRetryableMaxClientsError(error) || attempt === maxRetries) {
         throw error;
       }
-      // Progressive backoff: 200ms, 500ms, 1200ms
-      await wait(baseDelayMs * Math.pow(2.5, attempt));
+      await wait(500);
     }
   }
 

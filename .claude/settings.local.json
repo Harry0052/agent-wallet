@@ -40,7 +40,15 @@
       "Bash(npx tsc:*)",
       "Bash(wc -l components/dashboard/*.tsx)",
       "Bash(find '/Users/harry/Desktop/agent wallet' -type f \\\\\\(-name *nav* -o -name *Nav* -o -name *sidebar* -o -name *Sidebar* \\\\\\) -path */components/*)",
-      "Bash(npx playwright:*)"
+      "Bash(npx playwright:*)",
+      "Bash(claude mcp:*)",
+      "Bash(npx skills:*)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__apply_migration"
     ]
   },
   "enableAllProjectMcpServers": true,

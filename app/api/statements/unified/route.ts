@@ -26,29 +26,29 @@ export async function GET(req: NextRequest) {
   try {
     const userId = auth.auth.walletUserId;
     const parsed = parseStatementQueryParams(req.nextUrl.searchParams);
-    const [statement, moneyIntelligence, automationSummary] = await Promise.all([
-      getUnifiedStatement({
-        userId,
-        filters: parsed.filters,
-        pagination: parsed.pagination,
-      }),
-      buildMoneyIntelligenceForUser(userId).catch((error) => {
-        const message = error instanceof Error ? error.message : "unknown";
-        logServerEvent("warn", "statements.unified.money_intelligence.unavailable", {
-          userId,
-          message,
-        });
-        return null;
-      }),
-      getAutomationSummaryForUser({ userId }).catch((error) => {
-        const message = error instanceof Error ? error.message : "unknown";
-        logServerEvent("warn", "statements.unified.automation_summary.unavailable", {
-          userId,
-          message,
-        });
-        return null;
-      }),
-    ]);
+    // Sequential to prevent connection pool exhaustion on Supabase session mode.
+    // moneyIntelligence is cached (5-min TTL) so usually hits memory, not DB.
+    const statement = await getUnifiedStatement({
+      userId,
+      filters: parsed.filters,
+      pagination: parsed.pagination,
+    });
+
+    let moneyIntelligence = null;
+    try {
+      moneyIntelligence = await buildMoneyIntelligenceForUser(userId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown";
+      logServerEvent("warn", "statements.unified.money_intelligence.unavailable", { userId, message });
+    }
+
+    let automationSummary = null;
+    try {
+      automationSummary = await getAutomationSummaryForUser({ userId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown";
+      logServerEvent("warn", "statements.unified.automation_summary.unavailable", { userId, message });
+    }
     const moneyStatement = moneyIntelligence
       ? (({ classifiedTransactions, ...rest }) => {
           void classifiedTransactions;

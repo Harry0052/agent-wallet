@@ -160,29 +160,26 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     });
   }
 
-  // Critical data: wallet + accounts + transactions (needed for all dashboard views)
-  // Load these first in parallel (3 DB connections max)
-  const [wallet, connectedAccounts, transactions] = await Promise.all([
-    safe(getWallet(userId), {
-      balance: 0,
-      currency: 'USD',
-      transactions: [],
-      settings: { maxTransaction: 1000, dailyLimit: 5000, monthlyBudget: 0, approvalThreshold: 500, requireLocation: false, allowedMerchants: [], blockedMerchants: [] },
-      recipients: [],
-    }, 'wallet'),
-    safe(listConnectedAccounts(userId), [], 'accounts'),
-    safe(listNormalizedTransactions({ userId, limit: 250 }), [], 'transactions'),
-  ]);
+  // CRITICAL: With Supabase session mode max=1, Promise.all does NOT parallelize —
+  // queries queue behind one connection. Sequential is actually faster because it
+  // avoids connection timeout pressure from queued promises. Each query uses and
+  // releases the single connection cleanly before the next one starts.
+  const wallet = await safe(getWallet(userId), {
+    balance: 0,
+    currency: 'USD',
+    transactions: [],
+    settings: { maxTransaction: 1000, dailyLimit: 5000, monthlyBudget: 0, approvalThreshold: 500, requireLocation: false, allowedMerchants: [], blockedMerchants: [] },
+    recipients: [],
+  }, 'wallet');
+  const connectedAccounts = await safe(listConnectedAccounts(userId), [], 'accounts');
+  const transactions = await safe(listNormalizedTransactions({ userId, limit: 250 }), [], 'transactions');
 
-  // Secondary data: load after critical path to reduce peak DB connections.
-  // These are used for insight cards and supplementary features.
-  const [connectedApps, recurring, paymentMethods, categoryRules, automationSummaryResult] = await Promise.all([
-    safe(listConnectedApps(userId), [], 'apps'),
-    safe(listSubscriptions({ userId, status: "suspected" }), [], 'subscriptions'),
-    safe(listSavedFundingMethods(userId), [], 'funding'),
-    safe(listCategoryLearningRules(userId), [], 'category_rules'),
-    safe(getAutomationSummaryForUser({ userId }), null, 'automation'),
-  ]);
+  // Secondary data — individually fault-tolerant
+  const connectedApps = await safe(listConnectedApps(userId), [], 'apps');
+  const recurring = await safe(listSubscriptions({ userId, status: "suspected" }), [], 'subscriptions');
+  const paymentMethods = await safe(listSavedFundingMethods(userId), [], 'funding');
+  const categoryRules = await safe(listCategoryLearningRules(userId), [], 'category_rules');
+  const automationSummaryResult = await safe(getAutomationSummaryForUser({ userId }), null, 'automation');
 
   // Subscription detection is deferred — it runs on the next /api/subscriptions
   // call or webhook, not inline during the home page load. This avoids creating

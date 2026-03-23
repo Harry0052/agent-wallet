@@ -133,24 +133,23 @@ export function useFinancialData(): FinancialData {
   // Subscriptions load in background (non-blocking) to avoid delaying
   // the initial dashboard render.
   const fetchConnectedData = useCallback(async () => {
-    // Accounts + transactions in parallel — both critical for first paint
-    const [accountsResult, txResult] = await Promise.allSettled([
-      fetchConnectedAccountsBundle(),
-      fetchUnifiedStatement({ page_size: 250 }),
-    ]);
-
-    if (accountsResult.status === "fulfilled") {
-      setConnectedAccounts(accountsResult.value.accounts);
-    } else {
+    // Sequential to reduce concurrent DB connections across serverless invocations.
+    // With Supabase session mode, each API call holds a DB connection for its
+    // full duration. Parallel calls = parallel connections = pool exhaustion.
+    // Accounts first (fast, ~50ms), then transactions.
+    try {
+      const bundle = await fetchConnectedAccountsBundle();
+      setConnectedAccounts(bundle.accounts);
+    } catch {
       setConnectedAccounts((prev) => prev.length > 0 ? prev : []);
     }
 
-    if (txResult.status === "fulfilled") {
-      setConnectedTransactions(txResult.value.transactions ?? []);
-    } else {
+    try {
+      const statement = await fetchUnifiedStatement({ page_size: 250 });
+      setConnectedTransactions(statement.transactions ?? []);
+    } catch (err) {
       setConnectedTransactions((prev) => {
         if (prev.length > 0) return prev;
-        const err = txResult.reason;
         const message = err instanceof Error ? err.message : "Failed to load transactions.";
         const isNoDataError = /no\s+connected|no\s+account|not\s+connected|empty/i.test(message);
         const isDbError = /maxclient|max clients|pool|connection/i.test(message);
