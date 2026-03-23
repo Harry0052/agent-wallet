@@ -294,32 +294,18 @@ export async function upsertConnectedItem(input: UpsertItemInput): Promise<void>
     throw new Error("Failed to persist connected financial item.");
   }
 
-  for (const account of input.accounts) {
-    await query(
-      `
-        INSERT INTO financial_connector_accounts (
-          id,
-          user_id,
-          item_id,
-          plaid_account_id,
-          account_type,
-          subtype,
-          mask,
-          nickname,
-          official_name
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        ON CONFLICT (user_id, plaid_account_id)
-        DO UPDATE SET
-          item_id = EXCLUDED.item_id,
-          account_type = EXCLUDED.account_type,
-          subtype = EXCLUDED.subtype,
-          mask = EXCLUDED.mask,
-          nickname = EXCLUDED.nickname,
-          official_name = EXCLUDED.official_name,
-          updated_at = NOW()
-      `,
-      [
+  // Batch upsert accounts in a single query (instead of N sequential queries)
+  if (input.accounts.length > 0) {
+    const acctValues: unknown[] = [];
+    const acctPlaceholders: string[] = [];
+
+    for (let j = 0; j < input.accounts.length; j++) {
+      const account = input.accounts[j];
+      const off = j * 9;
+      acctPlaceholders.push(
+        `($${off + 1}, $${off + 2}, $${off + 3}, $${off + 4}, $${off + 5}, $${off + 6}, $${off + 7}, $${off + 8}, $${off + 9})`,
+      );
+      acctValues.push(
         randomUUID(),
         input.userId,
         itemId,
@@ -329,7 +315,24 @@ export async function upsertConnectedItem(input: UpsertItemInput): Promise<void>
         account.mask,
         account.nickname,
         account.officialName,
-      ],
+      );
+    }
+
+    await query(
+      `INSERT INTO financial_connector_accounts (
+        id, user_id, item_id, plaid_account_id, account_type,
+        subtype, mask, nickname, official_name
+      ) VALUES ${acctPlaceholders.join(', ')}
+      ON CONFLICT (user_id, plaid_account_id)
+      DO UPDATE SET
+        item_id = EXCLUDED.item_id,
+        account_type = EXCLUDED.account_type,
+        subtype = EXCLUDED.subtype,
+        mask = EXCLUDED.mask,
+        nickname = EXCLUDED.nickname,
+        official_name = EXCLUDED.official_name,
+        updated_at = NOW()`,
+      acctValues,
     );
   }
 

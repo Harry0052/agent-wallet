@@ -54,11 +54,14 @@ function resolvePoolConfig(connectionString: string): PoolConfig {
   const configuredMax = parsePositiveInt(process.env.DATABASE_POOL_MAX);
   const isServerless = connectionString.includes('pooler.supabase.com') || process.env.VERCEL;
 
-  // Supabase session mode: each serverless function invocation gets its own
-  // Pool instance. Keep max=1 so each invocation holds at most 1 session.
-  // Idle timeout is very short (2s) so the connection is released back to
-  // Supabase's pooler as fast as possible after queries complete.
-  const max = configuredMax ?? (isServerless ? 1 : 10);
+  // Supabase transaction mode (port 6543): can use higher pool max since
+  // connections are shared across statements, not held for the session.
+  // Supabase session mode (port 5432): keep max=1 per invocation.
+  const isTransactionMode = connectionString.includes(':6543')
+    || process.env.DATABASE_POOLER_MODE === 'transaction';
+
+  const max = configuredMax
+    ?? (isTransactionMode ? 5 : isServerless ? 1 : 10);
 
   const idleTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_IDLE_TIMEOUT_MS)
     ?? (isServerless ? 2_000 : 30_000);

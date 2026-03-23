@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowRight, Lock, Sparkles, TrendingDown } from "lucide-react";
 import type { SmartHomePayload } from "@/services/smartWallet";
@@ -46,9 +47,27 @@ const ACCENT_MAP: Record<InsightType, { bg: string; border: string; icon: string
   },
 };
 
+/** Map CTA labels to real app routes */
+const CTA_ROUTES: Record<string, string> = {
+  "Get started": "/connect",
+  "Review recurring spend": "/statements?panel=recurring",
+  "Inspect charges": "/statements?panel=anomalies",
+  "View cash flow": "/cashflow",
+  "Set a savings goal": "/goals",
+  "Review spending plan": "/budgets",
+  "Review bills": "/statements?panel=recurring",
+};
+
 function InsightCard({ insight, index }: { insight: ActionableInsight; index: number }) {
   const accent = ACCENT_MAP[insight.type];
   const Icon = ICON_MAP[insight.type];
+  const router = useRouter();
+
+  const ctaRoute = insight.cta ? CTA_ROUTES[insight.cta] ?? null : null;
+
+  const handleCtaClick = () => {
+    if (ctaRoute) router.push(ctaRoute);
+  };
 
   return (
     <motion.div
@@ -85,9 +104,10 @@ function InsightCard({ insight, index }: { insight: ActionableInsight; index: nu
             >
               {insight.impactLabel}
             </span>
-            {insight.cta && (
+            {insight.cta && ctaRoute && (
               <button
                 type="button"
+                onClick={handleCtaClick}
                 className="group inline-flex items-center gap-1 text-[0.78rem] font-semibold transition-colors"
                 style={{ color: accent.icon }}
               >

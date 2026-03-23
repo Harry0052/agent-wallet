@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { fmt } from "@/lib/utils";
 
 interface SankeyNode {
@@ -86,7 +86,7 @@ function buildFlowPath(
   ].join(" ");
 }
 
-export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreakdown }: SankeyProps) {
+export const SankeyDiagram = memo(function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreakdown }: SankeyProps) {
   const data = useMemo(() => {
     const savings = Math.max(income - expenses, 0);
     const sorted = [...categoryBreakdown].sort((a, b) => b.amount - a.amount);
@@ -364,4 +364,4 @@ export function SankeyDiagram({ income, expenses, categoryBreakdown, incomeBreak
       </svg>
     </div>
   );
-}
+});

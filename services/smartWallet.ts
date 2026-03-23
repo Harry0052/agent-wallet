@@ -1,4 +1,3 @@
-import type { MoneyIntelligenceResult } from "@/lib/server/moneyIntelligence/types";
 import type { AutomationActionSummary } from "@/lib/types";
 import { safeJson } from "@/services/safeFetch";
 
@@ -64,24 +63,8 @@ export interface SmartHomePayload {
     daysUntilNegative: number | null;
     confidence: number;
   };
-  moneyIntelligence?: {
-    generatedAt: string;
-    engineVersion: string;
-    rulesVersion: string;
-    statement: Omit<MoneyIntelligenceResult["statement"], "classifiedTransactions">;
-    coverage: MoneyIntelligenceResult["coverage"];
-    netWorth: MoneyIntelligenceResult["netWorth"];
-    spendingLimits: MoneyIntelligenceResult["spendingLimits"];
-    affordability: MoneyIntelligenceResult["affordability"];
-    weeklyPrediction: MoneyIntelligenceResult["weeklyPrediction"];
-    monthlySurvivalForecast: MoneyIntelligenceResult["monthlySurvivalForecast"];
-    billPredictions: MoneyIntelligenceResult["billPredictions"];
-    subscriptionTimeline: MoneyIntelligenceResult["subscriptionTimeline"];
-    alerts: MoneyIntelligenceResult["alerts"];
-    categoryLearning: MoneyIntelligenceResult["categoryLearning"];
-    studentFocus: MoneyIntelligenceResult["studentFocus"];
-    advancedIntelligence: MoneyIntelligenceResult["advancedIntelligence"];
-  };
+  /** @deprecated Removed from dashboard payload. Use /api/statements/unified for moneyIntelligence. */
+  moneyIntelligence?: undefined;
   automation?: {
     summary: AutomationActionSummary;
     policy: {

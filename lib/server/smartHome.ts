@@ -16,7 +16,6 @@ import {
   buildMoneyIntelligenceFromSources,
 } from '@/lib/server/moneyIntelligence/engine';
 import { listCategoryLearningRules } from '@/lib/server/moneyIntelligence/categoryLearningStore';
-import type { MoneyIntelligenceResult } from '@/lib/server/moneyIntelligence/types';
 import { getAutomationSummaryForUser } from '@/lib/server/automation/service';
 import type { AutomationActionSummary } from '@/lib/types';
 import { logServerEvent } from '@/lib/server/observability';
@@ -84,24 +83,6 @@ export interface SmartHomePayload {
     daysUntilNegative: number | null;
     confidence: number;
   };
-  moneyIntelligence?: {
-    generatedAt: string;
-    engineVersion: string;
-    rulesVersion: string;
-    statement: Omit<MoneyIntelligenceResult['statement'], 'classifiedTransactions'>;
-    coverage: MoneyIntelligenceResult['coverage'];
-    netWorth: MoneyIntelligenceResult['netWorth'];
-    spendingLimits: MoneyIntelligenceResult['spendingLimits'];
-    affordability: MoneyIntelligenceResult['affordability'];
-    weeklyPrediction: MoneyIntelligenceResult['weeklyPrediction'];
-    monthlySurvivalForecast: MoneyIntelligenceResult['monthlySurvivalForecast'];
-    billPredictions: MoneyIntelligenceResult['billPredictions'];
-    subscriptionTimeline: MoneyIntelligenceResult['subscriptionTimeline'];
-    alerts: MoneyIntelligenceResult['alerts'];
-    categoryLearning: MoneyIntelligenceResult['categoryLearning'];
-    studentFocus: MoneyIntelligenceResult['studentFocus'];
-    advancedIntelligence: MoneyIntelligenceResult['advancedIntelligence'];
-  };
   automation?: {
     summary: AutomationActionSummary;
     policy: {
@@ -123,6 +104,8 @@ export interface SmartHomePayload {
     additional: ActionableInsight[];
     locked: LockedInsightPreview[];
   };
+  /** @deprecated Removed from dashboard payload for performance. Use /api/statements/unified instead. */
+  moneyIntelligence?: undefined;
 }
 
 function roundCurrency(value: number): number {
@@ -505,9 +488,6 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     }
   } catch { /* engine not yet available */ }
 
-  const { classifiedTransactions, ...statementSummary } = moneyIntelligence.statement;
-  void classifiedTransactions;
-
   return {
     generatedAt: nowIso,
     summary: {
@@ -532,24 +512,9 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     },
     healthScore,
     cashFlow,
-    moneyIntelligence: {
-      generatedAt: moneyIntelligence.generatedAt,
-      engineVersion: moneyIntelligence.engineVersion,
-      rulesVersion: moneyIntelligence.rulesVersion,
-      statement: statementSummary,
-      coverage: moneyIntelligence.coverage,
-      netWorth: moneyIntelligence.netWorth,
-      spendingLimits: moneyIntelligence.spendingLimits,
-      affordability: moneyIntelligence.affordability,
-      weeklyPrediction: moneyIntelligence.weeklyPrediction,
-      monthlySurvivalForecast: moneyIntelligence.monthlySurvivalForecast,
-      billPredictions: moneyIntelligence.billPredictions,
-      subscriptionTimeline: moneyIntelligence.subscriptionTimeline,
-      alerts: moneyIntelligence.alerts,
-      categoryLearning: moneyIntelligence.categoryLearning,
-      studentFocus: moneyIntelligence.studentFocus,
-      advancedIntelligence: moneyIntelligence.advancedIntelligence,
-    },
+    // moneyIntelligence omitted from dashboard payload — only used by
+    // /api/statements/unified (TransactionsView). Removing it cuts
+    // the SmartHome JSON response by ~60%.
     automation: automationSummaryResult
       ? {
           summary: automationSummaryResult.summary,

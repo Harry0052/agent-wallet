@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { ChevronLeft, ChevronRight, Loader2, PencilLine, PieChart, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { fmt } from "@/lib/utils";
@@ -551,13 +550,7 @@ export function BudgetsView() {
                 <p className="mt-3 text-sm leading-6 text-[var(--aw-text-muted)]">
                   Import transactions later if you connect accounts. Start planning today with manual categories.
                 </p>
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                  <Link
-                    href="/connect"
-                    className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm"
-                  >
-                    Connect an account
-                  </Link>
+                <div className="mt-5 flex items-center justify-center">
                   <button
                     type="button"
                     onClick={openCreateModal}

@@ -1016,3 +1016,30 @@ CREATE TABLE IF NOT EXISTS referral_conversions (
 
 CREATE INDEX IF NOT EXISTS idx_referral_conversions_referrer_month
 ON referral_conversions (referrer_user_id, month_key);
+
+-- ── Performance indexes (Supabase Pro optimization) ─────────────────────────
+
+-- Transaction queries: subscription detection filters by pending status
+CREATE INDEX IF NOT EXISTS idx_transactions_user_pending_occurred
+ON transactions (user_id, pending, occurred_at DESC);
+
+-- Transaction queries: monthly spend aggregation
+CREATE INDEX IF NOT EXISTS idx_transactions_user_month_spend
+ON transactions (user_id, occurred_at DESC)
+WHERE pending = FALSE;
+
+-- Ledger: wallet balance calculation needs fast user+date scan
+CREATE INDEX IF NOT EXISTS idx_ledger_entries_user_status_created
+ON ledger_entries (user_id, status, created_at DESC);
+
+-- Subscription detection: JOIN on linked_account_id
+CREATE INDEX IF NOT EXISTS idx_transactions_linked_account_only
+ON transactions (linked_account_id);
+
+-- Webhook processing: Plaid item lookup by plaid_item_id
+CREATE INDEX IF NOT EXISTS idx_financial_connector_items_plaid_item
+ON financial_connector_items (plaid_item_id);
+
+-- User subscriptions: billing status check (used on every auth'd request)
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user
+ON user_subscriptions (user_id);

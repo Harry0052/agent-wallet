@@ -123,13 +123,41 @@ export function buildMoneyIntelligenceFromSources(input: {
   });
 }
 
+// ── In-memory cache for money intelligence (avoids rebuild on every request) ──
+
+const MI_CACHE = new Map<string, { result: MoneyIntelligenceResult; expiresAt: number }>();
+const MI_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function buildMoneyIntelligenceForUser(
   userId: string,
   input?: { nowIso?: string },
 ): Promise<MoneyIntelligenceResult> {
+  const cacheKey = userId;
+  const cached = MI_CACHE.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.result;
+  }
+
   const sources = await loadMoneyIntelligenceSources(userId);
-  return buildMoneyIntelligenceFromSources({
+  const result = buildMoneyIntelligenceFromSources({
     sources,
     nowIso: input?.nowIso,
   });
+
+  MI_CACHE.set(cacheKey, { result, expiresAt: Date.now() + MI_CACHE_TTL_MS });
+
+  // Evict stale entries to prevent memory growth (keep max 100 users)
+  if (MI_CACHE.size > 100) {
+    const now = Date.now();
+    for (const [key, entry] of MI_CACHE) {
+      if (entry.expiresAt <= now) MI_CACHE.delete(key);
+    }
+  }
+
+  return result;
+}
+
+/** Invalidate cached money intelligence for a user (call after transaction sync) */
+export function invalidateMoneyIntelligenceCache(userId: string): void {
+  MI_CACHE.delete(userId);
 }

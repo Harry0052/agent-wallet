@@ -7,6 +7,7 @@ import {
   listLinkedAccountBindingsForUser,
 } from "@/financial_connectors/tokenVault";
 import { normalizePlaidTransaction } from "@/transactions/transactionNormalizer";
+import { invalidateMoneyIntelligenceCache } from "@/lib/server/moneyIntelligence/engine";
 import {
   getSyncCursor,
   removeTransactionsByProviderIds,
@@ -156,6 +157,9 @@ export async function syncPlaidTransactionsForConnectorItem(
       plaidItemId: input.plaidItemId,
       cursor,
     });
+
+    // Invalidate cached money intelligence so next load reflects new transactions
+    invalidateMoneyIntelligenceCache(input.userId);
 
     await completeFinancialSyncRun({
       id: run.id,

@@ -65,6 +65,9 @@ export function TransactionsView() {
     [],
   );
 
+  const PAGE_SIZE = 50;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [editingManualTxId, setEditingManualTxId] = useState<string | null>(null);
   const [manualAmount, setManualAmount] = useState("");
@@ -87,9 +90,15 @@ export function TransactionsView() {
 
   // Fetch statement only for money_intelligence (not covered by useFinancialData)
   const [statement, setStatement] = useState<UnifiedStatement | null>(null);
+  const statementCacheRef = useRef<{ data: UnifiedStatement | null; epoch: number }>({ data: null, epoch: -1 });
+
   useEffect(() => {
+    if (statementCacheRef.current.epoch === financialData.epoch) return;
     void fetchUnifiedStatement({ page_size: 120 }).then(
-      (value) => setStatement(value),
+      (value) => {
+        statementCacheRef.current = { data: value, epoch: financialData.epoch };
+        setStatement(value);
+      },
       () => setStatement(null),
     );
   }, [financialData.epoch]);
@@ -151,6 +160,11 @@ export function TransactionsView() {
       return true;
     });
   }, [debouncedSearch, filterMode, mergedTransactions]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [debouncedSearch, filterMode]);
 
   const resetManualForm = () => {
     setEditingManualTxId(null);
@@ -437,7 +451,7 @@ export function TransactionsView() {
               <span className="text-right">Date</span>
               <span className="text-right">Amount</span>
             </div>
-            {filteredTransactions.map((tx) => {
+            {filteredTransactions.slice(0, visibleCount).map((tx) => {
               const transactionType = normalizeTransactionType(tx);
               const displayAmount = Math.abs(tx.amount);
 
@@ -530,6 +544,17 @@ export function TransactionsView() {
                 </div>
               );
             })}
+            {visibleCount < filteredTransactions.length && (
+              <div className="flex justify-center py-4">
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                  className="aw-button-secondary inline-flex h-10 items-center gap-1.5 rounded-xl px-5 text-sm"
+                >
+                  Show {Math.min(PAGE_SIZE, filteredTransactions.length - visibleCount)} more transactions
+                </button>
+              </div>
+            )}
           </div>
         )}
       </WorkspacePanel>

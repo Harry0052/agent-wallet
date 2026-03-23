@@ -53,7 +53,7 @@ import type {
 
 type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
 
-type TimeRange = "month" | "quarter" | "year";
+type TimeRange = "month" | "quarter" | "semi" | "year";
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -166,6 +166,11 @@ function inRange(date: Date, range: TimeRange): boolean {
     return date >= quarterStart;
   }
 
+  if (range === "semi") {
+    const semiStart = addMonths(startOfMonth(now), -5);
+    return date >= semiStart;
+  }
+
   const yearStart = addMonths(startOfMonth(now), -11);
   return date >= yearStart;
 }
@@ -237,7 +242,7 @@ export function CashFlowView() {
       .slice(0, 6);
   }, [recurringForecastEntries]);
 
-  const rangeLabel = range === "month" ? "this month" : range === "quarter" ? "the last 3 months" : "the last 12 months";
+  const rangeLabel = range === "month" ? "this month" : range === "quarter" ? "the last 3 months" : range === "semi" ? "the last 6 months" : "the last 12 months";
 
   // Compute range-specific income/expenses for KPI cards
   const rangeIncome = actualRangeEntries
@@ -374,27 +379,31 @@ export function CashFlowView() {
 
       {/* Summary cards — styled with borders + shadows for premium feel */}
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="aw-card aw-card-compact">
+        <div className="aw-card aw-card-compact group relative">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Income</p>
           <p className="aw-number mt-3 text-2xl text-[var(--aw-success)]">{fmt(rangeIncome)}</p>
           <p className="mt-2 text-sm text-[var(--aw-text-muted)]">Money in {rangeLabel}</p>
+          <p className="mt-2 hidden text-[10px] leading-relaxed text-[var(--aw-text-muted)] group-hover:block">All money received — paychecks, transfers in, refunds, and side income.</p>
         </div>
-        <div className="aw-card aw-card-compact">
+        <div className="aw-card aw-card-compact group relative">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Spending</p>
           <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(rangeExpenses)}</p>
           <p className="mt-2 text-sm text-[var(--aw-text-muted)]">Money out {rangeLabel}</p>
+          <p className="mt-2 hidden text-[10px] leading-relaxed text-[var(--aw-text-muted)] group-hover:block">Everything you spent — bills, subscriptions, groceries, and purchases.</p>
         </div>
-        <div className="aw-card aw-card-compact">
+        <div className="aw-card aw-card-compact group relative">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Remaining</p>
           <p className={`aw-number mt-3 text-2xl ${rangeNet >= 0 ? "text-[var(--aw-success)]" : "text-[var(--aw-danger)]"}`}>
             {fmt(rangeNet)}
           </p>
           <p className="mt-2 text-sm text-[var(--aw-text-muted)]">{rangeNet >= 0 ? "You kept more than you spent" : "You spent more than you earned"}</p>
+          <p className="mt-2 hidden text-[10px] leading-relaxed text-[var(--aw-text-muted)] group-hover:block">{rangeNet >= 0 ? "Positive cash flow means you have room to save or invest." : "Spending more than you earn creates debt over time. Review your top categories."}</p>
         </div>
-        <div className="aw-card aw-card-compact">
+        <div className="aw-card aw-card-compact group relative">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Savings rate</p>
           <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{rangeSavingsRate}%</p>
           <p className="mt-2 text-sm text-[var(--aw-text-muted)]">Portion of income kept</p>
+          <p className="mt-2 hidden text-[10px] leading-relaxed text-[var(--aw-text-muted)] group-hover:block">{rangeSavingsRate >= 20 ? "20%+ is a strong savings rate. You're building a solid financial buffer." : rangeSavingsRate > 0 ? "Aim for 20% if you can. Even small increases compound over time." : "A 0% savings rate means all income is spent. Look for one category to reduce."}</p>
         </div>
       </div>
 
@@ -404,9 +413,10 @@ export function CashFlowView() {
         action={(
           <div className="aw-toolbar">
             <div className="aw-segmented">
-              <button type="button" data-active={range === "month"} onClick={() => setRange("month")}>Monthly</button>
-              <button type="button" data-active={range === "quarter"} onClick={() => setRange("quarter")}>Quarterly</button>
-              <button type="button" data-active={range === "year"} onClick={() => setRange("year")}>Yearly</button>
+              <button type="button" data-active={range === "month"} onClick={() => setRange("month")}>1M</button>
+              <button type="button" data-active={range === "quarter"} onClick={() => setRange("quarter")}>3M</button>
+              <button type="button" data-active={range === "semi"} onClick={() => setRange("semi")}>6M</button>
+              <button type="button" data-active={range === "year"} onClick={() => setRange("year")}>12M</button>
             </div>
           </div>
         )}

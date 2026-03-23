@@ -23,10 +23,6 @@ interface TransactionRow {
   category: string;
 }
 
-interface CountRow {
-  total: string;
-}
-
 interface SpendRow {
   total: string | null;
 }
@@ -112,17 +108,8 @@ export async function getUnifiedStatement(input: {
   const limit = input.pagination.page_size;
   const offset = offsetFromPagination(input.pagination);
 
-  const countQuery = await query<CountRow>(
-    `
-      SELECT COUNT(*)::text AS total
-      FROM transactions t
-      WHERE ${filtered.whereSql}
-    `,
-    filtered.params,
-  );
-  const total = Number.parseInt(countQuery.rows[0]?.total || "0", 10) || 0;
-
-  const transactionQuery = await query<TransactionRow>(
+  // Combined query: COUNT(*) OVER() avoids a separate count round-trip
+  const transactionQuery = await query<TransactionRow & { total_count: string }>(
     `
       SELECT
         t.id,
@@ -134,7 +121,8 @@ export async function getUnifiedStatement(input: {
         t.currency,
         t.pending,
         t.occurred_at::text,
-        t.category
+        t.category,
+        COUNT(*) OVER()::text AS total_count
       FROM transactions t
       WHERE ${filtered.whereSql}
       ORDER BY t.occurred_at DESC, t.id DESC
@@ -144,6 +132,9 @@ export async function getUnifiedStatement(input: {
     [...filtered.params, limit, offset],
   );
 
+  const total = Number.parseInt(transactionQuery.rows[0]?.total_count || "0", 10) || 0;
+
+  // Monthly spend — run in parallel with nothing (kept separate for clarity + index usage)
   const monthSpendResult = await query<SpendRow>(
     `
       SELECT COALESCE(SUM(amount), 0)::text AS total

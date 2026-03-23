@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import type { ComponentType, HTMLAttributes } from "react";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
@@ -31,17 +31,17 @@ import { cn } from "@/lib/utils";
 import type { DashboardPreferences, DashboardWidgetId, DashboardWidgetProps } from "@/components/dashboard/dashboardTypes";
 
 const widgetRenderers: Record<DashboardWidgetId, ComponentType<DashboardWidgetProps & { dragHandleProps?: HTMLAttributes<HTMLButtonElement> }>> = {
-  okayToSpend: OkayToSpendWidget,
-  budget: BudgetWidget,
-  creditScore: CreditScoreWidget,
-  netWorth: NetWorthWidget,
-  goals: GoalsWidget,
-  gettingStarted: GettingStartedWidget,
-  spending: SpendingWidget,
-  transactions: TransactionsWidget,
-  recurring: RecurringWidget,
-  investments: InvestmentsWidget,
-  advice: AdviceWidget,
+  okayToSpend: memo(OkayToSpendWidget),
+  budget: memo(BudgetWidget),
+  creditScore: memo(CreditScoreWidget),
+  netWorth: memo(NetWorthWidget),
+  goals: memo(GoalsWidget),
+  gettingStarted: memo(GettingStartedWidget),
+  spending: memo(SpendingWidget),
+  transactions: memo(TransactionsWidget),
+  recurring: memo(RecurringWidget),
+  investments: memo(InvestmentsWidget),
+  advice: memo(AdviceWidget),
 };
 
 interface CustomizableDashboardProps extends DashboardWidgetProps {
@@ -113,10 +113,10 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
   );
 
   const activeWidget = activeWidgetId ? dashboardWidgets.find((widget) => widget.id === activeWidgetId) : null;
-  const effectiveWidgetProps = {
+  const effectiveWidgetProps = useMemo(() => ({
     ...widgetProps,
     useLiveData: preferences.useLiveData,
-  };
+  }), [widgetProps, preferences.useLiveData]);
   const liveMode = effectiveWidgetProps.useLiveData && effectiveWidgetProps.accountsConnected;
   const trackedSourceCount = widgetProps.dataSource.accounts.length;
   const primaryActionHref = liveMode ? null : "/connect";

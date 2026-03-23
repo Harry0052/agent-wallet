@@ -200,50 +200,22 @@ export async function upsertNormalizedTransactions(
   await ensureTransactionSchema();
   if (rows.length === 0) return 0;
 
-  for (const row of rows) {
-    await query(
-      `
-        INSERT INTO transactions (
-          id,
-          user_id,
-          linked_account_id,
-          provider_transaction_id,
-          merchant_name,
-          normalized_merchant,
-          amount,
-          currency,
-          pending,
-          pending_transaction_id,
-          occurred_at,
-          authorized_date,
-          category,
-          category_detailed,
-          payment_channel,
-          original_description,
-          logo_url,
-          merchant_entity_id
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::timestamptz, $12, $13, $14, $15, $16, $17, $18)
-        ON CONFLICT (user_id, provider_transaction_id)
-        DO UPDATE SET
-          linked_account_id = EXCLUDED.linked_account_id,
-          merchant_name = EXCLUDED.merchant_name,
-          normalized_merchant = EXCLUDED.normalized_merchant,
-          amount = EXCLUDED.amount,
-          currency = EXCLUDED.currency,
-          pending = EXCLUDED.pending,
-          pending_transaction_id = EXCLUDED.pending_transaction_id,
-          occurred_at = EXCLUDED.occurred_at,
-          authorized_date = EXCLUDED.authorized_date,
-          category = EXCLUDED.category,
-          category_detailed = EXCLUDED.category_detailed,
-          payment_channel = EXCLUDED.payment_channel,
-          original_description = EXCLUDED.original_description,
-          logo_url = EXCLUDED.logo_url,
-          merchant_entity_id = EXCLUDED.merchant_entity_id,
-          updated_at = NOW()
-      `,
-      [
+  // Batch insert in chunks of 50 to stay within PostgreSQL parameter limits
+  const CHUNK_SIZE = 50;
+  let inserted = 0;
+
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE);
+    const values: unknown[] = [];
+    const placeholders: string[] = [];
+
+    for (let j = 0; j < chunk.length; j++) {
+      const row = chunk[j];
+      const offset = j * 18;
+      placeholders.push(
+        `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${offset + 10}, $${offset + 11}::timestamptz, $${offset + 12}, $${offset + 13}, $${offset + 14}, $${offset + 15}, $${offset + 16}, $${offset + 17}, $${offset + 18})`,
+      );
+      values.push(
         randomUUID(),
         row.user_id,
         row.linked_account_id,
@@ -262,11 +234,42 @@ export async function upsertNormalizedTransactions(
         row.original_description,
         row.logo_url,
         row.merchant_entity_id,
-      ],
+      );
+    }
+
+    await query(
+      `INSERT INTO transactions (
+        id, user_id, linked_account_id, provider_transaction_id,
+        merchant_name, normalized_merchant, amount, currency,
+        pending, pending_transaction_id, occurred_at, authorized_date,
+        category, category_detailed, payment_channel, original_description,
+        logo_url, merchant_entity_id
+      ) VALUES ${placeholders.join(', ')}
+      ON CONFLICT (user_id, provider_transaction_id)
+      DO UPDATE SET
+        linked_account_id = EXCLUDED.linked_account_id,
+        merchant_name = EXCLUDED.merchant_name,
+        normalized_merchant = EXCLUDED.normalized_merchant,
+        amount = EXCLUDED.amount,
+        currency = EXCLUDED.currency,
+        pending = EXCLUDED.pending,
+        pending_transaction_id = EXCLUDED.pending_transaction_id,
+        occurred_at = EXCLUDED.occurred_at,
+        authorized_date = EXCLUDED.authorized_date,
+        category = EXCLUDED.category,
+        category_detailed = EXCLUDED.category_detailed,
+        payment_channel = EXCLUDED.payment_channel,
+        original_description = EXCLUDED.original_description,
+        logo_url = EXCLUDED.logo_url,
+        merchant_entity_id = EXCLUDED.merchant_entity_id,
+        updated_at = NOW()`,
+      values,
     );
+
+    inserted += chunk.length;
   }
 
-  return rows.length;
+  return inserted;
 }
 
 export async function removeTransactionsByProviderIds(input: {

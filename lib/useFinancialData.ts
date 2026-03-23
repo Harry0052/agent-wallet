@@ -129,28 +129,28 @@ export function useFinancialData(): FinancialData {
   }, []);
 
   // ── Fetch connected data from APIs ──────────────────────────────────────
-  // Calls are sequential to avoid overwhelming Supabase session mode pooler.
-  // Each call is individually fault-tolerant — a DB error on one call
-  // should not prevent the others from loading.
+  // Accounts + transactions load first (critical path).
+  // Subscriptions load in background (non-blocking) to avoid delaying
+  // the initial dashboard render.
   const fetchConnectedData = useCallback(async () => {
-    // Accounts first — fastest, needed for other displays
-    try {
-      const bundle = await fetchConnectedAccountsBundle();
-      setConnectedAccounts(bundle.accounts);
-    } catch {
-      // Keep existing accounts if we have them, only clear if first load
+    // Accounts + transactions in parallel — both critical for first paint
+    const [accountsResult, txResult] = await Promise.allSettled([
+      fetchConnectedAccountsBundle(),
+      fetchUnifiedStatement({ page_size: 250 }),
+    ]);
+
+    if (accountsResult.status === "fulfilled") {
+      setConnectedAccounts(accountsResult.value.accounts);
+    } else {
       setConnectedAccounts((prev) => prev.length > 0 ? prev : []);
     }
 
-    // Transactions — the main data users care about
-    try {
-      const statement = await fetchUnifiedStatement({ page_size: 160 });
-      setConnectedTransactions(statement.transactions ?? []);
-    } catch (err) {
-      // Keep existing transactions if available — don't show "0 transactions"
-      // just because the DB was temporarily unreachable
+    if (txResult.status === "fulfilled") {
+      setConnectedTransactions(txResult.value.transactions ?? []);
+    } else {
       setConnectedTransactions((prev) => {
         if (prev.length > 0) return prev;
+        const err = txResult.reason;
         const message = err instanceof Error ? err.message : "Failed to load transactions.";
         const isNoDataError = /no\s+connected|no\s+account|not\s+connected|empty/i.test(message);
         const isDbError = /maxclient|max clients|pool|connection/i.test(message);
@@ -163,11 +163,16 @@ export function useFinancialData(): FinancialData {
         return [];
       });
     }
+  }, []);
 
-    // Recurring — least critical, load last
+  // ── Deferred subscription fetch (non-blocking background load) ────────
+  const fetchRecurringData = useCallback(async () => {
     try {
       const subs = await fetchSuspectedSubscriptions();
-      setConnectedRecurring(subs);
+      if (mountedRef.current) {
+        setConnectedRecurring(subs);
+        setEpoch((prev) => prev + 1);
+      }
     } catch {
       setConnectedRecurring((prev) => prev.length > 0 ? prev : []);
     }
@@ -201,9 +206,10 @@ export function useFinancialData(): FinancialData {
     if (mountedRef.current) {
       setLoading(false);
     }
-    // Refresh balances in background after cached data is displayed
+    // Non-critical data loads in background after first paint
+    void fetchRecurringData();
     void backgroundRefreshBalances();
-  }, [fetchConnectedData, readManualData, backgroundRefreshBalances]);
+  }, [fetchConnectedData, fetchRecurringData, readManualData, backgroundRefreshBalances]);
 
   // ── Initial load ────────────────────────────────────────────────────────
   useEffect(() => {
