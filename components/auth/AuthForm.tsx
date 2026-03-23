@@ -23,14 +23,27 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const nextPath = searchParams.get('next');
   const refCode = searchParams.get('ref');
 
+  // Persist referral code to localStorage so it survives OAuth redirects
+  useEffect(() => {
+    if (refCode) {
+      try { localStorage.setItem('calico.referral_code', refCode); } catch {}
+    }
+  }, [refCode]);
+
   const googleOauthHref = useMemo(() => {
-    if (!nextPath) return '/api/auth/google/login';
-    return `/api/auth/google/login?next=${encodeURIComponent(nextPath)}`;
-  }, [nextPath]);
+    const params = new URLSearchParams();
+    if (nextPath) params.set('next', nextPath);
+    if (refCode) params.set('ref', refCode);
+    const qs = params.toString();
+    return qs ? `/api/auth/google/login?${qs}` : '/api/auth/google/login';
+  }, [nextPath, refCode]);
   const appleOauthHref = useMemo(() => {
-    if (!nextPath) return '/api/auth/apple/login';
-    return `/api/auth/apple/login?next=${encodeURIComponent(nextPath)}`;
-  }, [nextPath]);
+    const params = new URLSearchParams();
+    if (nextPath) params.set('next', nextPath);
+    if (refCode) params.set('ref', refCode);
+    const qs = params.toString();
+    return qs ? `/api/auth/apple/login?${qs}` : '/api/auth/apple/login';
+  }, [nextPath, refCode]);
 
   useEffect(() => {
     if (!oauthError) return;

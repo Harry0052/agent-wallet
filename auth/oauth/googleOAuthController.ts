@@ -14,6 +14,7 @@ import {
   verifyGoogleStateCookie,
 } from '@/auth/oauth/googleOAuth';
 import { signInWithGoogleOAuth } from '@/auth/oauth/googleOAuthService';
+import { attributeReferral } from '@/lib/server/referrals';
 import { enforceRateLimit } from '@/security/rateLimiter';
 import {
   enforceSecurityIpBlock,
@@ -112,7 +113,8 @@ export async function handleGoogleOAuthLogin(request: NextRequest): Promise<Next
 
   try {
     const redirectTo = request.nextUrl.searchParams.get('next');
-    const oauth = createGoogleAuthorizationRequest({ redirectTo });
+    const referralCode = request.nextUrl.searchParams.get('ref');
+    const oauth = createGoogleAuthorizationRequest({ redirectTo, referralCode });
 
     const response = NextResponse.redirect(oauth.authorizationUrl);
     setOauthStateCookie(response, oauth.stateCookieValue, oauth.expiresAt);
@@ -199,6 +201,18 @@ export async function handleGoogleOAuthCallback(request: NextRequest): Promise<N
     });
 
     const user = await signInWithGoogleOAuth(identity);
+
+    // Attribute referral if a code was passed through the OAuth state
+    if (stateCookie.referralCode && user.appUserId) {
+      try {
+        await attributeReferral({
+          referralCode: stateCookie.referralCode,
+          referredUserId: user.appUserId,
+        });
+      } catch {
+        // Referral attribution failure must not block login
+      }
+    }
 
     const session = await createSession({
       appUserId: user.appUserId,

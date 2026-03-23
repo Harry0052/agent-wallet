@@ -12,6 +12,7 @@ export interface GoogleOAuthStatePayload {
   nonce: string;
   redirectTo: string;
   expiresAt: number;
+  referralCode?: string;
 }
 
 export interface VerifiedGoogleIdentity {
@@ -103,6 +104,7 @@ function safeRedirectPath(input: string | null | undefined): string {
 
 export function createGoogleAuthorizationRequest(input: {
   redirectTo?: string | null;
+  referralCode?: string | null;
 }): {
   authorizationUrl: string;
   stateCookieValue: string;
@@ -114,11 +116,14 @@ export function createGoogleAuthorizationRequest(input: {
   const redirectTo = safeRedirectPath(input.redirectTo);
   const expiresAt = Date.now() + GOOGLE_OAUTH_STATE_TTL_MS;
 
+  const referralCode = input.referralCode?.trim().slice(0, 20) || undefined;
+
   const payload: GoogleOAuthStatePayload = {
     state,
     nonce,
     redirectTo,
     expiresAt,
+    ...(referralCode ? { referralCode } : {}),
   };
 
   const payloadEncoded = base64UrlJson(payload);
