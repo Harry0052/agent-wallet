@@ -112,11 +112,18 @@ export async function enforceApiAuth(
     // Handle non-auth errors (DB connection errors, pool exhaustion, etc.)
     // instead of rethrowing — prevents empty 500 responses on Vercel.
     const message = error instanceof Error ? error.message : 'Authentication service unavailable';
+    const isPoolError = /maxclient|max clients|pool|connection|timeout/i.test(message);
     console.error('[AUTH_GUARD] Non-auth error during authentication:', message);
     return {
       ok: false,
       response: NextResponse.json(
-        { ok: false, error: 'Service temporarily unavailable. Please try again.', errorCode: 'SERVICE_UNAVAILABLE' },
+        {
+          ok: false,
+          error: isPoolError
+            ? 'Calico is experiencing high demand. Please try again in a moment.'
+            : 'Service temporarily unavailable. Please try again.',
+          errorCode: 'SERVICE_UNAVAILABLE',
+        },
         { status: 503 },
       ),
     };

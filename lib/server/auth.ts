@@ -398,7 +398,19 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
   const token = await getSessionTokenFromCookies();
   if (!token) return null;
 
-  const session = await findSessionByToken(token);
+  // Retry once on transient DB failures (pool exhaustion, connection timeout)
+  // to reduce "service_unavailable" errors under load.
+  let session: SessionLookupRow | null = null;
+  try {
+    session = await findSessionByToken(token);
+  } catch (firstError) {
+    await new Promise((r) => setTimeout(r, 300));
+    try {
+      session = await findSessionByToken(token);
+    } catch {
+      throw firstError;
+    }
+  }
   if (!session) return null;
 
   // Intentionally skip updating last_seen_at on every request.

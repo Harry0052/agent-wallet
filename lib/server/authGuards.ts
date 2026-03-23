@@ -14,6 +14,15 @@ async function resolveAuthenticatedUserOrRedirect(loginRedirect: string): Promis
     return user;
   } catch (error) {
     unstable_rethrow(error);
+    // Distinguish "no session" (should redirect to login) from transient DB errors
+    // (should NOT redirect — user may be legitimately authenticated but DB is slow).
+    const message = error instanceof Error ? error.message : '';
+    const isTransientDbError = /maxclient|max clients|pool|connection|timeout|ECONNREFUSED/i.test(message);
+    if (isTransientDbError) {
+      console.error('[authGuards] Transient DB error during auth — NOT redirecting to login:', message);
+      // Throw to let Next.js show the error boundary instead of wrongly sending to login
+      throw new Error('Unable to verify your session right now. Please refresh the page.');
+    }
     console.error('[authGuards] failed to resolve authenticated user', error);
     redirect(loginRedirect);
   }
