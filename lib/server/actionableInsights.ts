@@ -143,13 +143,49 @@ function generateCandidates(payload: SmartHomePayload): CandidateInsight[] {
   return candidates;
 }
 
-function fallbackInsight(): ActionableInsight {
+function fallbackInsight(
+  dataQuality?: { mode: string; lowData: boolean },
+): ActionableInsight {
+  // State 1: No connected accounts
+  if (!dataQuality || dataQuality.mode === 'no_connected_accounts') {
+    return {
+      type: 'opportunity',
+      title: 'Connect an account to unlock insights',
+      description: 'Calico analyzes your spending to surface savings opportunities and warnings.',
+      impactLabel: 'Personalized insights await',
+      cta: 'Get started',
+    };
+  }
+
+  // State 2: Accounts connected but transactions haven't synced yet
+  if (dataQuality.mode === 'awaiting_sync') {
+    return {
+      type: 'opportunity',
+      title: 'We\'re analyzing your transactions',
+      description: 'Your accounts are connected. Insights will appear once your transaction data finishes syncing.',
+      impactLabel: 'Syncing in progress',
+      cta: null,
+    };
+  }
+
+  // State 3: Accounts connected, thin history — not enough patterns yet
+  if (dataQuality.mode === 'thin_history') {
+    return {
+      type: 'opportunity',
+      title: 'Building your financial picture',
+      description: 'Calico is learning your spending patterns. More insights will appear as your transaction history grows.',
+      impactLabel: 'Analyzing your data',
+      cta: 'View cash flow',
+    };
+  }
+
+  // State 4: Full data, but no specific insights triggered (everything looks normal)
   return {
     type: 'opportunity',
-    title: 'Connect an account to unlock insights',
-    description: 'Calico analyzes your spending to surface savings opportunities and warnings.',
-    impactLabel: 'Personalized insights await',
-    cta: 'Get started',
+    title: 'Your finances look steady',
+    description: 'No unusual spending or savings opportunities detected right now. Calico will notify you when something comes up.',
+    impactLabel: 'All clear',
+    cta: null,
   };
 }
 
@@ -186,8 +222,10 @@ export function generateActionableInsights(
     cta: c.cta,
   });
 
-  // Primary insight: best candidate or fallback
-  const primary = sorted.length > 0 ? clean(sorted[0]) : fallbackInsight();
+  // Primary insight: best candidate or state-aware fallback
+  const primary = sorted.length > 0
+    ? clean(sorted[0])
+    : fallbackInsight(payload.dataQuality);
 
   // Additional insights: plan-gated
   const isPro = planLevel(plan) >= planLevel('pro');

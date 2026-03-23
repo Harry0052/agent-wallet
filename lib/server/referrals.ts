@@ -207,59 +207,90 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const referralCode = generateReferralCode(userId);
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_ORIGIN || 'https://startcalico.com';
 
-  // Monthly conversions
-  const monthResult = await query<{ count: string; total: string }>(
-    `SELECT COUNT(*)::text AS count, COALESCE(SUM(payout_amount), 0)::text AS total
-     FROM referral_conversions
-     WHERE referrer_user_id = $1 AND month_key = $2`,
-    [userId, monthKey],
-  );
+  // Zero-state response (returned if tables don't exist yet or queries fail)
+  const zeroStats: ReferralStats = {
+    referralCode,
+    referralLink: `${baseUrl}/signup?ref=${referralCode}`,
+    monthKey,
+    monthlyConversions: 0,
+    currentTier: '50%',
+    conversionsToNextTier: 10,
+    monthlyEarnings: 0,
+    totalEarnings: 0,
+    pendingSignups: 0,
+    recentConversions: [],
+  };
 
-  const monthlyConversions = Number(monthResult.rows[0]?.count || '0');
-  const monthlyEarnings = Number(monthResult.rows[0]?.total || '0');
+  // Wrap DB queries in try-catch so missing tables don't crash the endpoint.
+  // The referral tables are created by schema.sql but may not exist on
+  // databases that haven't run the latest migration yet.
+  let monthlyConversions = 0;
+  let monthlyEarnings = 0;
+  let totalEarnings = 0;
+  let pendingSignups = 0;
+  let recentConversions: ReferralStats['recentConversions'] = [];
 
-  // Total earnings (all time)
-  const totalResult = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(payout_amount), 0)::text AS total
-     FROM referral_conversions
-     WHERE referrer_user_id = $1`,
-    [userId],
-  );
-  const totalEarnings = Number(totalResult.rows[0]?.total || '0');
+  try {
+    const [monthResult, totalResult, pendingResult, recentResult] = await Promise.all([
+      query<{ count: string; total: string }>(
+        `SELECT COUNT(*)::text AS count, COALESCE(SUM(payout_amount), 0)::text AS total
+         FROM referral_conversions
+         WHERE referrer_user_id = $1 AND month_key = $2`,
+        [userId, monthKey],
+      ),
+      query<{ total: string }>(
+        `SELECT COALESCE(SUM(payout_amount), 0)::text AS total
+         FROM referral_conversions
+         WHERE referrer_user_id = $1`,
+        [userId],
+      ),
+      query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM referral_attributions ra
+         WHERE ra.referrer_user_id = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM referral_conversions rc
+             WHERE rc.referred_user_id = ra.referred_user_id
+           )`,
+        [userId],
+      ),
+      query<{
+        referred_plan: string;
+        payout_amount: string;
+        commission_rate: string;
+        created_at: string;
+      }>(
+        `SELECT referred_plan, payout_amount::text, commission_rate::text, created_at::text
+         FROM referral_conversions
+         WHERE referrer_user_id = $1
+         ORDER BY created_at DESC
+         LIMIT 10`,
+        [userId],
+      ),
+    ]);
 
-  // Pending signups (attributed but not yet converted)
-  const pendingResult = await query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM referral_attributions ra
-     WHERE ra.referrer_user_id = $1
-       AND NOT EXISTS (
-         SELECT 1 FROM referral_conversions rc
-         WHERE rc.referred_user_id = ra.referred_user_id
-       )`,
-    [userId],
-  );
-  const pendingSignups = Number(pendingResult.rows[0]?.count || '0');
-
-  // Recent conversions (last 10)
-  const recentResult = await query<{
-    referred_plan: string;
-    payout_amount: string;
-    commission_rate: string;
-    created_at: string;
-  }>(
-    `SELECT referred_plan, payout_amount::text, commission_rate::text, created_at::text
-     FROM referral_conversions
-     WHERE referrer_user_id = $1
-     ORDER BY created_at DESC
-     LIMIT 10`,
-    [userId],
-  );
+    monthlyConversions = Number(monthResult.rows[0]?.count || '0');
+    monthlyEarnings = Number(monthResult.rows[0]?.total || '0');
+    totalEarnings = Number(totalResult.rows[0]?.total || '0');
+    pendingSignups = Number(pendingResult.rows[0]?.count || '0');
+    recentConversions = recentResult.rows.map((r) => ({
+      plan: r.referred_plan,
+      payoutAmount: Number(r.payout_amount),
+      commissionRate: Number(r.commission_rate),
+      createdAt: r.created_at,
+    }));
+  } catch (error) {
+    // Tables may not exist yet — return zero-state with valid referral link
+    logServerEvent('warn', 'referral.stats.query_failed', {
+      userId,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+    return zeroStats;
+  }
 
   const currentTier = monthlyConversions >= 10 ? '100%' : '50%';
   const conversionsToNextTier = monthlyConversions >= 10 ? 0 : 10 - monthlyConversions;
-
-  // Use window.location.origin on client; hardcode base for server
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://calico.app';
 
   return {
     referralCode,
@@ -271,11 +302,6 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
     monthlyEarnings: Math.round(monthlyEarnings * 100) / 100,
     totalEarnings: Math.round(totalEarnings * 100) / 100,
     pendingSignups,
-    recentConversions: recentResult.rows.map((r) => ({
-      plan: r.referred_plan,
-      payoutAmount: Number(r.payout_amount),
-      commissionRate: Number(r.commission_rate),
-      createdAt: r.created_at,
-    })),
+    recentConversions,
   };
 }

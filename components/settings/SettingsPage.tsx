@@ -1001,6 +1001,7 @@ function BillingSection({
 
 function ReferralsSection({ account }: { account: AuthenticatedAccount | null }) {
   const [copied, setCopied] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [stats, setStats] = useState<{
     referralCode: string;
     referralLink: string;
@@ -1013,13 +1014,18 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
   } | null>(null);
 
   useEffect(() => {
-    if (!account) return;
+    if (!account) {
+      setStatsLoading(false);
+      return;
+    }
+    setStatsLoading(true);
     fetch('/api/referrals')
       .then((r) => r.json())
       .then((data) => {
         if (data.ok && data.stats) setStats(data.stats);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
   }, [account]);
 
   const referralLink = stats?.referralLink ?? null;
@@ -1132,9 +1138,17 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
             </button>
           </div>
         </div>
-      ) : (
+      ) : statsLoading ? (
+        <p className="text-sm text-[var(--aw-text-muted)]">
+          Loading your referral link...
+        </p>
+      ) : !account ? (
         <p className="text-sm text-[var(--aw-text-muted)]">
           Sign in to get your referral link.
+        </p>
+      ) : (
+        <p className="text-sm text-[var(--aw-text-muted)]">
+          Unable to load referral link. Try refreshing the page.
         </p>
       )}
     </div>

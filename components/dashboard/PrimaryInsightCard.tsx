@@ -161,6 +161,11 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
   const hasLocked = insights.locked.length > 0;
   const hasAdditional = insights.additional.length > 0;
 
+  // Determine the correct "unlock" destination based on user state
+  const noAccounts = home.dataQuality?.mode === "no_connected_accounts";
+  const unlockHref = noAccounts ? "/connect" : "/plans";
+  const unlockLabel = noAccounts ? "Connect an account" : "Unlock all insights";
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -189,7 +194,7 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
             className="flex justify-center pt-1"
           >
             <Link
-              href="/plans"
+              href={unlockHref}
               className="group inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[0.75rem] font-semibold transition-all hover:shadow-sm"
               style={{
                 background: "rgba(253, 186, 116, 0.15)",
@@ -198,7 +203,7 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
               }}
             >
               <Sparkles size={12} style={{ color: "var(--calico-primary)" }} />
-              Unlock all insights
+              {unlockLabel}
               <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
             </Link>
           </motion.div>
