@@ -49,8 +49,15 @@ function setOauthStateCookie(response: NextResponse, value: string, expiresAtMs:
   });
 }
 
+function canonicalOrigin(request: NextRequest): string {
+  // Use NEXT_PUBLIC_APP_ORIGIN if set, otherwise derive from request
+  const configured = process.env.NEXT_PUBLIC_APP_ORIGIN?.trim();
+  if (configured) return configured;
+  return request.nextUrl.origin;
+}
+
 function loginRedirectUrl(request: NextRequest, reason: string): URL {
-  const url = new URL('/login', request.url);
+  const url = new URL('/login', canonicalOrigin(request));
   url.searchParams.set('oauth_error', reason);
   return url;
 }
@@ -221,7 +228,22 @@ export async function handleGoogleOAuthCallback(request: NextRequest): Promise<N
       },
     });
 
-    const response = NextResponse.redirect(new URL(redirectTo, request.url));
+    // Use canonical origin so cookie domain always matches redirect target.
+    // Without this, when the callback URL host differs from the canonical app
+    // domain (e.g. Vercel preview URL vs production domain), the session cookie
+    // gets set on the wrong host and is lost after redirect.
+    const origin = canonicalOrigin(request);
+    const finalRedirectUrl = new URL(redirectTo, origin);
+
+    logServerEvent('info', 'oauth_callback_redirect', {
+      provider: 'google',
+      redirectTo,
+      origin,
+      finalUrl: finalRedirectUrl.toString(),
+      requestHost: request.nextUrl.host,
+    });
+
+    const response = NextResponse.redirect(finalRedirectUrl);
     setSessionCookie(response, session.token, session.expiresAt);
     clearOauthStateCookie(response);
     return response;
