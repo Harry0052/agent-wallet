@@ -5,6 +5,7 @@ import { calicoTheme } from "@/styles/theme";
 import { C } from "./landingConstants";
 import { LandingNav } from "./LandingNav";
 import { LandingHero } from "./LandingHero";
+import { TrustCarousel } from "./TrustCarousel";
 import { LandingHowItWorks } from "./LandingHowItWorks";
 import { LandingFeatures } from "./LandingFeatures";
 import { LandingTrust } from "./LandingTrust";
@@ -19,6 +20,7 @@ function LandingSectionsContent() {
   return (
     <>
       <LandingHero />
+      <TrustCarousel />
       <LandingHowItWorks />
       <LandingFeatures />
       <LandingTrust />
