@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   ArrowLeftRight,
   Home,
@@ -9,6 +10,7 @@ import {
   Lightbulb,
   ListChecks,
   LineChart,
+  MessageSquarePlus,
   PieChart,
   Settings,
   Target,
@@ -17,6 +19,7 @@ import {
 } from "lucide-react";
 import { useCustomLabels } from "@/lib/useCustomLabels";
 import { useEntitlements } from "@/lib/useEntitlements";
+import { FeedbackModal } from "@/components/feedback/FeedbackModal";
 
 interface NavLink {
   href: string;
@@ -50,6 +53,7 @@ export function AppNav() {
   const pathname = usePathname();
   const { getLabel } = useCustomLabels();
   const { loading, can } = useEntitlements();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const visiblePrimaryLinks = primaryLinks.filter((link) => {
     const gate = PRIMARY_GATES[link.href];
@@ -112,7 +116,18 @@ export function AppNav() {
         ) : null}
 
         <div className="mt-auto rounded-[16px] border border-[var(--aw-border)] bg-[var(--aw-surface-1)]/70 p-2 shadow-[0_4px_12px_rgba(15,23,42,0.04)]">
-          <div className="sw-sidebar-nav">{utilLinks.map(renderLink)}</div>
+          <div className="sw-sidebar-nav">
+            <button
+              type="button"
+              onClick={() => setFeedbackOpen(true)}
+              className="sw-sidebar-link"
+              data-active={false}
+            >
+              <MessageSquarePlus size={18} strokeWidth={1.7} />
+              Feedback
+            </button>
+            {utilLinks.map(renderLink)}
+          </div>
         </div>
       </nav>
 
@@ -136,6 +151,8 @@ export function AppNav() {
           })}
         </div>
       </nav>
+
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   );
 }
