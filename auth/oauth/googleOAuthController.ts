@@ -25,6 +25,24 @@ function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
+/** Non-fatal audit logging — must never crash the OAuth flow */
+async function safeAuditEvent(input: {
+  userId?: string | null;
+  action: string;
+  ip?: string | null;
+  userAgent?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): Promise<void> {
+  try {
+    await recordAccountAuditEvent(input);
+  } catch (error) {
+    logServerEvent('warn', 'oauth.audit_event_failed', {
+      action: input.action,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+  }
+}
+
 function clearOauthStateCookie(response: NextResponse): void {
   response.cookies.set({
     name: GOOGLE_OAUTH_STATE_COOKIE,
@@ -138,7 +156,7 @@ export async function handleGoogleOAuthCallback(request: NextRequest): Promise<N
       reason: queryError,
     });
 
-    await recordAccountAuditEvent({
+    await safeAuditEvent({
       action: 'oauth_login_failure',
       ip: meta.ip,
       userAgent: meta.userAgent,
@@ -159,7 +177,7 @@ export async function handleGoogleOAuthCallback(request: NextRequest): Promise<N
       reason: 'invalid_oauth_state_or_code',
     });
 
-    await recordAccountAuditEvent({
+    await safeAuditEvent({
       action: 'oauth_login_failure',
       ip: meta.ip,
       userAgent: meta.userAgent,
@@ -200,7 +218,7 @@ export async function handleGoogleOAuthCallback(request: NextRequest): Promise<N
         appUserId: user.appUserId,
       });
 
-      await recordAccountAuditEvent({
+      await safeAuditEvent({
         userId: user.appUserId,
         action: 'new_oauth_user_created',
         ip: meta.ip,
@@ -217,7 +235,7 @@ export async function handleGoogleOAuthCallback(request: NextRequest): Promise<N
       isNewUser: user.isNewUser,
     });
 
-    await recordAccountAuditEvent({
+    await safeAuditEvent({
       userId: user.appUserId,
       action: 'oauth_login_success',
       ip: meta.ip,
@@ -255,7 +273,7 @@ export async function handleGoogleOAuthCallback(request: NextRequest): Promise<N
       reason,
     });
 
-    await recordAccountAuditEvent({
+    await safeAuditEvent({
       action: 'oauth_login_failure',
       ip: meta.ip,
       userAgent: meta.userAgent,
