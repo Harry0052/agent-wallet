@@ -20,6 +20,7 @@ import type { MoneyIntelligenceResult } from '@/lib/server/moneyIntelligence/typ
 import { getAutomationSummaryForUser } from '@/lib/server/automation/service';
 import type { AutomationActionSummary } from '@/lib/types';
 import { logServerEvent } from '@/lib/server/observability';
+import type { ActionableInsight, LockedInsightPreview } from '@/lib/server/actionableInsights';
 
 export type SourceState = 'Synced' | 'Imported' | 'Inferred' | 'Manual';
 
@@ -116,6 +117,11 @@ export interface SmartHomePayload {
     infers: string;
     recommends: string;
     canDo: string;
+  };
+  actionableInsights?: {
+    primary: ActionableInsight | null;
+    additional: ActionableInsight[];
+    locked: LockedInsightPreview[];
   };
 }
 

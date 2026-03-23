@@ -7,6 +7,7 @@ import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordi
 import { CSS } from "@dnd-kit/utilities";
 import { motion } from "framer-motion";
 import { LayoutGrid, Sparkles } from "lucide-react";
+import { PrimaryInsightCard } from "@/components/dashboard/PrimaryInsightCard";
 import { AdviceWidget } from "@/components/dashboard/AdviceWidget";
 import { BudgetWidget } from "@/components/dashboard/BudgetWidget";
 import { OkayToSpendWidget } from "@/components/dashboard/OkayToSpendWidget";
@@ -183,6 +184,9 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
               )}
             </div>
           </motion.section>
+
+          {/* Actionable insight card — always visible above widgets */}
+          <PrimaryInsightCard home={widgetProps.home} />
 
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <SortableContext items={orderedWidgetIds} strategy={rectSortingStrategy}>

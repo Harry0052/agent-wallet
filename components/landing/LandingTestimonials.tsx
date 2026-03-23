@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Star } from "lucide-react";
 import { C, sectionHeadingStyle } from "./landingConstants";
 import { fadeUp, staggerContainer, viewportOnce } from "./landingMotion";
+import { StudentSocialProofCarousel } from "./StudentSocialProofCarousel";
 
 const testimonials = [
   {
@@ -59,9 +60,8 @@ const testimonials = [
   },
 ];
 
-// Split into two rows for the dual-marquee effect
+// First 5 testimonials for the marquee row (strongest conversion quotes)
 const row1 = testimonials.slice(0, 5);
-const row2 = testimonials.slice(5, 10);
 
 function TestimonialCard({ t }: { t: (typeof testimonials)[number] }) {
   return (
@@ -245,11 +245,11 @@ export function LandingTestimonials() {
         </motion.div>
       </div>
 
-      {/* Full-bleed marquee rows — overflow hidden on the section, not constrained by max-width */}
-      <div className="flex flex-col gap-5">
-        <MarqueeRow items={row1} direction="left" speed={0.4} />
-        <MarqueeRow items={row2} direction="right" speed={0.35} />
-      </div>
+      {/* Full-bleed marquee — overflow hidden on the section, not constrained by max-width */}
+      <MarqueeRow items={row1} direction="left" speed={0.4} />
+
+      {/* Student social proof carousel — replaces second testimonial row */}
+      <StudentSocialProofCarousel />
     </section>
   );
 }

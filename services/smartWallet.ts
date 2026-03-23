@@ -98,6 +98,25 @@ export interface SmartHomePayload {
     recommends: string;
     canDo: string;
   };
+  actionableInsights?: {
+    primary: {
+      type: 'warning' | 'opportunity' | 'prediction';
+      title: string;
+      description: string;
+      impactLabel: string;
+      cta: string | null;
+    } | null;
+    additional: Array<{
+      type: 'warning' | 'opportunity' | 'prediction';
+      title: string;
+      description: string;
+      impactLabel: string;
+      cta: string | null;
+    }>;
+    locked: Array<{
+      teaser: string;
+    }>;
+  };
 }
 
 export interface SmartSurfaceResult {

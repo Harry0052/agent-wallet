@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { enforceApiAuth } from '@/security/authGuard';
 import { enforceRateLimit } from '@/security/rateLimiter';
 import { buildSmartHomePayload } from '@/lib/server/smartHome';
+import { getUserSubscription, getBillingState } from '@/lib/server/billing';
+import { generateActionableInsights } from '@/lib/server/actionableInsights';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 
 export const runtime = 'nodejs';
@@ -25,11 +27,19 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
-    const payload = await withTimeout(
-      buildSmartHomePayload(auth.auth.walletUserId),
-      25_000,
-      'buildSmartHomePayload',
-    );
+    const [payload, subscription] = await Promise.all([
+      withTimeout(
+        buildSmartHomePayload(auth.auth.walletUserId),
+        25_000,
+        'buildSmartHomePayload',
+      ),
+      getUserSubscription(auth.auth.walletUserId).catch(() => null),
+    ]);
+
+    // Append plan-gated actionable insights to the payload
+    const billing = getBillingState(subscription);
+    payload.actionableInsights = generateActionableInsights(payload, billing.plan);
+
     return NextResponse.json({ ok: true, home: payload });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load Calico home';
