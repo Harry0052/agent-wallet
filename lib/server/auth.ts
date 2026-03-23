@@ -354,8 +354,22 @@ export async function createSession(input: {
   };
 }
 
+// ── In-memory session cache ─────────────────────────────────────────────────
+// Caches session lookups for 60s to avoid hitting the DB on every API call.
+// A single dashboard load fires 6+ API requests, each calling findSessionByToken.
+// Without this cache, 500 users = 3000+ session queries/min just for auth.
+const SESSION_CACHE = new Map<string, { session: SessionLookupRow | null; expiresAt: number }>();
+const SESSION_CACHE_TTL_MS = 60_000; // 60 seconds
+
 async function findSessionByToken(token: string): Promise<SessionLookupRow | null> {
   const tokenHash = hashSessionToken(token);
+
+  // Check cache first
+  const cached = SESSION_CACHE.get(tokenHash);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.session;
+  }
+
   const result = await query<SessionLookupRow>(
     `
       SELECT
@@ -373,11 +387,30 @@ async function findSessionByToken(token: string): Promise<SessionLookupRow | nul
     `,
     [tokenHash],
   );
-  return result.rows[0] || null;
+
+  const session = result.rows[0] || null;
+  SESSION_CACHE.set(tokenHash, { session, expiresAt: Date.now() + SESSION_CACHE_TTL_MS });
+
+  // Evict stale entries to prevent memory growth
+  if (SESSION_CACHE.size > 200) {
+    const now = Date.now();
+    for (const [key, entry] of SESSION_CACHE) {
+      if (entry.expiresAt <= now) SESSION_CACHE.delete(key);
+    }
+  }
+
+  return session;
+}
+
+/** Invalidate session cache for a specific token (call on logout/revoke) */
+export function invalidateSessionCache(token: string): void {
+  const tokenHash = hashSessionToken(token);
+  SESSION_CACHE.delete(tokenHash);
 }
 
 export async function revokeSessionByToken(token: string): Promise<void> {
   const tokenHash = hashSessionToken(token);
+  SESSION_CACHE.delete(tokenHash);
   await query(
     `
       UPDATE app_user_sessions

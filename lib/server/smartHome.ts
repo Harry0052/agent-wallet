@@ -160,7 +160,9 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     });
   }
 
-  const [wallet, connectedAccounts, connectedApps, recurring, transactions, paymentMethods, categoryRules, automationSummaryResult] = await Promise.all([
+  // Critical data: wallet + accounts + transactions (needed for all dashboard views)
+  // Load these first in parallel (3 DB connections max)
+  const [wallet, connectedAccounts, transactions] = await Promise.all([
     safe(getWallet(userId), {
       balance: 0,
       currency: 'USD',
@@ -169,9 +171,14 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
       recipients: [],
     }, 'wallet'),
     safe(listConnectedAccounts(userId), [], 'accounts'),
+    safe(listNormalizedTransactions({ userId, limit: 250 }), [], 'transactions'),
+  ]);
+
+  // Secondary data: load after critical path to reduce peak DB connections.
+  // These are used for insight cards and supplementary features.
+  const [connectedApps, recurring, paymentMethods, categoryRules, automationSummaryResult] = await Promise.all([
     safe(listConnectedApps(userId), [], 'apps'),
     safe(listSubscriptions({ userId, status: "suspected" }), [], 'subscriptions'),
-    safe(listNormalizedTransactions({ userId, limit: 250 }), [], 'transactions'),
     safe(listSavedFundingMethods(userId), [], 'funding'),
     safe(listCategoryLearningRules(userId), [], 'category_rules'),
     safe(getAutomationSummaryForUser({ userId }), null, 'automation'),

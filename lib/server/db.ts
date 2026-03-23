@@ -61,12 +61,12 @@ function resolvePoolConfig(connectionString: string): PoolConfig {
     || process.env.DATABASE_POOLER_MODE === 'transaction';
 
   const max = configuredMax
-    ?? (isTransactionMode ? 5 : isServerless ? 1 : 10);
+    ?? (isTransactionMode ? 5 : isServerless ? 2 : 10);
 
   const idleTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_IDLE_TIMEOUT_MS)
-    ?? (isServerless ? 2_000 : 30_000);
+    ?? (isServerless ? 3_000 : 30_000);
   const connectionTimeoutMillis = parsePositiveInt(process.env.DATABASE_POOL_CONNECTION_TIMEOUT_MS)
-    ?? (isServerless ? 8_000 : 10_000);
+    ?? (isServerless ? 12_000 : 10_000);
 
   return {
     connectionString,
