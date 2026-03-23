@@ -39,7 +39,8 @@
       "Bash(npx tsx:*)",
       "Bash(npx tsc:*)",
       "Bash(wc -l components/dashboard/*.tsx)",
-      "Bash(find '/Users/harry/Desktop/agent wallet' -type f \\\\\\(-name *nav* -o -name *Nav* -o -name *sidebar* -o -name *Sidebar* \\\\\\) -path */components/*)"
+      "Bash(find '/Users/harry/Desktop/agent wallet' -type f \\\\\\(-name *nav* -o -name *Nav* -o -name *sidebar* -o -name *Sidebar* \\\\\\) -path */components/*)",
+      "Bash(npx playwright:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

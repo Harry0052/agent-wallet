@@ -18,7 +18,7 @@ type RateLimitResult = {
 
 const RATE_LIMITS: Record<RateLimitProfile, RateLimitConfig> = {
   auth: {
-    maxRequests: 5,
+    maxRequests: 10,
     windowMs: 60_000,
   },
   general: {
