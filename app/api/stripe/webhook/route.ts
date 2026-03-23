@@ -16,6 +16,7 @@ import {
 import { markPaymentMethodRemovedByStripeIdWithUsers } from '@/lib/server/fundingPaymentMethods';
 import { apiError, logServerEvent } from '@/lib/server/observability';
 import { handleSubscriptionWebhookEvent } from '@/lib/server/billing';
+import { recordReferralConversion } from '@/lib/server/referrals';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -355,6 +356,32 @@ export async function POST(req: NextRequest) {
           eventId: event.id,
           eventType: event.type,
         });
+
+        // Record referral conversion on first successful subscription payment
+        if (event.type === 'invoice.paid') {
+          const invoice = event.data.object as Stripe.Invoice;
+          const rawSub = (invoice as unknown as Record<string, unknown>).subscription;
+          const subscriptionId = typeof rawSub === 'string' ? rawSub : (rawSub as { id: string } | null)?.id;
+          if (subscriptionId) {
+            try {
+              const sub = await stripe.subscriptions.retrieve(subscriptionId);
+              const plan = sub.metadata?.plan;
+              const userId = sub.metadata?.app_user_id;
+              if (userId && plan && (plan === 'starter' || plan === 'pro' || plan === 'autonomous')) {
+                await recordReferralConversion({
+                  referredUserId: userId,
+                  plan: plan as 'starter' | 'pro' | 'autonomous',
+                  stripeEventId: event.id,
+                });
+              }
+            } catch (refError) {
+              logServerEvent('warn', 'stripe.webhook.referral_conversion_failed', {
+                eventId: event.id,
+                error: refError instanceof Error ? refError.message : String(refError),
+              });
+            }
+          }
+        }
       } catch (subError) {
         logServerEvent('error', 'stripe.webhook.subscription_event_failed', {
           eventId: event.id,

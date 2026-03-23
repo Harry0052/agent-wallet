@@ -21,6 +21,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const oauthError = searchParams.get('oauth_error');
   const signupSuccess = searchParams.get('signup');
   const nextPath = searchParams.get('next');
+  const refCode = searchParams.get('ref');
 
   const googleOauthHref = useMemo(() => {
     if (!nextPath) return '/api/auth/google/login';
@@ -101,7 +102,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
     setIsLoading(true);
     try {
       if (isSignup) {
-        await signup({ email: submittedEmail, password: submittedPassword });
+        await signup({ email: submittedEmail, password: submittedPassword, ...(refCode ? { referralCode: refCode } : {}) });
         // Show success state briefly before transitioning to login
         setSignupComplete(true);
         setTimeout(() => {

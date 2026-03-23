@@ -15,11 +15,11 @@ interface School {
 }
 
 const schools: School[] = [
-  { src: "/logos/ucla.png", alt: "UCLA logo", shortName: "UCLA", height: 30 },
-  { src: "/logos/uci.png", alt: "UCI logo", shortName: "UCI", height: 30 },
-  { src: "/logos/usc.png", alt: "USC logo", shortName: "USC", height: 30 },
-  { src: "/logos/stanford.png", alt: "Stanford logo", shortName: "Stanford", height: 30 },
-  { src: "/logos/calpoly.png", alt: "Cal Poly logo", shortName: "Cal Poly", height: 30 },
+  { src: "/logos/ucla.png", alt: "UCLA logo", shortName: "UCLA", height: 42 },
+  { src: "/logos/uci.png", alt: "UCI logo", shortName: "UCI", height: 42 },
+  { src: "/logos/usc.png", alt: "USC logo", shortName: "USC", height: 42 },
+  { src: "/logos/stanford.png", alt: "Stanford logo", shortName: "Stanford", height: 42 },
+  { src: "/logos/calpoly.png", alt: "Cal Poly logo", shortName: "Cal Poly", height: 42 },
 ];
 
 /* ── Single school item ──────────────────────────────────────── */
@@ -33,7 +33,7 @@ function SchoolItem({ school }: { school: School }) {
         alignItems: "center",
         justifyContent: "center",
         gap: 4,
-        padding: "0 40px",
+        padding: "0 48px",
         flexShrink: 0,
       }}
     >
@@ -46,8 +46,7 @@ function SchoolItem({ school }: { school: School }) {
           height: school.height,
           width: "auto",
           objectFit: "contain",
-          opacity: 0.5,
-          filter: "grayscale(30%)",
+          opacity: 0.85,
           userSelect: "none",
           pointerEvents: "none",
         }}

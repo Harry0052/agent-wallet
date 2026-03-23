@@ -980,3 +980,39 @@ BEGIN
       ON DELETE CASCADE;
   END IF;
 END $$;
+
+-- ── Referral system ─────────────────────────────────────────────────────────
+
+-- Track referral relationships (set once at signup, immutable)
+CREATE TABLE IF NOT EXISTS referral_attributions (
+  id TEXT PRIMARY KEY,
+  referrer_user_id TEXT NOT NULL,
+  referred_user_id TEXT NOT NULL UNIQUE,
+  referral_code TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_referral_attributions_referrer
+ON referral_attributions (referrer_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_referral_attributions_code
+ON referral_attributions (referral_code);
+
+-- Payout ledger for referral commissions
+CREATE TABLE IF NOT EXISTS referral_conversions (
+  id TEXT PRIMARY KEY,
+  referrer_user_id TEXT NOT NULL,
+  referred_user_id TEXT NOT NULL UNIQUE,
+  referred_plan TEXT NOT NULL,
+  stripe_event_id TEXT NOT NULL UNIQUE,
+  month_key TEXT NOT NULL,
+  referral_number_for_month INTEGER NOT NULL,
+  commission_rate NUMERIC(5,4) NOT NULL,
+  plan_price NUMERIC(10,2) NOT NULL,
+  payout_amount NUMERIC(10,2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_referral_conversions_referrer_month
+ON referral_conversions (referrer_user_id, month_key);

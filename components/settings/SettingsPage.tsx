@@ -1001,14 +1001,28 @@ function BillingSection({
 
 function ReferralsSection({ account }: { account: AuthenticatedAccount | null }) {
   const [copied, setCopied] = useState(false);
+  const [stats, setStats] = useState<{
+    referralCode: string;
+    referralLink: string;
+    monthlyConversions: number;
+    currentTier: string;
+    conversionsToNextTier: number;
+    monthlyEarnings: number;
+    totalEarnings: number;
+    pendingSignups: number;
+  } | null>(null);
 
-  // Generate a stable referral code from the user's ID
-  const referralCode = account?.appUserId
-    ? account.appUserId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toLowerCase()
-    : null;
-  const referralLink = referralCode
-    ? `https://calico.app/ref/${referralCode}`
-    : null;
+  useEffect(() => {
+    if (!account) return;
+    fetch('/api/referrals')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && data.stats) setStats(data.stats);
+      })
+      .catch(() => {});
+  }, [account]);
+
+  const referralLink = stats?.referralLink ?? null;
 
   const copyToClipboard = () => {
     if (!referralLink) return;
@@ -1018,35 +1032,83 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
     });
   };
 
+  const fmt = (n: number) => `$${n.toFixed(2)}`;
+
   return (
     <div className="aw-card space-y-6 !p-6">
       <div>
         <h3 className="text-lg font-semibold text-[var(--aw-text)]">
-          Invite a friend, they get 50% off
+          Refer friends, earn commission
         </h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Share your link and the person who signs up gets 50% off their first month on any plan.
+          Earn 50% commission on each referral. Hit 10 in a month and earn 100% on every referral after that.
         </p>
       </div>
 
-      <div className="rounded-xl border border-[var(--calico-primary,#FDBA74)]/30 bg-[rgba(253,186,116,0.08)] p-4">
-        <p className="text-sm font-semibold text-[var(--aw-text)]">How it works</p>
-        <ol className="mt-2 space-y-1.5 text-sm text-[var(--aw-text-muted)]">
-          <li className="flex gap-2">
-            <span className="shrink-0 font-semibold text-[var(--calico-primary,#FDBA74)]">1.</span>
-            Share your referral link with a friend
-          </li>
-          <li className="flex gap-2">
-            <span className="shrink-0 font-semibold text-[var(--calico-primary,#FDBA74)]">2.</span>
-            They sign up and pick a plan
-          </li>
-          <li className="flex gap-2">
-            <span className="shrink-0 font-semibold text-[var(--calico-primary,#FDBA74)]">3.</span>
-            They get 50% off their first month automatically
-          </li>
-        </ol>
+      {/* Progress toward 100% tier */}
+      {stats ? (
+        <div className="rounded-xl border border-[var(--calico-primary,#FDBA74)]/30 bg-[rgba(253,186,116,0.08)] p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-[var(--aw-text)]">
+              {stats.monthlyConversions} of 10 referrals this month
+            </p>
+            <span className="rounded-full bg-[var(--calico-primary,#FDBA74)] px-2.5 py-0.5 text-xs font-bold text-[var(--aw-text)]">
+              {stats.currentTier}
+            </span>
+          </div>
+          <div className="mt-2 h-2 rounded-full bg-[var(--aw-border)]">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${Math.min(100, (stats.monthlyConversions / 10) * 100)}%`,
+                backgroundColor: stats.monthlyConversions >= 10 ? 'var(--aw-success)' : 'var(--calico-primary, #FDBA74)',
+              }}
+            />
+          </div>
+          {stats.conversionsToNextTier > 0 ? (
+            <p className="mt-2 text-xs text-[var(--aw-text-muted)]">
+              {stats.conversionsToNextTier} more to unlock 100% commission this month
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-[var(--aw-success)]">
+              You&apos;ve unlocked 100% commission this month!
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {/* Earnings summary */}
+      {stats ? (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl bg-[var(--aw-surface-1)] p-3 text-center">
+            <p className="text-lg font-semibold text-[var(--aw-text)]">{fmt(stats.monthlyEarnings)}</p>
+            <p className="text-[10px] text-[var(--aw-text-muted)]">This month</p>
+          </div>
+          <div className="rounded-xl bg-[var(--aw-surface-1)] p-3 text-center">
+            <p className="text-lg font-semibold text-[var(--aw-text)]">{fmt(stats.totalEarnings)}</p>
+            <p className="text-[10px] text-[var(--aw-text-muted)]">All time</p>
+          </div>
+          <div className="rounded-xl bg-[var(--aw-surface-1)] p-3 text-center">
+            <p className="text-lg font-semibold text-[var(--aw-text)]">{stats.pendingSignups}</p>
+            <p className="text-[10px] text-[var(--aw-text-muted)]">Pending</p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Commission examples */}
+      <div className="rounded-xl border border-[var(--aw-border)] p-4">
+        <p className="mb-2 text-sm font-semibold text-[var(--aw-text)]">Commission rates</p>
+        <div className="space-y-1.5 text-xs text-[var(--aw-text-muted)]">
+          <div className="flex justify-between"><span>Starter (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$4.50</span></div>
+          <div className="flex justify-between"><span>Starter (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$8.99</span></div>
+          <div className="flex justify-between"><span>Pro (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$14.00</span></div>
+          <div className="flex justify-between"><span>Pro (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$27.99</span></div>
+          <div className="flex justify-between"><span>Autonomous (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$45.00</span></div>
+          <div className="flex justify-between"><span>Autonomous (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$89.99</span></div>
+        </div>
       </div>
 
+      {/* Referral link */}
       {referralLink ? (
         <div>
           <p className="mb-2 text-xs text-[var(--aw-text-muted)]">Your referral link</p>

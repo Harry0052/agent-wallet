@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
-  BarChart3,
   Home,
   Landmark,
   Lightbulb,
@@ -31,13 +30,11 @@ const primaryLinks: NavLink[] = [
   { href: "/transactions", key: "transactions", icon: ArrowLeftRight },
   { href: "/budgets", key: "budgets", icon: PieChart },
   { href: "/goals", key: "goals", icon: Target },
-  { href: "/reports", key: "reports", icon: BarChart3 },
 ];
 
 // Features that gate specific nav links
 const PRIMARY_GATES: Partial<Record<string, string>> = {
   "/goals": "simple_goals",
-  "/reports": "spending_trends",
 };
 
 const secondaryLinks: NavLink[] = [

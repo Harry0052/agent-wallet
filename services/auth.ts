@@ -11,6 +11,7 @@ interface AuthSuccessBody {
 export async function signup(input: {
   email: string;
   password: string;
+  referralCode?: string;
 }): Promise<{ signupComplete: true }> {
   const response = await fetch('/api/auth/signup', {
     method: 'POST',

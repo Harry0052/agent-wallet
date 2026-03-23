@@ -4,6 +4,34 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { fmt, fmtDate } from "@/lib/utils";
+
+/* ── Category color map (reused from Sankey for visual consistency) ── */
+
+const CATEGORY_COLORS: Record<string, string> = {
+  "food & dining": "#D97706",
+  "food and drink": "#D97706",
+  dining: "#D97706",
+  restaurants: "#D97706",
+  groceries: "#B45309",
+  "housing/rent": "#7C3AED",
+  rent: "#7C3AED",
+  mortgage: "#7C3AED",
+  transportation: "#2563EB",
+  travel: "#0284C7",
+  shopping: "#DB2777",
+  entertainment: "#DB2777",
+  "utilities/bills": "#4F46E5",
+  utilities: "#4F46E5",
+  health: "#059669",
+  healthcare: "#059669",
+  education: "#0D9488",
+  personal: "#EA580C",
+  subscriptions: "#9333EA",
+  insurance: "#6366F1",
+  savings: "#16A34A",
+  transfer: "#78716C",
+  uncategorized: "#9B8B7B",
+};
 import { SankeyDiagram } from "@/components/cashflow/SankeyDiagram";
 import {
   WorkspaceEmpty,
@@ -247,6 +275,18 @@ export function CashFlowView() {
       .sort((a, b) => b.amount - a.amount);
   }, [actualRangeEntries]);
 
+  // Top spending categories with percentages (ported from Reports)
+  const topCategories = useMemo(() => {
+    const totalExpenses = categoryBreakdown.reduce((s, c) => s + c.amount, 0);
+    if (totalExpenses === 0) return [];
+    return categoryBreakdown.slice(0, 6).map((c) => ({
+      category: c.category.charAt(0).toUpperCase() + c.category.slice(1).toLowerCase(),
+      amount: c.amount,
+      percent: Math.round((c.amount / totalExpenses) * 100),
+      color: CATEGORY_COLORS[c.category.toLowerCase()] ?? "#C4A882",
+    }));
+  }, [categoryBreakdown]);
+
   const openManualEntry = (type?: "income" | "expense") => {
     setManualType(type ?? "expense");
     setManualLabel("");
@@ -332,29 +372,29 @@ export function CashFlowView() {
         )}
       />
 
-      {/* Summary cards */}
+      {/* Summary cards — styled with borders + shadows for premium feel */}
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Income</p>
-          <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-success)]">{fmt(rangeIncome)}</p>
-          <p className="mt-1 text-[10px] text-[var(--aw-text-muted)]">Money in {rangeLabel}</p>
+        <div className="aw-card aw-card-compact">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Income</p>
+          <p className="aw-number mt-3 text-2xl text-[var(--aw-success)]">{fmt(rangeIncome)}</p>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">Money in {rangeLabel}</p>
         </div>
-        <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Spending</p>
-          <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-text)]">{fmt(rangeExpenses)}</p>
-          <p className="mt-1 text-[10px] text-[var(--aw-text-muted)]">Money out {rangeLabel}</p>
+        <div className="aw-card aw-card-compact">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Spending</p>
+          <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{fmt(rangeExpenses)}</p>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">Money out {rangeLabel}</p>
         </div>
-        <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Remaining</p>
-          <p className={`aw-number mt-2 text-xl font-semibold ${rangeNet >= 0 ? "text-[var(--aw-success)]" : "text-[var(--aw-danger)]"}`}>
+        <div className="aw-card aw-card-compact">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Remaining</p>
+          <p className={`aw-number mt-3 text-2xl ${rangeNet >= 0 ? "text-[var(--aw-success)]" : "text-[var(--aw-danger)]"}`}>
             {fmt(rangeNet)}
           </p>
-          <p className="mt-1 text-[10px] text-[var(--aw-text-muted)]">{rangeNet >= 0 ? "You kept more than you spent" : "You spent more than you earned"}</p>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">{rangeNet >= 0 ? "You kept more than you spent" : "You spent more than you earned"}</p>
         </div>
-        <div className="rounded-2xl bg-[var(--aw-surface-1)] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--aw-text-muted)]">Savings rate</p>
-          <p className="aw-number mt-2 text-xl font-semibold text-[var(--aw-text)]">{rangeSavingsRate}%</p>
-          <p className="mt-1 text-[10px] text-[var(--aw-text-muted)]">Portion of income kept</p>
+        <div className="aw-card aw-card-compact">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Savings rate</p>
+          <p className="aw-number mt-3 text-2xl text-[var(--aw-text)]">{rangeSavingsRate}%</p>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">Portion of income kept</p>
         </div>
       </div>
 
@@ -411,6 +451,35 @@ export function CashFlowView() {
           </>
         )}
       </WorkspacePanel>
+
+      {/* Top spending categories — color-coded breakdown */}
+      {topCategories.length > 0 ? (
+        <WorkspacePanel className="mt-4" title="Top spending categories">
+          <div className="space-y-4">
+            {topCategories.map((cat) => (
+              <div key={cat.category}>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-[var(--aw-text)]">{cat.category}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="aw-number text-[var(--aw-text-muted)]">{fmt(cat.amount)}</span>
+                    <span className="aw-number w-10 text-right font-semibold text-[var(--aw-text)]">{cat.percent}%</span>
+                  </div>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-[var(--aw-border)]">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.max(3, cat.percent)}%`,
+                      backgroundColor: cat.color,
+                      opacity: 0.7,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </WorkspacePanel>
+      ) : null}
 
       <WorkspacePanel className="mt-4" title="Upcoming bills and income">
         <div className="aw-card-table">

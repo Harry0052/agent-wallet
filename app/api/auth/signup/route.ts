@@ -11,12 +11,14 @@ import {
   monitorApiAbuse,
   resolveClientIp,
 } from '@/security/securityMonitor';
+import { attributeReferral } from '@/lib/server/referrals';
 
 export const runtime = 'nodejs';
 
 const BodySchema = z.object({
   email: z.string().trim().email('A valid email is required.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
+  referralCode: z.string().trim().max(20).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -47,6 +49,18 @@ export async function POST(req: NextRequest) {
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
+
+    // Attribute referral if a code was provided
+    if (body.referralCode) {
+      try {
+        await attributeReferral({
+          referralCode: body.referralCode,
+          referredUserId: created.appUserId,
+        });
+      } catch {
+        // Referral attribution failure must not block signup
+      }
+    }
 
     // Do NOT create a session on signup — user must explicitly log in.
     return NextResponse.json({

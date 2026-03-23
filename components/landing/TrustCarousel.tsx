@@ -16,10 +16,10 @@ interface Partner {
 }
 
 const partners: Partner[] = [
-  { src: "/logos/plaid.png", alt: "Plaid logo", caption: "Partnered with Plaid", height: 28 },
-  { src: "/logos/stripe.png", alt: "Stripe logo", caption: "Partnered with Stripe", height: 28 },
-  { src: "/logos/google.png", alt: "Google logo", caption: "Partnered with Google", height: 28 },
-  { src: "/logos/claude.png", alt: "Claude logo", caption: "Partnered with Claude", height: 28 },
+  { src: "/logos/plaid.png", alt: "Plaid logo", caption: "Partnered with Plaid", height: 40 },
+  { src: "/logos/stripe.png", alt: "Stripe logo", caption: "Partnered with Stripe", height: 40 },
+  { src: "/logos/google.png", alt: "Google logo", caption: "Partnered with Google", height: 40 },
+  { src: "/logos/claude.png", alt: "Claude logo", caption: "Partnered with Claude", height: 40 },
 ];
 
 /* ── Single partner item ─────────────────────────────────────── */
@@ -32,7 +32,7 @@ function PartnerItem({ partner }: { partner: Partner }) {
         flexDirection: "column",
         alignItems: "center",
         gap: 10,
-        padding: "0 48px",
+        padding: "0 56px",
         flexShrink: 0,
       }}
     >
@@ -45,8 +45,7 @@ function PartnerItem({ partner }: { partner: Partner }) {
           height: partner.height,
           width: "auto",
           objectFit: "contain",
-          opacity: 0.7,
-          filter: "grayscale(20%)",
+          opacity: 0.92,
           userSelect: "none",
           pointerEvents: "none",
         }}
@@ -55,9 +54,9 @@ function PartnerItem({ partner }: { partner: Partner }) {
       />
       <span
         style={{
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 500,
-          color: C.textMuted,
+          color: C.textSecondary,
           letterSpacing: "0.04em",
           whiteSpace: "nowrap",
           fontFamily: C.fontFamily,

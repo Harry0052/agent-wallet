@@ -19,7 +19,6 @@ const COMPONENT_FILES = [
   'components/cashflow/CashFlowView.tsx',
   'components/budgets/BudgetsView.tsx',
   'components/goals/GoalsView.tsx',
-  'components/reports/ReportsView.tsx',
   'components/insights/InsightsView.tsx',
   'components/settings/SettingsPage.tsx',
   'components/onboarding/OnboardingFlow.tsx',
