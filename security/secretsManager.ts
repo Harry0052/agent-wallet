@@ -350,9 +350,17 @@ export function validateRequiredSecretsAtStartup(): void {
   }
 
   if (missing.length > 0) {
-    throw new Error(
-      `Startup secret validation failed. Missing required secret values: ${missing.join('; ')}`,
+    // Log loudly but do NOT crash the server — let individual routes fail
+    // at the point of use with specific error messages. A hard throw here
+    // kills ALL Vercel functions on cold start, including health checks
+    // and public pages that don't need secrets.
+    console.error(
+      `[CRITICAL] Startup secret validation failed. Missing: ${missing.join('; ')}. ` +
+      `Routes requiring these secrets will return 500. Fix by adding the missing env vars in Vercel project settings.`,
     );
+
+    // Store the missing keys so routes can check without re-validating
+    (globalThis as Record<string, unknown>).__agentWalletMissingStartupSecrets = missing;
   }
 
   globalThis.__agentWalletSecretsStartupValidated = true;

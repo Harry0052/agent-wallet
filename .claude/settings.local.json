@@ -50,7 +50,10 @@
       "mcp__supabase__execute_sql",
       "mcp__supabase__apply_migration",
       "Bash(node --test tests/entitlements.test.ts)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "mcp__supabase__get_project",
+      "mcp__supabase__get_project_url",
+      "Bash(npx -y vercel --version)"
     ]
   },
   "enableAllProjectMcpServers": true,
