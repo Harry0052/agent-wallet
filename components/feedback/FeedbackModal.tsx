@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 
@@ -17,6 +18,7 @@ const CATEGORIES = [
 ] as const;
 
 export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
+  const pathname = usePathname();
   const [message, setMessage] = useState("");
   const [category, setCategory] = useState<string>("general");
   const [submitting, setSubmitting] = useState(false);
@@ -45,7 +47,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, category }),
+        body: JSON.stringify({ message: trimmed, category, route: pathname }),
       });
 
       if (!res.ok) {
