@@ -7,8 +7,8 @@ export default function TasksPage() {
   return (
     <EntitlementGatedPage
       requiredFeature="ai_automation"
-      featureLabel="Your To-Do List"
-      featureDescription="Calico creates and manages money tasks for you — bill reviews, savings transfers, spending alerts, and more."
+      featureLabel="Action Center"
+      featureDescription="Tell Calico what to do — cancel subscriptions, lower bills, move money, and more. Calico handles the work with your approval."
       requiredPlan="autonomous"
     >
       <TaskCenterView />

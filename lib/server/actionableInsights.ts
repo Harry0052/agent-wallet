@@ -19,10 +19,28 @@ export interface LockedInsightPreview {
   teaser: string;
 }
 
+/**
+ * Why additional insights are unavailable.
+ *
+ * - 'plan_locked'        → real insights exist but are gated by the user's plan
+ * - 'insufficient_data'  → not enough transaction history to generate insights
+ * - 'awaiting_sync'      → accounts connected but data hasn't arrived yet
+ * - 'no_accounts'        → no connected accounts at all
+ * - null                 → insights are available (Pro+) or nothing extra to show
+ */
+export type InsightUnavailableReason =
+  | 'plan_locked'
+  | 'insufficient_data'
+  | 'awaiting_sync'
+  | 'no_accounts'
+  | null;
+
 export interface ActionableInsightsResult {
   primary: ActionableInsight | null;
   additional: ActionableInsight[];
   locked: LockedInsightPreview[];
+  /** Why additional insights are unavailable — drives UI treatment */
+  unavailableReason: InsightUnavailableReason;
 }
 
 // ── Plan gating ─────────────────────────────────────────────────────────────
@@ -227,19 +245,37 @@ export function generateActionableInsights(
     ? clean(sorted[0])
     : fallbackInsight(payload.dataQuality);
 
-  // Additional insights: plan-gated
+  // Determine data availability
+  const dataMode = payload.dataQuality?.mode;
+  const hasRealCandidates = sorted.length > 1; // extra insights beyond primary
   const isPro = planLevel(plan) >= planLevel('pro');
 
-  if (isPro && sorted.length > 1) {
-    // Pro+ users: return up to 2 real additional insights
+  // Pro+ users with extra insights: show them all
+  if (isPro && hasRealCandidates) {
     const additional = sorted.slice(1, 3).map(clean);
-    return { primary, additional, locked: [] };
+    return { primary, additional, locked: [], unavailableReason: null };
   }
 
-  // Starter / no plan: return locked placeholders, never real data
-  return {
-    primary,
-    additional: [],
-    locked: LOCKED_TEASERS.slice(0, 2),
-  };
+  // Determine WHY additional insights are unavailable
+  let unavailableReason: InsightUnavailableReason = null;
+
+  if (!dataMode || dataMode === 'no_connected_accounts') {
+    unavailableReason = 'no_accounts';
+  } else if (dataMode === 'awaiting_sync') {
+    unavailableReason = 'awaiting_sync';
+  } else if (dataMode === 'thin_history') {
+    unavailableReason = 'insufficient_data';
+  } else if (!isPro && hasRealCandidates) {
+    // Full data, real insights exist, but user's plan doesn't include them
+    unavailableReason = 'plan_locked';
+  }
+  // When dataMode === 'none' and sorted.length <= 1:
+  // unavailableReason stays null — user has full data, just nothing extra to show.
+
+  // Only show locked teasers when real insights are being gated by plan
+  const locked = unavailableReason === 'plan_locked'
+    ? LOCKED_TEASERS.slice(0, 2)
+    : [];
+
+  return { primary, additional: [], locked, unavailableReason };
 }

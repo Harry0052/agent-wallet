@@ -99,6 +99,7 @@ export interface SmartHomePayload {
     locked: Array<{
       teaser: string;
     }>;
+    unavailableReason?: 'plan_locked' | 'insufficient_data' | 'awaiting_sync' | 'no_accounts' | null;
   };
 }
 

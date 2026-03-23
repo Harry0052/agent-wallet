@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowRight, Lock, Sparkles, TrendingDown } from "lucide-react";
+import { AlertTriangle, ArrowRight, BarChart3, Clock, Lock, Sparkles, TrendingDown } from "lucide-react";
 import type { SmartHomePayload } from "@/services/smartWallet";
 
 type InsightType = "warning" | "opportunity" | "prediction";
+
+type InsightUnavailableReason =
+  | "plan_locked"
+  | "insufficient_data"
+  | "awaiting_sync"
+  | "no_accounts"
+  | null;
 
 interface ActionableInsight {
   type: InsightType;
@@ -57,6 +64,12 @@ const CTA_ROUTES: Record<string, string> = {
   "Review spending plan": "/budgets",
   "Review bills": "/statements?panel=recurring",
 };
+
+/** Copy for the learning/insufficient-data state cards */
+const LEARNING_MESSAGES = [
+  "Learning your patterns",
+  "Needs more transaction history",
+] as const;
 
 function InsightCard({ insight, index }: { insight: ActionableInsight; index: number }) {
   const accent = ACCENT_MAP[insight.type];
@@ -122,6 +135,7 @@ function InsightCard({ insight, index }: { insight: ActionableInsight; index: nu
   );
 }
 
+/** Plan-gated card: blurred with lock icon + upgrade CTA */
 function LockedCard({ preview, index }: { preview: LockedPreview; index: number }) {
   return (
     <motion.div
@@ -154,17 +168,69 @@ function LockedCard({ preview, index }: { preview: LockedPreview; index: number 
   );
 }
 
+/** Insufficient-data card: no lock, soft treatment, learning language */
+function LearningCard({ message, index }: { message: string; index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.18 + index * 0.06, duration: 0.2, ease: "easeOut" }}
+      className="rounded-[14px] border px-5 py-3.5"
+      style={{
+        background: "rgba(253, 186, 116, 0.04)",
+        borderColor: "rgba(253, 186, 116, 0.18)",
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[10px]"
+          style={{ background: "rgba(253, 186, 116, 0.12)" }}
+        >
+          <BarChart3 size={13} style={{ color: "var(--calico-primary)" }} />
+        </div>
+        <span className="text-[0.8rem] font-medium text-[var(--calico-text-muted)]">
+          {message}
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
+/** Syncing/awaiting data card */
+function SyncingCard({ index }: { index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.18 + index * 0.06, duration: 0.2, ease: "easeOut" }}
+      className="rounded-[14px] border px-5 py-3.5"
+      style={{
+        background: "rgba(253, 186, 116, 0.04)",
+        borderColor: "rgba(253, 186, 116, 0.18)",
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[10px]"
+          style={{ background: "rgba(253, 186, 116, 0.12)" }}
+        >
+          <Clock size={13} style={{ color: "var(--calico-primary)" }} />
+        </div>
+        <span className="text-[0.8rem] font-medium text-[var(--calico-text-muted)]">
+          This insight appears once Calico has enough data
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
 export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
   const insights = home.actionableInsights;
   if (!insights || !insights.primary) return null;
 
+  const reason: InsightUnavailableReason = insights.unavailableReason ?? null;
   const hasLocked = insights.locked.length > 0;
   const hasAdditional = insights.additional.length > 0;
-
-  // Determine the correct "unlock" destination based on user state
-  const noAccounts = home.dataQuality?.mode === "no_connected_accounts";
-  const unlockHref = noAccounts ? "/connect" : "/plans";
-  const unlockLabel = noAccounts ? "Connect an account" : "Unlock all insights";
 
   return (
     <motion.section
@@ -173,7 +239,7 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
       transition={{ delay: 0.03, duration: 0.25, ease: "easeOut" }}
       className="flex flex-col gap-3"
     >
-      {/* Primary insight */}
+      {/* Primary insight — always shown */}
       <InsightCard insight={insights.primary} index={0} />
 
       {/* Additional insights (Pro+) */}
@@ -181,8 +247,8 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
         <InsightCard key={`additional-${i}`} insight={insight} index={i + 1} />
       ))}
 
-      {/* Locked previews (Starter) */}
-      {hasLocked && (
+      {/* Plan-locked: show blurred cards + upgrade CTA */}
+      {reason === "plan_locked" && hasLocked && (
         <div className="flex flex-col gap-2">
           {insights.locked.map((preview, i) => (
             <LockedCard key={`locked-${i}`} preview={preview} index={i} />
@@ -194,7 +260,7 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
             className="flex justify-center pt-1"
           >
             <Link
-              href={unlockHref}
+              href="/plans"
               className="group inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[0.75rem] font-semibold transition-all hover:shadow-sm"
               style={{
                 background: "rgba(253, 186, 116, 0.15)",
@@ -203,11 +269,51 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
               }}
             >
               <Sparkles size={12} style={{ color: "var(--calico-primary)" }} />
-              {unlockLabel}
+              Unlock all insights
               <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
             </Link>
           </motion.div>
         </div>
+      )}
+
+      {/* Insufficient data: show learning cards (no lock, no upgrade CTA) */}
+      {reason === "insufficient_data" && (
+        <div className="flex flex-col gap-2">
+          {LEARNING_MESSAGES.map((message, i) => (
+            <LearningCard key={`learning-${i}`} message={message} index={i} />
+          ))}
+        </div>
+      )}
+
+      {/* Awaiting sync: show syncing placeholder */}
+      {reason === "awaiting_sync" && (
+        <div className="flex flex-col gap-2">
+          <SyncingCard index={0} />
+        </div>
+      )}
+
+      {/* No accounts: show connect CTA */}
+      {reason === "no_accounts" && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.2 }}
+          className="flex justify-center pt-1"
+        >
+          <Link
+            href="/connect"
+            className="group inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[0.75rem] font-semibold transition-all hover:shadow-sm"
+            style={{
+              background: "rgba(253, 186, 116, 0.15)",
+              border: "1px solid rgba(253, 186, 116, 0.3)",
+              color: "var(--calico-text)",
+            }}
+          >
+            <Sparkles size={12} style={{ color: "var(--calico-primary)" }} />
+            Connect an account
+            <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        </motion.div>
       )}
     </motion.section>
   );

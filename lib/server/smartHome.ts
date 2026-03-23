@@ -19,7 +19,7 @@ import { listCategoryLearningRules } from '@/lib/server/moneyIntelligence/catego
 import { getAutomationSummaryForUser } from '@/lib/server/automation/service';
 import type { AutomationActionSummary } from '@/lib/types';
 import { logServerEvent } from '@/lib/server/observability';
-import type { ActionableInsight, LockedInsightPreview } from '@/lib/server/actionableInsights';
+import type { ActionableInsight, InsightUnavailableReason, LockedInsightPreview } from '@/lib/server/actionableInsights';
 
 export type SourceState = 'Synced' | 'Imported' | 'Inferred' | 'Manual';
 
@@ -103,6 +103,7 @@ export interface SmartHomePayload {
     primary: ActionableInsight | null;
     additional: ActionableInsight[];
     locked: LockedInsightPreview[];
+    unavailableReason: InsightUnavailableReason;
   };
   /** @deprecated Removed from dashboard payload for performance. Use /api/statements/unified instead. */
   moneyIntelligence?: undefined;

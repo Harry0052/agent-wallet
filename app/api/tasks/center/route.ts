@@ -15,6 +15,10 @@ import {
 } from '@/lib/server/automation/service';
 import type { AutomationActionType, AutomationPolicyMode } from '@/lib/types';
 import { isAuthError } from '@/lib/server/auth';
+import { ensureProvidersRegistered } from '@/lib/server/automation/providers/register';
+
+// Register execution providers (Tiny Fish, etc.) on first import
+ensureProvidersRegistered();
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

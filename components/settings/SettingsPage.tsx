@@ -719,7 +719,7 @@ function GeneralSection() {
 
 function MembersSection({ account, billing }: { account: AuthenticatedAccount | null; billing: BillingStatus | null }) {
   const plan = billing?.plan ?? null;
-  const maxMembers = plan === "autonomous" ? 5 : 2;
+  const maxMembers = plan === "autonomous" ? 5 : plan === "pro" ? 3 : 2;
   const memberCount = 1; // Owner is always 1 member
 
   return (
@@ -727,7 +727,7 @@ function MembersSection({ account, billing }: { account: AuthenticatedAccount | 
       <div>
         <h3 className="text-lg font-semibold text-[var(--aw-text)]">Members</h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Share your household with up to {maxMembers} people{plan === "autonomous" ? " on the Autonomous plan" : ""}
+          Share your household with up to {maxMembers} people
         </p>
       </div>
 

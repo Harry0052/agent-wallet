@@ -3,14 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
-  Clock,
   Loader2,
-  ListChecks,
   RefreshCw,
-  X,
+  Zap,
 } from "lucide-react";
 import {
-  attemptTaskCenterAction,
   confirmTaskCenterAction,
   detectTaskCenterActions,
   dismissTaskCenterAction,
@@ -20,44 +17,28 @@ import {
   updateTaskCenterPolicy,
   type TaskCenterSnapshot,
 } from "@/services/taskCenter";
-import type {
-  AutomationActionRecord,
-  AutomationActionStatus,
-  AutomationPolicyMode,
-} from "@/lib/types";
-import { fmt } from "@/lib/utils";
+import type { AutomationPolicyMode } from "@/lib/types";
+import { CommandInput } from "./CommandInput";
+import { ActionCard, ActionHistoryCard } from "./ActionCard";
+import { CredentialModal, type CredentialRequestDisplay } from "./CredentialModal";
+import { QUICK_ACTIONS } from "./ActionCenterTypes";
 
-function friendlyStatus(status: AutomationActionStatus): string {
-  if (status === "pending_confirm") return "Needs your OK";
-  if (status === "suggested") return "Suggested";
-  if (status === "detected") return "New";
-  if (status === "attempted") return "In progress";
-  if (status === "completed") return "Done";
-  if (status === "failed") return "Failed";
-  if (status === "dismissed") return "Dismissed";
-  return "Snoozed";
+// ── Command submission ──────────────────────────────────────────────────────
+
+async function submitCommand(input: string): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch("/api/ai/command", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ input }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) {
+    return { ok: false, message: data.error || "Couldn't process that request." };
+  }
+  return { ok: true, message: "Got it. Calico is working on this." };
 }
 
-function friendlyActionType(value: AutomationActionRecord["actionType"]): string {
-  if (value === "subscription_cancel") return "Cancel subscription";
-  if (value === "subscription_negotiate") return "Negotiate subscription";
-  if (value === "bill_pay") return "Pay bill";
-  if (value === "savings_transfer") return "Move to savings";
-  if (value === "debt_optimize") return "Optimize debt";
-  if (value === "expense_categorization") return "Fix category";
-  if (value === "refund_budget") return "Budget refund";
-  if (value === "recurring_review") return "Review recurring charge";
-  if (value === "trial_conversion_review") return "Free trial ending";
-  return "Split expense";
-}
-
-function statusBadgeClass(status: AutomationActionStatus): string {
-  if (status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "failed") return "border-rose-200 bg-rose-50 text-rose-700";
-  if (status === "pending_confirm") return "border-amber-200 bg-amber-50 text-amber-700";
-  if (status === "dismissed") return "border-zinc-200 bg-zinc-50 text-zinc-600";
-  return "border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] text-[var(--aw-text)]";
-}
+// ── Policy labels ───────────────────────────────────────────────────────────
 
 function friendlyPolicyLabel(mode: AutomationPolicyMode): string {
   if (mode === "suggest_only") return "Suggest only";
@@ -65,22 +46,27 @@ function friendlyPolicyLabel(mode: AutomationPolicyMode): string {
   return "Let Calico act";
 }
 
+// ── Main view ───────────────────────────────────────────────────────────────
+
 export function TaskCenterView() {
   const [snapshot, setSnapshot] = useState<TaskCenterSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
+  const [commandLoading, setCommandLoading] = useState(false);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [policySaving, setPolicySaving] = useState(false);
-  const [lastNotice, setLastNotice] = useState<string | null>(null);
+  const [credentialRequest, setCredentialRequest] = useState<CredentialRequestDisplay | null>(null);
+  const [credentialSubmitting, setCredentialSubmitting] = useState(false);
+  const [credentialError, setCredentialError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const next = await fetchTaskCenterSnapshot();
-      setSnapshot(next);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load.");
+      setSnapshot(await fetchTaskCenterSnapshot());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load Action Center.");
     } finally {
       setLoading(false);
     }
@@ -90,112 +76,266 @@ export function TaskCenterView() {
     void load();
   }, [load]);
 
-  const actions = snapshot?.actions || [];
+  // ── Derived state ───────────────────────────────────────────────────────
+
+  const actions = snapshot?.actions ?? [];
+
   const activeActions = useMemo(
-    () => actions.filter((action) => action.status !== "completed" && action.status !== "dismissed"),
+    () => actions.filter((a) => a.status !== "completed" && a.status !== "dismissed"),
     [actions],
   );
-  const needsAttention = useMemo(
-    () => activeActions.filter((a) => a.status === "pending_confirm" || a.status === "detected" || a.status === "suggested"),
+
+  const historyActions = useMemo(
+    () => actions.filter((a) => a.status === "completed" || a.status === "dismissed").slice(0, 8),
+    [actions],
+  );
+
+  const needsAttentionCount = useMemo(
+    () => activeActions.filter((a) =>
+      a.status === "pending_confirm" || a.status === "detected" || a.status === "suggested",
+    ).length,
     [activeActions],
   );
 
-  const runDetect = async () => {
-    setError(null);
-    setLastNotice(null);
+  // ── Handlers ────────────────────────────────────────────────────────────
+
+  const handleCommand = async (input: string) => {
+    setCommandLoading(true);
+    setNotice(null);
+    try {
+      const result = await submitCommand(input);
+      setNotice({ type: result.ok ? "success" : "error", message: result.message });
+      if (result.ok) {
+        // Detect new actions from the command
+        try {
+          await detectTaskCenterActions();
+        } catch { /* best effort */ }
+        await load();
+      }
+    } catch {
+      setNotice({ type: "error", message: "Something went wrong. Try again." });
+    } finally {
+      setCommandLoading(false);
+    }
+  };
+
+  const handleDetect = async () => {
+    setNotice(null);
     try {
       const result = await detectTaskCenterActions();
       const count = result.result.detected;
-      setLastNotice(count > 0 ? `Found ${count} new thing${count === 1 ? "" : "s"} to look at.` : "Nothing new right now.");
+      setNotice({
+        type: count > 0 ? "success" : "info",
+        message: count > 0
+          ? `Found ${count} new item${count === 1 ? "" : "s"} to review.`
+          : "Nothing new right now. Calico is watching.",
+      });
       await load();
-    } catch (detectError) {
-      setError(detectError instanceof Error ? detectError.message : "Check failed.");
+    } catch (e) {
+      setNotice({ type: "error", message: e instanceof Error ? e.message : "Check failed." });
     }
   };
 
   const withBusy = async (actionId: string, fn: () => Promise<void>) => {
     setBusyActionId(actionId);
-    setError(null);
-    setLastNotice(null);
+    setNotice(null);
     try {
       await fn();
       await load();
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : "Action failed.");
+    } catch (e) {
+      setNotice({ type: "error", message: e instanceof Error ? e.message : "Action failed." });
     } finally {
       setBusyActionId(null);
     }
   };
 
-  const updateDefaultPolicy = async (next: AutomationPolicyMode) => {
+  const updatePolicy = async (next: AutomationPolicyMode) => {
     setPolicySaving(true);
-    setError(null);
     try {
       await updateTaskCenterPolicy({ defaultMode: next });
       await load();
-    } catch (policyError) {
-      setError(policyError instanceof Error ? policyError.message : "Failed to update.");
+    } catch (e) {
+      setNotice({ type: "error", message: e instanceof Error ? e.message : "Policy update failed." });
     } finally {
       setPolicySaving(false);
     }
   };
 
+  // ── Credential handlers ──────────────────────────────────────────────────
+
+  const handleCredentialSubmit = async (requestId: string, value: string) => {
+    setCredentialSubmitting(true);
+    setCredentialError(null);
+    try {
+      const res = await fetch("/api/tasks/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "submit", requestId, value }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setCredentialError(data.error || "Failed to submit. Try again.");
+        return;
+      }
+      setCredentialRequest(null);
+      setCredentialError(null);
+      setNotice({ type: "success", message: "Credential received. Calico is continuing the task." });
+      await load();
+    } catch {
+      setCredentialError("Something went wrong. Please try again.");
+    } finally {
+      setCredentialSubmitting(false);
+    }
+  };
+
+  const handleCredentialCancel = (requestId: string) => {
+    void fetch("/api/tasks/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: "revoke", requestId, reason: "User cancelled" }),
+    }).catch(() => {});
+    setCredentialRequest(null);
+    setCredentialError(null);
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
   return (
     <div className="aw-page">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--aw-text)]">Action Center</h1>
-          <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-            Things Calico found that may save you money or need your approval.
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-xl"
+              style={{ background: "rgba(59, 130, 246, 0.08)" }}
+            >
+              <Zap size={18} className="text-[#3B82F6]" />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--aw-text)]">
+              Action Center
+            </h1>
+          </div>
+          <p className="mt-2 text-sm text-[var(--aw-text-muted)]">
+            Tell Calico what to do, or review actions it found for you.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => { void runDetect(); }}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--aw-border)] bg-white px-4 text-sm font-semibold text-[var(--aw-text)] transition hover:bg-[var(--aw-surface-subtle)]"
+          onClick={() => { void handleDetect(); }}
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--aw-border)] bg-white px-4 text-sm font-semibold text-[var(--aw-text)] transition-colors hover:bg-[var(--aw-surface-subtle)]"
         >
           <RefreshCw size={15} />
-          Check for new items
+          Scan for actions
         </button>
       </div>
 
-      {error ? (
-        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+      {/* Command input */}
+      <div className="mt-6">
+        <CommandInput
+          onSubmit={(input) => { void handleCommand(input); }}
+          loading={commandLoading}
+        />
+      </div>
+
+      {/* Quick actions */}
+      {activeActions.length === 0 && !loading && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {QUICK_ACTIONS.map((qa) => (
+            <button
+              key={qa.label}
+              type="button"
+              onClick={() => { void handleCommand(qa.input); }}
+              disabled={commandLoading}
+              className="rounded-full border border-[var(--aw-border)] bg-white px-3.5 py-1.5 text-[0.78rem] font-medium text-[var(--aw-text-muted)] transition-all hover:border-[rgba(59,130,246,0.3)] hover:bg-[rgba(59,130,246,0.04)] hover:text-[var(--aw-text)] disabled:opacity-50"
+            >
+              {qa.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Notice banner */}
+      {notice && (
+        <div
+          className="mt-4 rounded-xl border px-4 py-3 text-sm"
+          style={{
+            borderColor:
+              notice.type === "error"
+                ? "rgba(220, 38, 38, 0.2)"
+                : notice.type === "success"
+                  ? "rgba(22, 163, 74, 0.2)"
+                  : "var(--aw-border)",
+            background:
+              notice.type === "error"
+                ? "rgba(220, 38, 38, 0.04)"
+                : notice.type === "success"
+                  ? "rgba(22, 163, 74, 0.04)"
+                  : "var(--aw-surface-subtle)",
+            color:
+              notice.type === "error"
+                ? "#DC2626"
+                : notice.type === "success"
+                  ? "#16A34A"
+                  : "var(--aw-text-muted)",
+          }}
+        >
+          {notice.message}
+        </div>
+      )}
+
+      {/* Attention badge */}
+      {needsAttentionCount > 0 && (
+        <div
+          className="mt-5 flex items-center gap-2.5 rounded-xl px-4 py-3"
+          style={{
+            background: "rgba(59, 130, 246, 0.05)",
+            border: "1px solid rgba(59, 130, 246, 0.12)",
+          }}
+        >
+          <CheckCircle2 size={16} className="flex-shrink-0 text-[#3B82F6]" />
+          <p className="text-sm font-medium text-[var(--aw-text)]">
+            {needsAttentionCount} item{needsAttentionCount === 1 ? " needs" : "s need"} your review
+          </p>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex justify-center py-20">
+          <Loader2 size={20} className="animate-spin text-[#3B82F6]" />
+        </div>
+      )}
+
+      {/* Error */}
+      {!loading && error && (
+        <div className="mt-6 rounded-xl border border-[rgba(220,38,38,0.2)] bg-[rgba(220,38,38,0.04)] px-4 py-3 text-sm text-[#DC2626]">
           {error}
         </div>
-      ) : null}
+      )}
 
-      {lastNotice ? (
-        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {lastNotice}
-        </div>
-      ) : null}
-
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-        </div>
-      ) : (
+      {/* Active actions */}
+      {!loading && !error && (
         <>
-          {needsAttention.length > 0 ? (
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-sm font-semibold text-amber-800">
-                {needsAttention.length} item{needsAttention.length === 1 ? " needs" : "s need"} your attention
-              </p>
-            </div>
-          ) : null}
-
-          <section className="mt-5 rounded-xl border border-[var(--aw-border)] bg-white p-4">
+          {/* Policy control */}
+          <section
+            className="mt-6 rounded-2xl border bg-white px-5 py-4"
+            style={{ borderColor: "var(--aw-border)" }}
+          >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-[var(--aw-text)]">When Calico finds something</p>
-                <p className="text-xs text-[var(--aw-text-muted)]">Choose how much control you want.</p>
+                <p className="text-[0.85rem] font-semibold text-[var(--aw-text)]">
+                  When Calico finds something
+                </p>
+                <p className="mt-0.5 text-[0.78rem] text-[var(--aw-text-muted)]">
+                  Choose how much control you want.
+                </p>
               </div>
               <select
                 value={snapshot?.policy.defaultMode || "user_confirm_required"}
-                onChange={(event) => { void updateDefaultPolicy(event.target.value as AutomationPolicyMode); }}
+                onChange={(e) => { void updatePolicy(e.target.value as AutomationPolicyMode); }}
                 disabled={policySaving}
-                className="h-9 rounded-lg border border-[var(--aw-border)] bg-white px-3 text-sm text-[var(--aw-text)]"
+                className="h-9 rounded-xl border border-[var(--aw-border)] bg-white px-3 text-[0.82rem] font-medium text-[var(--aw-text)] outline-none"
               >
                 <option value="suggest_only">{friendlyPolicyLabel("suggest_only")}</option>
                 <option value="user_confirm_required">{friendlyPolicyLabel("user_confirm_required")}</option>
@@ -204,141 +344,67 @@ export function TaskCenterView() {
             </div>
           </section>
 
+          {/* Active task list */}
           <section className="mt-5 space-y-3">
             {activeActions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[var(--aw-border)] bg-white px-4 py-16 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--aw-surface-subtle)]">
-                  <ListChecks size={22} className="text-[var(--aw-text-muted)]" />
+              <div
+                className="rounded-2xl border border-dashed bg-white px-6 py-16 text-center"
+                style={{ borderColor: "var(--aw-border)" }}
+              >
+                <div
+                  className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+                  style={{ background: "rgba(59, 130, 246, 0.06)" }}
+                >
+                  <Zap size={24} className="text-[#3B82F6]" />
                 </div>
-                <p className="text-sm font-semibold text-[var(--aw-text)]">You're all caught up</p>
-                <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-[var(--aw-text-muted)]">
-                  Calico will add review items here when it finds something worth doing — like transfer cleanup, recurring confirmations, budget drafts, or category fixes.
+                <p className="text-[0.95rem] font-semibold text-[var(--aw-text)]">
+                  You're all caught up
+                </p>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--aw-text-muted)]">
+                  Type a request above, or Calico will add items here when it finds
+                  something worth doing — like subscriptions to cancel, bills to lower,
+                  or categories to fix.
                 </p>
               </div>
             ) : (
-              activeActions.map((action) => {
-                const busy = busyActionId === action.id;
-                return (
-                  <article key={action.id} className="rounded-xl border border-[var(--aw-border)] bg-white px-4 py-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-[var(--aw-text)]">{action.title}</p>
-                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass(action.status)}`}>
-                            {friendlyStatus(action.status)}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-[var(--aw-text-muted)]">
-                          {friendlyActionType(action.actionType)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="mt-3 text-sm text-[var(--aw-text-muted)]">{action.summary}</p>
-
-                    {action.amount !== null ? (
-                      <p className="mt-2 text-sm font-semibold text-[var(--aw-text)]">
-                        {fmt(action.amount)}{action.currency ? ` ${action.currency.toUpperCase()}` : ""}
-                      </p>
-                    ) : null}
-
-                    {action.explainability.factors.length > 0 ? (
-                      <p className="mt-2 text-xs text-[var(--aw-text-muted)]">
-                        {action.explainability.factors[0]}
-                      </p>
-                    ) : null}
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {(action.status === "pending_confirm" || action.status === "suggested" || action.status === "detected") ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => { void withBusy(action.id, async () => { await confirmTaskCenterAction(action.id); }); }}
-                          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--aw-primary)] px-3 text-xs font-semibold text-[var(--aw-text)]"
-                        >
-                          {busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                          Approve
-                        </button>
-                      ) : null}
-
-                      {(action.status === "pending_confirm" || action.status === "suggested" || action.status === "failed") ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => { void withBusy(action.id, async () => { const result = await attemptTaskCenterAction(action.id); setLastNotice(result.result.message); }); }}
-                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--aw-border)] bg-white px-3 text-xs font-semibold text-[var(--aw-text)]"
-                        >
-                          Review details
-                        </button>
-                      ) : null}
-
-                      {action.status === "snoozed" || action.status === "failed" ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => { void withBusy(action.id, async () => { await reopenTaskCenterAction(action.id); }); }}
-                          className="inline-flex h-9 items-center rounded-lg border border-[var(--aw-border)] bg-white px-3 text-xs font-semibold text-[var(--aw-text)]"
-                        >
-                          Try again
-                        </button>
-                      ) : null}
-
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => { void withBusy(action.id, async () => { await snoozeTaskCenterAction(action.id, 3); }); }}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--aw-border)] bg-white px-3 text-xs font-semibold text-[var(--aw-text-muted)]"
-                      >
-                        <Clock size={13} />
-                        Later
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => { void withBusy(action.id, async () => { await dismissTaskCenterAction(action.id); }); }}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--aw-border)] bg-white px-3 text-xs font-semibold text-[var(--aw-text-muted)]"
-                      >
-                        <X size={13} />
-                        Dismiss
-                      </button>
-                    </div>
-                  </article>
-                );
-              })
+              activeActions.map((action) => (
+                <ActionCard
+                  key={action.id}
+                  action={action}
+                  busy={busyActionId === action.id}
+                  onApprove={() => { void withBusy(action.id, () => confirmTaskCenterAction(action.id)); }}
+                  onSnooze={() => { void withBusy(action.id, () => snoozeTaskCenterAction(action.id, 3)); }}
+                  onDismiss={() => { void withBusy(action.id, () => dismissTaskCenterAction(action.id)); }}
+                  onReopen={() => { void withBusy(action.id, () => reopenTaskCenterAction(action.id)); }}
+                />
+              ))
             )}
           </section>
 
-          {/* Completed / dismissed history */}
-          {actions.filter((a) => a.status === "completed" || a.status === "dismissed").length > 0 ? (
-            <section className="mt-6">
+          {/* History */}
+          {historyActions.length > 0 && (
+            <section className="mt-8">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">
                 Recently handled
               </p>
               <div className="space-y-2">
-                {actions
-                  .filter((a) => a.status === "completed" || a.status === "dismissed")
-                  .slice(0, 5)
-                  .map((action) => (
-                    <div
-                      key={action.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-4 py-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-[var(--aw-text-muted)]">{action.title}</p>
-                        <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]/60">
-                          {friendlyActionType(action.actionType)}
-                        </p>
-                      </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusBadgeClass(action.status)}`}>
-                        {action.status === "completed" ? "Done" : "Dismissed"}
-                      </span>
-                    </div>
-                  ))}
+                {historyActions.map((action) => (
+                  <ActionHistoryCard key={action.id} action={action} />
+                ))}
               </div>
             </section>
-          ) : null}
+          )}
         </>
+      )}
+      {/* Credential modal */}
+      {credentialRequest && (
+        <CredentialModal
+          request={credentialRequest}
+          onSubmit={handleCredentialSubmit}
+          onCancel={handleCredentialCancel}
+          submitting={credentialSubmitting}
+          error={credentialError}
+        />
       )}
     </div>
   );

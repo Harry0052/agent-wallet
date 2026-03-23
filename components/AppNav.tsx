@@ -62,7 +62,7 @@ export function AppNav() {
     if (loading) return link.href === "/cashflow";
     if (link.href === "/cashflow") return can("monthly_cashflow");
     if (link.href === "/tasks") return can("ai_automation");
-    if (link.href === "/investments") return can("premium_intelligence");
+    if (link.href === "/investments") return can("investments");
     if (link.href === "/insights") return can("basic_insights");
     return false;
   });

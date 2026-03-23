@@ -5,6 +5,7 @@ import type { PlanId } from '@/lib/server/billing';
 // ── Feature definitions ─────────────────────────────────────────────────────
 
 export type FeatureKey =
+  // ── Starter ──
   | 'core_dashboard'
   | 'basic_transactions'
   | 'basic_budgets'
@@ -16,6 +17,7 @@ export type FeatureKey =
   | 'spending_categories'
   | 'monthly_cashflow'
   | 'manual_entry'
+  // ── Pro ──
   | 'simple_goals'
   | 'income_expense_chart'
   | 'category_breakdowns'
@@ -28,14 +30,18 @@ export type FeatureKey =
   | 'priority_support'
   | 'ai_research'
   | 'cashflow_forecast'
-  | 'ai_automation'
-  | 'autonomous_actions'
-  | 'bill_negotiation'
+  | 'premium_intelligence'
   | 'advanced_forecasting'
   | 'financial_memory'
+  | 'investments'
+  // ── Autonomous (action-execution only) ──
+  | 'ai_automation'
+  | 'autonomous_actions'
+  | 'action_execution'
+  | 'task_history'
+  | 'bill_negotiation'
   | 'custom_integrations'
-  | 'api_access'
-  | 'premium_intelligence';
+  | 'api_access';
 
 export interface FeatureDefinition {
   key: FeatureKey;
@@ -58,7 +64,7 @@ export const FEATURES: FeatureDefinition[] = [
   { key: 'manual_entry', label: 'Manual Entry', description: 'Add accounts and transactions by hand', minimumPlan: 'starter' },
 
   // ── Pro — "Your adaptive money coach" ──
-  // Coaching: personalized guidance, smart plans, purchase planning, credit, investing readiness
+  // All intelligence, analysis, and viewing features. No action execution.
   { key: 'unlimited_accounts', label: 'Unlimited Accounts', description: 'Connect all your banks, cards, and loans', minimumPlan: 'pro' },
   { key: 'simple_goals', label: 'Money Goals', description: 'Goals with suggested targets, timelines, and contribution amounts', minimumPlan: 'pro' },
   { key: 'income_expense_chart', label: 'Income vs. Spending', description: 'See what you earn and spend side by side', minimumPlan: 'pro' },
@@ -72,18 +78,21 @@ export const FEATURES: FeatureDefinition[] = [
   { key: 'custom_categories', label: 'Custom Categories', description: 'Organize transactions into your own groups', minimumPlan: 'pro' },
   { key: 'ai_research', label: 'Purchase Planner', description: 'Ask Calico if you can afford something and when to buy it', minimumPlan: 'pro' },
   { key: 'cashflow_forecast', label: '30-Day Forecast', description: 'See where your money will be in 30 days', minimumPlan: 'pro' },
+  { key: 'premium_intelligence', label: 'Advanced Intelligence', description: 'Full depth of Calico analysis, scenarios, and optimization', minimumPlan: 'pro' },
+  { key: 'advanced_forecasting', label: 'Extended Outlook', description: 'Longer-range financial projections and what-if scenarios', minimumPlan: 'pro' },
+  { key: 'financial_memory', label: 'Financial Memory', description: 'Calico remembers your patterns and gets smarter over time', minimumPlan: 'pro' },
+  { key: 'investments', label: 'Investments', description: 'Track holdings and portfolio value inside your broader money picture', minimumPlan: 'pro' },
   { key: 'priority_support', label: 'Priority Support', description: 'Faster help when you need it', minimumPlan: 'pro' },
 
   // ── Fully Autonomous — "Help me handle it" ──
-  // Execution: Calico takes action and optimizes on your behalf
+  // Action execution only: Calico takes action on your behalf
   { key: 'ai_automation', label: 'Action Center', description: 'Calico detects issues, drafts fixes, and asks for your approval', minimumPlan: 'autonomous' },
   { key: 'autonomous_actions', label: 'Learned Rules', description: 'Calico remembers corrections and applies them automatically', minimumPlan: 'autonomous' },
-  { key: 'bill_negotiation', label: 'Bill Optimization', description: 'Identify opportunities to reduce recurring costs (coming soon)', minimumPlan: 'autonomous' },
-  { key: 'advanced_forecasting', label: 'Extended Outlook', description: 'Longer-range financial projections (coming soon)', minimumPlan: 'autonomous' },
-  { key: 'financial_memory', label: 'Financial Memory', description: 'Calico remembers your patterns and gets smarter over time', minimumPlan: 'autonomous' },
+  { key: 'action_execution', label: 'Action Execution', description: 'Calico completes supported actions on your behalf', minimumPlan: 'autonomous' },
+  { key: 'task_history', label: 'Task History & Approvals', description: 'Review past actions, approvals, and execution logs', minimumPlan: 'autonomous' },
+  { key: 'bill_negotiation', label: 'Bill Optimization', description: 'Calico identifies and acts on opportunities to reduce recurring costs', minimumPlan: 'autonomous' },
   { key: 'custom_integrations', label: 'Custom Integrations', description: 'Connect external services to Calico (coming soon)', minimumPlan: 'autonomous' },
   { key: 'api_access', label: 'API Access', description: 'Programmatic access to your financial data (coming soon)', minimumPlan: 'autonomous' },
-  { key: 'premium_intelligence', label: 'Advanced Intelligence', description: 'Full depth of Calico analysis and optimization', minimumPlan: 'autonomous' },
 ];
 
 const PLAN_HIERARCHY: PlanId[] = ['starter', 'pro', 'autonomous'];
