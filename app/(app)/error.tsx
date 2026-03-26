@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 
 export default function AppError({
   error,
@@ -12,6 +13,7 @@ export default function AppError({
 }) {
   useEffect(() => {
     console.error("[Calico/App] Error:", error.message, error.digest);
+    Sentry.captureException(error);
   }, [error]);
 
   const isDbError = /pool|connection|timeout|maxclient|ECONNREFUSED|session/i.test(error.message);

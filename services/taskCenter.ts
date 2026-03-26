@@ -34,9 +34,10 @@ export interface TaskCenterSnapshot {
   policy: AutomationPolicyConfig;
 }
 
+import { toUserFriendlyError } from './apiErrorMessage';
+
 function toError(payload: { error?: string; errorCode?: string }): Error {
-  if (payload.errorCode && payload.error) return new Error(`${payload.errorCode}: ${payload.error}`);
-  return new Error(payload.error || 'Task center request failed');
+  return toUserFriendlyError(payload);
 }
 
 export async function fetchTaskCenterSnapshot(): Promise<TaskCenterSnapshot> {

@@ -1,12 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuthenticatedUser } from '@/lib/server/auth';
 import { getUserSubscription, getBillingState, PLANS } from '@/lib/server/billing';
 import { apiError } from '@/lib/server/observability';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'billing' });
+  if (rateLimited) return rateLimited;
+
   try {
     const user = await requireAuthenticatedUser();
     const sub = await getUserSubscription(user.appUserId);

@@ -5,6 +5,7 @@ import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observ
 import { sanitizeAiText } from '@/security/aiSanitizer';
 import { PromptInjectionError, assertPromptSafe } from '@/security/promptGuard';
 import { runInAiExecutionContext } from '@/security/secretsGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 
@@ -150,6 +151,9 @@ function buildGeneralAnswer(prompt: string, requestType: ClassifiedRequestType):
 }
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'ai', scope: 'ai_general_chat' });
+  if (rateLimited) return rateLimited;
+
   try {
     return await runInAiExecutionContext(async () => {
       const { prompt, sourceButton } = BodySchema.parse(await req.json());

@@ -5,6 +5,7 @@ import { setSessionCookie } from '@/lib/server/authCookies';
 import { recordAccountAuditEvent } from '@/lib/server/accountAudit';
 import { extractRequestMeta } from '@/lib/server/requestMeta';
 import { getPostAuthRedirectPath } from '@/lib/server/onboarding';
+import { logServerEvent } from '@/lib/server/observability';
 import { enforceRateLimit } from '@/security/rateLimiter';
 import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
 import {
@@ -97,9 +98,16 @@ export async function POST(req: NextRequest) {
         : 500;
 
     if (error instanceof AuthError && status === 401) {
-      monitorFailedLoginAttempt({
-        ip: resolveClientIp(req),
-        email: attemptedEmail,
+      const ip = resolveClientIp(req);
+      monitorFailedLoginAttempt({ ip, email: attemptedEmail });
+      logServerEvent('warn', 'auth.login.failed', {
+        ip,
+        email: attemptedEmail ? `${attemptedEmail.slice(0, 3)}...` : null,
+        reason: error.message,
+      });
+    } else if (status === 500) {
+      logServerEvent('error', 'auth.login.internal_error', {
+        error: rawMessage,
       });
     }
 

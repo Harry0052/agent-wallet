@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getWalletUserId } from '@/lib/server/ledger';
 import { listSavedFundingMethods, removeSavedFundingMethod } from '@/lib/server/fundingStripe';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 
@@ -10,7 +11,10 @@ const DeleteBodySchema = z.object({
   paymentMethodId: z.string().trim().min(1),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'funding' });
+  if (rateLimited) return rateLimited;
+
   try {
     const userId = await getWalletUserId();
     const methods = await listSavedFundingMethods(userId);
@@ -24,6 +28,9 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'funding' });
+  if (rateLimited) return rateLimited;
+
   try {
     const body = DeleteBodySchema.parse(await req.json());
     const userId = await getWalletUserId();

@@ -4,6 +4,7 @@ import { requireAuthenticatedUser, revokeCurrentSessionFromCookies } from '@/lib
 import { clearSessionCookie } from '@/lib/server/authCookies';
 import { query } from '@/lib/server/db';
 import { apiError, logServerEvent } from '@/lib/server/observability';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,9 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'auth', scope: 'account_delete' });
+  if (rateLimited) return rateLimited;
+
   try {
     const user = await requireAuthenticatedUser();
     const body = await req.json();

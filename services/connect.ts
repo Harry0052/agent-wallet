@@ -119,9 +119,11 @@ export class ConnectApiError extends Error {
   readonly plaidErrorCode: string | null;
 
   constructor(payload: { error?: string; errorCode?: string; plaidErrorCode?: string }) {
-    super(payload.error || "Request failed");
+    const code = payload.errorCode || "UNKNOWN_FAILURE";
+    const isDbError = /^DB_/i.test(code) || /maxclient|pool|connection/i.test(payload.error || "");
+    super(isDbError ? "Calico is temporarily busy. Please try again in a moment." : (payload.error || "Request failed"));
     this.name = "ConnectApiError";
-    this.errorCode = payload.errorCode || "UNKNOWN_FAILURE";
+    this.errorCode = code;
     this.plaidErrorCode = payload.plaidErrorCode || null;
   }
 }

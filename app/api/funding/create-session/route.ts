@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWalletUserId } from '@/lib/server/ledger';
 import { createTopupCheckoutSession } from '@/lib/server/fundingStripe';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'funding' });
+  if (rateLimited) return rateLimited;
+
   try {
     const body = (await req.json()) as { amount?: number };
     const amount = Number(body.amount);

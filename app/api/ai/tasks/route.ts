@@ -8,6 +8,7 @@ import {
 } from '@/lib/server/engines/taskEngine';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 import { enforceEntitlement } from '@/security/entitlementGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 
@@ -15,6 +16,9 @@ const MAX_SURFACED = 5;
 const MAX_CRITICAL = 1;
 
 export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'ai', scope: 'ai_tasks' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'ai_automation',
     rateLimitScope: 'ai_tasks',
@@ -57,6 +61,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'ai', scope: 'ai_tasks' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'ai_automation',
     rateLimitScope: 'ai_tasks_generate',
@@ -97,6 +104,9 @@ const PatchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'ai', scope: 'ai_tasks' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'ai_automation',
     rateLimitScope: 'ai_tasks_update',

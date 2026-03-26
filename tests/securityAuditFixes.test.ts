@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -86,11 +86,11 @@ test('password reset tokens are consumed atomically', () => {
   assert.match(source, /expires_at > NOW\(\)/);
 });
 
-// ── Existing auth: debug health endpoint requires auth ──────────────────────
+// ── Debug health endpoint removed (launch hardening) ────────────────────────
 
-test('debug health endpoint requires authentication', () => {
-  const source = read('app/api/debug/health/route.ts');
-  assert.match(source, /enforceApiAuth/);
+test('debug health endpoint has been removed', () => {
+  const exists = existsSync(join(ROOT, 'app/api/debug/health/route.ts'));
+  assert.strictEqual(exists, false, 'debug health route should be deleted for production');
 });
 
 // ── Error message sanitization in account removal ───────────────────────────

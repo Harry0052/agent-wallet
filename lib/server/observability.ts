@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { installSecretRedaction, redactSecrets } from '@/security/redactSecrets';
+import { captureException } from '@/lib/server/sentry';
 
 installSecretRedaction();
 
@@ -74,6 +75,11 @@ export function logServerEvent(level: 'info' | 'warn' | 'error', event: string, 
 
   if (level === 'error') {
     console.error(payload);
+    // Forward errors to Sentry for alerting/tracking
+    captureException(new Error(`[${event}] ${data.error || data.message || 'unknown'}`), {
+      event,
+      ...data,
+    });
     return;
   }
 

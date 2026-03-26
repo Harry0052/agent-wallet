@@ -5,6 +5,7 @@ import { processCommand } from '@/lib/server/engines/commandEngine';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 import { validateJsonBody } from '@/security/requestValidator';
 import { assertPromptSafe } from '@/security/promptGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,9 @@ const CommandSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'ai', scope: 'ai_command' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'ai_research',
     rateLimitScope: 'ai_command',

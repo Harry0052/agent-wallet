@@ -194,9 +194,10 @@ export interface StatementFilters {
   page_size?: number;
 }
 
+import { toUserFriendlyError } from "./apiErrorMessage";
+
 function toError(body: { error?: string; errorCode?: string }): Error {
-  if (body.errorCode && body.error) return new Error(`${body.errorCode}: ${body.error}`);
-  return new Error(body.error || "Request failed");
+  return toUserFriendlyError(body);
 }
 
 function normalizeTransactionSourceType(tx: StatementTransaction): RecordSourceType {

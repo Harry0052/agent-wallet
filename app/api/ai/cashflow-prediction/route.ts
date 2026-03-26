@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enforceEntitlement } from '@/security/entitlementGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
 import { predictCashFlow } from '@/lib/server/engines/cashFlowEngine';
 
 export async function GET(request: NextRequest) {
+  const rateLimited = enforceRateLimit(request, { profile: 'ai', scope: 'ai_cashflow' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(request, {
     requiredFeature: 'cashflow_forecast',
     rateLimitScope: 'ai_cashflow',

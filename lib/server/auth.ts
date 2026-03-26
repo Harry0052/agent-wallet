@@ -10,7 +10,7 @@ import { getOptionalSecret, getRequiredSecret } from '@/security/secretsManager'
 export const AUTH_SESSION_COOKIE = 'aw_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
-const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+// EMAIL_VERIFICATION_TTL_MS removed — email verification not yet wired end-to-end.
 
 interface AppUserRow {
   id: string;
@@ -72,6 +72,10 @@ function getAuthSessionSecret(): string {
 }
 
 function getPasswordResetSecret(): string {
+  if (process.env.NODE_ENV === 'production') {
+    // Production MUST use a dedicated reset secret — never fall back to session secret.
+    return getRequiredSecret('AUTH_PASSWORD_RESET_SECRET', { minLength: 32 });
+  }
   const explicit = getOptionalSecret('AUTH_PASSWORD_RESET_SECRET');
   if (explicit) {
     if (explicit.length < 32) {
@@ -79,19 +83,10 @@ function getPasswordResetSecret(): string {
     }
     return explicit;
   }
+  // Dev/test only: fall back to session secret for convenience.
   return getAuthSessionSecret();
 }
 
-function getEmailVerificationSecret(): string {
-  const explicit = getOptionalSecret('AUTH_EMAIL_VERIFICATION_SECRET');
-  if (explicit) {
-    if (explicit.length < 32) {
-      throw new Error('AUTH_EMAIL_VERIFICATION_SECRET must be at least 32 characters when set');
-    }
-    return explicit;
-  }
-  return getAuthSessionSecret();
-}
 
 function base64Url(input: Buffer): string {
   return input.toString('base64url');
@@ -135,10 +130,6 @@ function hashSessionToken(token: string): string {
 
 function hashPasswordResetToken(token: string): string {
   return createHmac('sha256', getPasswordResetSecret()).update(token).digest('hex');
-}
-
-function hashEmailVerificationToken(token: string): string {
-  return createHmac('sha256', getEmailVerificationSecret()).update(token).digest('hex');
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -608,33 +599,9 @@ export async function resetPasswordWithToken(input: {
   };
 }
 
-// Scaffolding for future email verification flow (token issuance only).
-export async function issueEmailVerificationToken(appUserId: string): Promise<{
-  token: string;
-  expiresAt: string;
-}> {
-  const token = base64Url(randomBytes(48));
-  const tokenHash = hashEmailVerificationToken(token);
-  const tokenId = `evt_${randomBytes(12).toString('hex')}`;
-  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS).toISOString();
-
-  await query(
-    `
-      INSERT INTO app_email_verification_tokens (
-        id,
-        user_id,
-        token_hash,
-        expires_at,
-        consumed_at,
-        created_at
-      )
-      VALUES ($1, $2, $3, $4::timestamptz, NULL, NOW())
-    `,
-    [tokenId, appUserId, tokenHash, expiresAt],
-  );
-
-  return {
-    token,
-    expiresAt,
-  };
-}
+// Email verification is not yet wired end-to-end (no consumption/verification
+// endpoint exists). The token issuance code has been removed to avoid shipping
+// half-built auth logic. Re-implement when the full flow is ready:
+// 1. issueEmailVerificationToken (store hashed token in DB)
+// 2. GET /api/auth/verify-email?token=... (consume token, mark email verified)
+// 3. Gate sensitive operations on email_verified flag

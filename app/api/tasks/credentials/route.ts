@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { enforceEntitlement } from '@/security/entitlementGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
 import { logServerEvent } from '@/lib/server/observability';
 import {
   getCredentialRequest,
@@ -31,6 +32,9 @@ const commandSchema = z.discriminatedUnion('command', [submitSchema, revokeSchem
  * List pending credential requests for a task.
  */
 export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'tasks' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'ai_automation',
     rateLimitScope: 'task_credentials',
@@ -66,6 +70,9 @@ export async function GET(req: NextRequest) {
  * Submit or revoke a credential.
  */
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'tasks' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'ai_automation',
     rateLimitScope: 'task_credentials_submit',

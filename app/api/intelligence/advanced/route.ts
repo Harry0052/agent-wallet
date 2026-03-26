@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { enforceEntitlement } from "@/security/entitlementGuard";
+import { enforceRateLimit } from "@/security/rateLimiter";
 import { apiError, classifyTaskError, logServerEvent } from "@/lib/server/observability";
 import { isAuthError } from "@/lib/server/auth";
 import {
@@ -38,6 +39,9 @@ async function loadBaseline(userId: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: "ai", scope: "intelligence_advanced" });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'premium_intelligence',
     rateLimitScope: 'advanced_intelligence',
@@ -71,6 +75,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: "ai", scope: "intelligence_advanced" });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'premium_intelligence',
     rateLimitScope: 'advanced_intelligence_simulation',

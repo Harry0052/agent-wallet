@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 export default function GlobalError({
   error,
@@ -11,6 +12,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error("[Calico] Unhandled error:", error.message, error.digest);
+    Sentry.captureException(error);
   }, [error]);
 
   const isDbError = /pool|connection|timeout|maxclient|ECONNREFUSED/i.test(error.message);

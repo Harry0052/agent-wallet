@@ -44,6 +44,12 @@ function isAdminByOverrideHeader(request: NextRequest): boolean {
   const configured = getOptionalSecret('AUTH_ADMIN_OVERRIDE_TOKEN');
   if (!configured) return false;
 
+  // Require minimum token length to prevent weak tokens in production
+  if (configured.length < 48) {
+    console.error('[AUTH_GUARD] AUTH_ADMIN_OVERRIDE_TOKEN is too short (min 48 chars). Admin override disabled.');
+    return false;
+  }
+
   const provided = request.headers.get('x-agent-wallet-admin-token')?.trim();
   if (!provided) return false;
   return secureEqual(provided, configured);

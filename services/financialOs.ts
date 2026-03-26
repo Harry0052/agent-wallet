@@ -6,9 +6,10 @@ import type {
 } from "@/lib/server/financialOs/types";
 import { safeJson } from "@/services/safeFetch";
 
+import { toUserFriendlyError } from "./apiErrorMessage";
+
 function toError(payload: { error?: string; errorCode?: string }): Error {
-  if (payload.errorCode && payload.error) return new Error(`${payload.errorCode}: ${payload.error}`);
-  return new Error(payload.error || "Request failed");
+  return toUserFriendlyError(payload);
 }
 
 export async function fetchFinancialOsDashboard(input?: {

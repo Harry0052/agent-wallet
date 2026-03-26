@@ -1,3 +1,5 @@
+import 'server-only';
+
 import {
   Pool,
   type PoolConfig,
@@ -120,6 +122,14 @@ function getPool(): Pool {
     console.error('[DB_POOL] Idle client error (connection released):', err.message);
   });
 
+  // Log pool saturation for observability — helps diagnose MaxClients errors
+  pool.on('connect', () => {
+    const p = pool!;
+    if (p.totalCount > 0 && p.waitingCount > 0) {
+      console.warn(`[DB_POOL] Pool pressure: total=${p.totalCount} idle=${p.idleCount} waiting=${p.waitingCount}`);
+    }
+  });
+
   globalThis.__agentWalletPgPool = pool;
   return pool;
 }
@@ -128,11 +138,10 @@ async function executeQueryWithRetry<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[],
 ): Promise<QueryResult<T>> {
-  // Single retry with short backoff when Supabase session mode is saturated.
-  // IMPORTANT: More retries = more pressure on an already-exhausted pool.
-  // One retry with 500ms delay is enough to catch brief pool saturation
-  // without amplifying the problem.
-  const maxRetries = 1;
+  // Two retries with exponential backoff when Supabase session mode is saturated.
+  // Backoff gives other serverless invocations time to release connections.
+  const maxRetries = 2;
+  const baseDelayMs = 500;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -143,7 +152,11 @@ async function executeQueryWithRetry<T extends QueryResultRow = QueryResultRow>(
       if (!isRetryableMaxClientsError(error) || attempt === maxRetries) {
         throw error;
       }
-      await wait(500);
+      // Exponential backoff: 500ms, 1000ms
+      const delay = baseDelayMs * Math.pow(2, attempt);
+      // Add jitter to prevent thundering herd (0-50% of delay)
+      const jitter = Math.floor(Math.random() * delay * 0.5);
+      await wait(delay + jitter);
     }
   }
 

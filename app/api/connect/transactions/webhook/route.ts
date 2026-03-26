@@ -208,8 +208,9 @@ async function verifyWebhookSecret(req: NextRequest, rawBody: string = ""): Prom
   // Fall back to shared secret
   if (verifySharedSecret(req)) return true;
 
-  // In sandbox/development, allow unverified webhooks if no verification is configured
-  if (plaidEnv !== "production") {
+  // In sandbox/development only, allow unverified webhooks if no verification is configured.
+  // On Vercel production deployments this bypass is always disabled regardless of PLAID_ENV.
+  if (plaidEnv !== "production" && process.env.VERCEL_ENV !== "production") {
     const hasAnySecret = getOptionalSecret("PLAID_WEBHOOK_SHARED_SECRET");
     if (!hasAnySecret && !jwtToken) {
       logServerEvent("warn", "connect.webhook.unverified_sandbox", { env: plaidEnv });

@@ -28,14 +28,13 @@ export interface SendMoneyResult {
   payoutStatus: 'succeeded' | 'pending' | 'failed';
 }
 
+import { toUserFriendlyError } from './apiErrorMessage';
+
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   const body = await safeJson<T & { error?: string; errorCode?: string }>(res);
   if (!res.ok) {
     const parsed = body as { error?: string; errorCode?: string };
-    if (parsed.errorCode && parsed.error) {
-      throw new Error(`${parsed.errorCode}: ${parsed.error}`);
-    }
-    throw new Error(parsed.error || 'Request failed');
+    throw toUserFriendlyError(parsed);
   }
   return body as T;
 }

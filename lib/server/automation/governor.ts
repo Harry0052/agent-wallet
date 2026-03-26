@@ -1,3 +1,5 @@
+import 'server-only';
+
 import type { AutomationActionType } from '../../types';
 
 export type AutomationSuppressionReason = 'ok' | 'low_confidence' | 'duplicate' | 'cooldown';

@@ -142,9 +142,10 @@ export type SmartTelemetryEvent =
   | "smart.low_data_exposed"
   | "smart.drill_in_home_to_statements";
 
+import { toUserFriendlyError } from "./apiErrorMessage";
+
 function toError(payload: { error?: string; errorCode?: string }): Error {
-  if (payload.errorCode && payload.error) return new Error(`${payload.errorCode}: ${payload.error}`);
-  return new Error(payload.error || "Request failed");
+  return toUserFriendlyError(payload);
 }
 
 async function rawFetchSmartHomePayload(): Promise<SmartHomePayload> {

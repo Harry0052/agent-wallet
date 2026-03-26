@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types --test 'tests/*.test.ts' 'security/tests/*.test.ts'",
+    "test": "node --experimental-strip-types --import ./tests/setup.mjs --test --test-concurrency=1 'tests/*.test.ts' 'security/tests/*.test.ts'",
     "lint": "tsc --noEmit",
     "type-check": "tsc --noEmit"
   },
@@ -17,6 +17,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/dm-sans": "^5.2.8",
+    "@sentry/nextjs": "^10.46.0",
     "@stripe/react-stripe-js": "^2.9.0",
     "@stripe/stripe-js": "^4.9.0",
     "@vercel/speed-insights": "^2.0.0",

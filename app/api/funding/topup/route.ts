@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getWalletUserId } from '@/lib/server/ledger';
 import { chargeSavedPaymentMethodTopup, createTopupCheckoutSession, paymentMethodDisplayLabel } from '@/lib/server/fundingStripe';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +15,9 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'funding' });
+  if (rateLimited) return rateLimited;
+
   try {
     const body = BodySchema.parse(await req.json());
     const userId = await getWalletUserId();

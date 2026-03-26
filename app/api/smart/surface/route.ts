@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { enforceEntitlement } from '@/security/entitlementGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 import { routeSmartSurfaceIntent } from '@/lib/server/smartSurface/intentRouter';
 import { assembleSmartSurfaceContext } from '@/lib/server/smartSurface/contextAssembly';
@@ -14,6 +15,9 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'smart_surface' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'basic_insights',
     rateLimitScope: 'smart_surface',

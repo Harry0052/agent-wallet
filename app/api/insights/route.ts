@@ -4,10 +4,14 @@ import { isAuthError } from '@/lib/server/auth';
 import { query } from '@/lib/server/db';
 import { apiError, logServerEvent } from '@/lib/server/observability';
 import { enforceEntitlement } from '@/security/entitlementGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'insights' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'basic_insights',
     rateLimitScope: 'insights',
@@ -53,6 +57,9 @@ const PatchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'insights' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'basic_insights',
     rateLimitScope: 'insights',

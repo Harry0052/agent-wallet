@@ -8,6 +8,7 @@ import {
   updateOnboardingState,
   type OnboardingStep,
 } from '@/lib/server/onboarding';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 
@@ -33,7 +34,10 @@ function payloadErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'onboarding' });
+  if (rateLimited) return rateLimited;
+
   try {
     const user = await requireAuthenticatedUser();
     const [onboarding, profile, wallet] = await Promise.all([
@@ -70,6 +74,9 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'onboarding' });
+  if (rateLimited) return rateLimited;
+
   try {
     const user = await requireAuthenticatedUser();
     const body = PatchSchema.parse(await req.json());

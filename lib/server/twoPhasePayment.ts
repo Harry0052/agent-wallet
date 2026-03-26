@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { randomUUID } from 'node:crypto';
 
 export type PaymentFundingMode = 'STRIPE_AUTH_CAPTURE' | 'PREPAID_BALANCE';

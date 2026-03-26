@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuthenticatedUser } from '@/lib/server/auth';
 import { createCheckoutSession, PLANS, type PlanId } from '@/lib/server/billing';
 import { apiError, logServerEvent } from '@/lib/server/observability';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,9 @@ const CheckoutSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'billing' });
+  if (rateLimited) return rateLimited;
+
   try {
     const user = await requireAuthenticatedUser();
 

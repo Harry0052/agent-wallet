@@ -1,3 +1,5 @@
+import 'server-only';
+
 import type { AutomationActionType, AutomationPolicyMode } from '../../types.ts';
 import {
   DESTRUCTIVE_ACTIONS,

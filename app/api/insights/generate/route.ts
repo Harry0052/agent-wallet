@@ -3,10 +3,14 @@ import { isAuthError } from '@/lib/server/auth';
 import { generateInsights } from '@/lib/server/engines/insightEngine';
 import { apiError, classifyTaskError, logServerEvent } from '@/lib/server/observability';
 import { enforceEntitlement } from '@/security/entitlementGuard';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'ai', scope: 'insights_generate' });
+  if (rateLimited) return rateLimited;
+
   const guard = await enforceEntitlement(req, {
     requiredFeature: 'advanced_insights',
     rateLimitScope: 'insights_generate',

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export type RateLimitProfile = 'auth' | 'general';
+export type RateLimitProfile = 'auth' | 'general' | 'ai' | 'webhook';
 
 type RateLimitConfig = {
   maxRequests: number;
@@ -19,11 +19,19 @@ type RateLimitResult = {
 const RATE_LIMITS: Record<RateLimitProfile, RateLimitConfig> = {
   auth: {
     maxRequests: 5,
-    windowMs: 60_000,
+    windowMs: 15 * 60_000, // 5 attempts per 15 minutes for auth routes
   },
   general: {
     maxRequests: 60,
     windowMs: 60_000,
+  },
+  ai: {
+    maxRequests: 20,
+    windowMs: 60_000, // AI routes are expensive — tighter limit
+  },
+  webhook: {
+    maxRequests: 300,
+    windowMs: 60_000, // Webhooks need higher throughput but still bounded
   },
 };
 

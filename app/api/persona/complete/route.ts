@@ -4,6 +4,7 @@ import { requireAuthenticatedUser } from '@/lib/server/auth';
 import { upsertUserPersona, addMemoryEntry } from '@/lib/server/persona';
 import { completeOnboarding } from '@/lib/server/onboarding';
 import { apiError, logServerEvent } from '@/lib/server/observability';
+import { enforceRateLimit } from '@/security/rateLimiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,9 @@ const CompleteSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const rateLimited = enforceRateLimit(req, { profile: 'general', scope: 'persona' });
+  if (rateLimited) return rateLimited;
+
   try {
     const user = await requireAuthenticatedUser();
     const body = await req.json();

@@ -1,3 +1,5 @@
+import 'server-only';
+
 import Stripe from 'stripe';
 import { getStripeSecretKey } from '@/lib/server/env';
 

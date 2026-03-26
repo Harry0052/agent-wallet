@@ -31,9 +31,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      purpose: "validation_debug_only",
-      authoritative: false,
-      note: "In-memory recent events for internal product validation/debug only. This feed is ephemeral and non-authoritative.",
       events,
     });
   } catch (error) {

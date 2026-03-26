@@ -4,6 +4,10 @@ import { ZodError, type ZodTypeAny, z } from 'zod';
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const DANGEROUS_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+// Maximum allowed request body size (1 MB). Reject oversized payloads early
+// to prevent abuse via large JSON bodies that consume memory/CPU during parsing.
+const MAX_BODY_BYTES = 1_048_576;
+
 export class RequestValidationError extends Error {
   status: number;
 
@@ -57,6 +61,7 @@ async function parseJsonBody(
   request: NextRequest,
   options: {
     allowEmptyBody?: boolean;
+    maxBodyBytes?: number;
   } = {},
 ): Promise<unknown> {
   const allowEmptyBody = options.allowEmptyBody ?? false;
@@ -65,6 +70,15 @@ async function parseJsonBody(
   const contentLength = contentLengthRaw ? Number.parseInt(contentLengthRaw, 10) : 0;
   const hasDeclaredBody = Number.isFinite(contentLength) && contentLength > 0;
   const hasJsonContentType = contentType.includes('application/json') || contentType.includes('+json');
+
+  // Reject oversized bodies before attempting to parse
+  const maxBytes = options.maxBodyBytes ?? MAX_BODY_BYTES;
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new RequestValidationError(
+      `Request body too large (${contentLength} bytes, max ${maxBytes}).`,
+      413,
+    );
+  }
 
   if (!hasJsonContentType && !allowEmptyBody) {
     throw new RequestValidationError('Expected application/json request body.', 415);
@@ -93,6 +107,7 @@ export async function validateJsonBody<TSchema extends ZodTypeAny>(
   schema: TSchema,
   options: {
     allowEmptyBody?: boolean;
+    maxBodyBytes?: number;
   } = {},
 ): Promise<z.infer<TSchema>> {
   const parsedBody = await parseJsonBody(request, options);

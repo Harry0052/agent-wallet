@@ -62,7 +62,14 @@
       "Bash(supabase --version)",
       "Bash(brew install:*)",
       "Bash(node --experimental-strip-types --test 'tests/automationPolicyGovernor.test.ts')",
-      "Bash(node --experimental-strip-types --test 'tests/authClientFlows.test.ts')"
+      "Bash(node --experimental-strip-types --test 'tests/authClientFlows.test.ts')",
+      "Bash(rm \"/Users/harry/Desktop/agent wallet/app/api/debug/health/route.ts\")",
+      "Bash(rmdir \"/Users/harry/Desktop/agent wallet/app/api/debug/health\")",
+      "Bash(rmdir \"/Users/harry/Desktop/agent wallet/app/api/debug\")",
+      "Bash(node --experimental-strip-types --test tests/automationDetectors.test.ts)",
+      "Bash(node --experimental-strip-types --import ./tests/setup.mjs --test tests/automationDetectors.test.ts)",
+      "Bash(node --experimental-strip-types --import ./tests/setup.mjs --test tests/moneyIntelligenceCore.test.ts)",
+      "Bash(node --experimental-strip-types --import ./tests/setup.mjs --test --test-concurrency=1 'tests/*.test.ts' 'security/tests/*.test.ts')"
     ]
   },
   "enableAllProjectMcpServers": true,

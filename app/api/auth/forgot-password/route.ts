@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { issuePasswordResetToken } from '@/lib/server/auth';
 import { recordAccountAuditEvent } from '@/lib/server/accountAudit';
 import { extractRequestMeta } from '@/lib/server/requestMeta';
+import { logServerEvent } from '@/lib/server/observability';
 import { enforceRateLimit } from '@/security/rateLimiter';
 import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
 
@@ -37,14 +38,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Dev-only token echo: only enabled when BOTH conditions are true.
+    // MUST NOT be set in production Vercel env vars.
     const allowTokenEcho = process.env.NODE_ENV !== 'production'
       && process.env.AUTH_DEV_RETURN_PASSWORD_RESET_TOKEN === 'true';
+
+    if (allowTokenEcho && process.env.VERCEL_ENV === 'production') {
+      // Safety net: refuse to echo tokens if somehow deployed to production
+      logServerEvent('error', 'auth.forgot_password.dev_token_echo_blocked', {
+        reason: 'AUTH_DEV_RETURN_PASSWORD_RESET_TOKEN is set in production — ignoring',
+      });
+    }
+
+    const safeTokenEcho = allowTokenEcho && process.env.VERCEL_ENV !== 'production';
+
     const responseBody: Record<string, unknown> = {
       ok: true,
       message: 'If an account exists for that email, reset instructions have been sent.',
     };
 
-    if (allowTokenEcho) {
+    if (safeTokenEcho) {
       const token = issued.token || randomBytes(48).toString('base64url');
       responseBody.resetToken = token;
       responseBody.resetUrl = buildResetUrl(token);
@@ -59,6 +72,14 @@ export async function POST(req: NextRequest) {
       : 'If an account exists for that email, reset instructions have been sent.';
 
     const status = error instanceof z.ZodError || error instanceof RequestValidationError ? 400 : 200;
+
+    // Log unexpected errors (not validation) for observability
+    if (status === 200 && !(error instanceof z.ZodError) && !(error instanceof RequestValidationError)) {
+      logServerEvent('error', 'auth.forgot_password.internal_error', {
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+
     return NextResponse.json({
       ok: status === 200,
       message,

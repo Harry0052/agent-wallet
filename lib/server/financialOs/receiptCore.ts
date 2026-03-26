@@ -1,3 +1,5 @@
+import 'server-only';
+
 import type { DeterministicReceiptLineItem, DeterministicReceiptParseResult } from "./types";
 
 function round(value: number): number {
