@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const allowTokenEcho = process.env.AUTH_DEV_RETURN_PASSWORD_RESET_TOKEN === 'true';
+    const allowTokenEcho = process.env.NODE_ENV !== 'production'
+      && process.env.AUTH_DEV_RETURN_PASSWORD_RESET_TOKEN === 'true';
     const responseBody: Record<string, unknown> = {
       ok: true,
       message: 'If an account exists for that email, reset instructions have been sent.',

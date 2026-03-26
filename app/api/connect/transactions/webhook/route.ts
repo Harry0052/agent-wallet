@@ -191,7 +191,7 @@ function verifySharedSecret(req: NextRequest): boolean {
 
 // ── Combined verification ───────────────────────────────────────────────────
 
-async function verifyWebhook(req: NextRequest, rawBody: string): Promise<boolean> {
+async function verifyWebhookSecret(req: NextRequest, rawBody: string = ""): Promise<boolean> {
   const plaidEnv = process.env.PLAID_ENV?.trim().toLowerCase();
 
   // Try JWT verification first (preferred)
@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
 
-    if (!(await verifyWebhook(req, rawBody))) {
+    if (!(await verifyWebhookSecret(req))) {
       logServerEvent("warn", "connect.webhook.verification_failed", {});
       return NextResponse.json(
         apiError("VALIDATION_ERROR", "Webhook verification failed.", false),

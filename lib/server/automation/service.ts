@@ -21,6 +21,7 @@ import {
 import {
   cooldownUntilForActionType,
   evaluateAutomationCandidateSuppression,
+  checkDuplicateRisk,
 } from '@/lib/server/automation/governor';
 import {
   evaluateExecutionPolicy,
@@ -566,6 +567,61 @@ export async function attemptAutomationAction(input: {
   });
 
   const attempted = attemptedTransition.action;
+
+  // ── Duplicate protection ───────────────────────────────────────────────────
+  const policyForDup = await getAutomationPolicyConfig(input.userId);
+  const duplicateWindowMinutes = policyForDup.duplicateWindowMinutes ?? 30;
+  const targetService =
+    (attempted.payload?.merchant as string)
+    || (attempted.payload?.targetService as string)
+    || null;
+
+  const duplicateCheck = await checkDuplicateRisk({
+    userId: input.userId,
+    actionType: attempted.actionType,
+    amount: attempted.amount,
+    targetService,
+    windowMinutes: duplicateWindowMinutes,
+  });
+
+  if (duplicateCheck.isDuplicate) {
+    const blocked = await updateAutomationActionState({
+      userId: input.userId,
+      actionId: attempted.id,
+      toStatus: 'failed',
+      lastError: duplicateCheck.reason,
+    });
+
+    await recordAutomationActionEvent({
+      userId: input.userId,
+      actionId: blocked.id,
+      eventType: 'failed',
+      fromStatus: 'attempted',
+      toStatus: 'failed',
+      reason: duplicateCheck.reason,
+      idempotencyKey: input.idempotencyKey,
+      metadata: {
+        duplicateActionId: duplicateCheck.existingActionId,
+        duplicateWindowMinutes,
+      },
+    });
+
+    await syncAgentTaskFromAction(blocked);
+
+    logServerEvent('warn', 'automation.attempt.duplicate_blocked', {
+      userId: input.userId,
+      actionId: blocked.id,
+      actionType: blocked.actionType,
+      existingActionId: duplicateCheck.existingActionId,
+    });
+
+    return {
+      action: blocked,
+      status: 'failed',
+      message: duplicateCheck.reason,
+      provider: 'duplicate_guard',
+    };
+  }
 
   await recordWebAction({
     userId: input.userId,

@@ -633,6 +633,504 @@ function detectAdvancedIntelligenceCandidates(input: {
   return candidates;
 }
 
+// ── Phase 3 Detectors ──────────────────────────────────────────────────────
+
+function detectSpendingGuardrails(input: {
+  transactions: DetectionTx[];
+  coverage: MoneyCoverage;
+  context: AutomationDetectionContext;
+  userId: string;
+  currency: string;
+}): AutomationDetectionCandidate[] {
+  const nowMs = parseDate(input.context.nowIso);
+  const candidates: AutomationDetectionCandidate[] = [];
+
+  // Group expenses by category and month
+  const expenseTxs = input.transactions.filter((tx) => tx.kind === 'expense');
+  const byCategory = new Map<string, DetectionTx[]>();
+  for (const tx of expenseTxs) {
+    const cat = normalizeText(tx.category);
+    const bucket = byCategory.get(cat) || [];
+    bucket.push(tx);
+    byCategory.set(cat, bucket);
+  }
+
+  const currentMonth = input.context.nowIso.slice(0, 7);
+
+  for (const [category, txs] of byCategory.entries()) {
+    if (category === 'uncategorized') continue;
+
+    // Get per-month totals for prior 3 months
+    const monthTotals = new Map<string, number>();
+    for (const tx of txs) {
+      const m = tx.occurredAt.slice(0, 7);
+      monthTotals.set(m, (monthTotals.get(m) || 0) + tx.amount);
+    }
+
+    const priorMonths = [...monthTotals.entries()]
+      .filter(([m]) => m < currentMonth)
+      .sort(([a], [b]) => b.localeCompare(a))
+      .slice(0, 3);
+
+    if (priorMonths.length < 2) continue;
+
+    const priorAvg = mean(priorMonths.map(([, total]) => total));
+    const currentTotal = monthTotals.get(currentMonth) || 0;
+
+    if (priorAvg > 0 && currentTotal > priorAvg * 1.5) {
+      const confidence = applyCoveragePenalty(0.72, input.coverage);
+      candidates.push(
+        toCandidate({
+          userId: input.userId,
+          nowIso: input.context.nowIso,
+          actionType: 'expense_categorization',
+          title: `Spending guardrail: ${category} over 1.5x average`,
+          summary: `${category} spending this month (${currentTotal.toFixed(2)}) exceeds 1.5x the ${priorMonths.length}-month average of ${priorAvg.toFixed(2)}.`,
+          confidence,
+          coverageConfidence: input.coverage.confidence,
+          factors: [
+            `Current month spend: ${currentTotal.toFixed(2)} ${input.currency}.`,
+            `Prior ${priorMonths.length}-month average: ${priorAvg.toFixed(2)} ${input.currency}.`,
+          ],
+          payload: {
+            guardrailType: 'category_overspend',
+            category,
+            currentTotal: round(currentTotal),
+            priorAvg: round(priorAvg),
+            ratio: round(currentTotal / priorAvg),
+          },
+          amount: round(currentTotal - priorAvg),
+          currency: input.currency,
+          window: monthWindow(input.context.nowIso),
+          entity: `guardrail:${category}`,
+          suggestedPolicy: 'suggest_only',
+        }),
+      );
+    }
+  }
+
+  // Daily food spend > $50
+  const todayStart = new Date(input.context.nowIso).toISOString().slice(0, 10);
+  const foodKeywords = ['food', 'restaurant', 'dining', 'eat', 'cafe', 'coffee', 'fast food', 'delivery', 'doordash', 'uber eats', 'grubhub'];
+  const todayFood = expenseTxs
+    .filter((tx) => tx.occurredAt.slice(0, 10) === todayStart)
+    .filter((tx) => includesAny(`${tx.category} ${tx.merchant}`, foodKeywords));
+  const todayFoodTotal = todayFood.reduce((sum, tx) => sum + tx.amount, 0);
+
+  if (todayFoodTotal > 50) {
+    const confidence = applyCoveragePenalty(0.68, input.coverage);
+    candidates.push(
+      toCandidate({
+        userId: input.userId,
+        nowIso: input.context.nowIso,
+        actionType: 'expense_categorization',
+        title: 'Daily food spend exceeds $50',
+        summary: `Food spending today (${todayFoodTotal.toFixed(2)}) is above the $50 guardrail.`,
+        confidence,
+        coverageConfidence: input.coverage.confidence,
+        factors: [
+          `Food spend today: ${todayFoodTotal.toFixed(2)} ${input.currency}.`,
+          `${todayFood.length} food-related transaction(s) today.`,
+        ],
+        payload: {
+          guardrailType: 'daily_food_overspend',
+          todayFoodTotal: round(todayFoodTotal),
+          foodTransactionCount: todayFood.length,
+        },
+        amount: round(todayFoodTotal),
+        currency: input.currency,
+        window: `${todayStart}:food`,
+        entity: 'guardrail:daily_food',
+        suggestedPolicy: 'suggest_only',
+      }),
+    );
+  }
+
+  // Weekly discretionary > $300
+  const weekStart = nowMs - 7 * MS_PER_DAY;
+  const discretionaryKeywords = ['shopping', 'entertainment', 'dining', 'restaurant', 'clothing', 'electronics', 'hobby', 'gaming'];
+  const weekDiscretionary = expenseTxs
+    .filter((tx) => tx.occurredAtMs >= weekStart)
+    .filter((tx) => includesAny(`${tx.category} ${tx.merchant}`, discretionaryKeywords));
+  const weekDiscTotal = weekDiscretionary.reduce((sum, tx) => sum + tx.amount, 0);
+
+  if (weekDiscTotal > 300) {
+    const confidence = applyCoveragePenalty(0.66, input.coverage);
+    candidates.push(
+      toCandidate({
+        userId: input.userId,
+        nowIso: input.context.nowIso,
+        actionType: 'expense_categorization',
+        title: 'Weekly discretionary spend exceeds $300',
+        summary: `Discretionary spending this week (${weekDiscTotal.toFixed(2)}) is above the $300 guardrail.`,
+        confidence,
+        coverageConfidence: input.coverage.confidence,
+        factors: [
+          `Discretionary spend this week: ${weekDiscTotal.toFixed(2)} ${input.currency}.`,
+          `${weekDiscretionary.length} discretionary transaction(s) this week.`,
+        ],
+        payload: {
+          guardrailType: 'weekly_discretionary_overspend',
+          weekDiscretionaryTotal: round(weekDiscTotal),
+          discretionaryCount: weekDiscretionary.length,
+        },
+        amount: round(weekDiscTotal),
+        currency: input.currency,
+        window: weekWindow(input.context.nowIso),
+        entity: 'guardrail:weekly_discretionary',
+        suggestedPolicy: 'suggest_only',
+      }),
+    );
+  }
+
+  return candidates.slice(0, 3);
+}
+
+function detectAutoSavingsOpportunity(input: {
+  transactions: DetectionTx[];
+  affordability: MoneyAffordability;
+  coverage: MoneyCoverage;
+  monthlySurvivalForecast: MoneyMonthlySurvivalForecast;
+  billPredictions: MoneyBillPrediction[];
+  context: AutomationDetectionContext;
+  userId: string;
+  currency: string;
+}): AutomationDetectionCandidate[] {
+  const candidates: AutomationDetectionCandidate[] = [];
+  const nowMs = parseDate(input.context.nowIso);
+
+  // Estimate monthly bills total from predictions
+  const monthlyBills = input.billPredictions.reduce((sum, bill) => sum + bill.amount, 0);
+  const buffer = 200;
+  const walletBalance = input.affordability.safeToSpendThisMonth + monthlyBills;
+  const surplus = walletBalance - monthlyBills - buffer;
+
+  if (surplus > 50) {
+    const transferAmount = round(Math.min(surplus * 0.6, surplus));
+    const confidence = applyCoveragePenalty(0.7, input.coverage);
+    candidates.push(
+      toCandidate({
+        userId: input.userId,
+        nowIso: input.context.nowIso,
+        actionType: 'savings_transfer',
+        title: 'Surplus balance detected',
+        summary: `Balance exceeds monthly bills + $200 buffer by ${surplus.toFixed(2)}. Consider moving ${transferAmount.toFixed(2)} to savings.`,
+        confidence,
+        coverageConfidence: input.coverage.confidence,
+        factors: [
+          `Estimated surplus above bills + buffer: ${surplus.toFixed(2)} ${input.currency}.`,
+          `Suggested transfer: ${transferAmount.toFixed(2)} ${input.currency}.`,
+        ],
+        payload: {
+          source: 'auto_savings_surplus',
+          surplus: round(surplus),
+          proposedTransferAmount: transferAmount,
+          estimatedMonthlyBills: round(monthlyBills),
+        },
+        amount: transferAmount,
+        currency: input.currency,
+        window: weekWindow(input.context.nowIso),
+        entity: 'savings_surplus',
+        suggestedPolicy: 'user_confirm_required',
+      }),
+    );
+  }
+
+  // If current week spend is < 70% of average weekly spend, suggest saving difference
+  const weekMs = 7 * MS_PER_DAY;
+  const expenses = input.transactions.filter((tx) => tx.kind === 'expense');
+  const currentWeekStart = nowMs - weekMs;
+  const currentWeekSpend = expenses
+    .filter((tx) => tx.occurredAtMs >= currentWeekStart)
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  // Calculate average weekly spend over prior 4 weeks
+  const priorWeekSpends: number[] = [];
+  for (let w = 1; w <= 4; w++) {
+    const wStart = nowMs - (w + 1) * weekMs;
+    const wEnd = nowMs - w * weekMs;
+    const wSpend = expenses
+      .filter((tx) => tx.occurredAtMs >= wStart && tx.occurredAtMs < wEnd)
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    if (wSpend > 0) priorWeekSpends.push(wSpend);
+  }
+
+  if (priorWeekSpends.length >= 2) {
+    const avgWeeklySpend = mean(priorWeekSpends);
+    if (avgWeeklySpend > 0 && currentWeekSpend < avgWeeklySpend * 0.7) {
+      const savingsOpportunity = round(avgWeeklySpend - currentWeekSpend);
+      if (savingsOpportunity >= 20) {
+        const confidence = applyCoveragePenalty(0.65, input.coverage);
+        candidates.push(
+          toCandidate({
+            userId: input.userId,
+            nowIso: input.context.nowIso,
+            actionType: 'savings_transfer',
+            title: 'Low-spend week savings opportunity',
+            summary: `This week's spend (${currentWeekSpend.toFixed(2)}) is under 70% of your average (${avgWeeklySpend.toFixed(2)}). Save the difference of ${savingsOpportunity.toFixed(2)}.`,
+            confidence,
+            coverageConfidence: input.coverage.confidence,
+            factors: [
+              `Current week spend: ${currentWeekSpend.toFixed(2)} ${input.currency}.`,
+              `Average weekly spend: ${avgWeeklySpend.toFixed(2)} ${input.currency}.`,
+            ],
+            payload: {
+              source: 'auto_savings_low_spend_week',
+              currentWeekSpend: round(currentWeekSpend),
+              avgWeeklySpend: round(avgWeeklySpend),
+              proposedTransferAmount: savingsOpportunity,
+            },
+            amount: savingsOpportunity,
+            currency: input.currency,
+            window: weekWindow(input.context.nowIso),
+            entity: 'savings_low_week',
+            suggestedPolicy: 'user_confirm_required',
+          }),
+        );
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function detectPaydayPattern(input: {
+  transactions: DetectionTx[];
+  coverage: MoneyCoverage;
+  context: AutomationDetectionContext;
+  userId: string;
+  currency: string;
+}): AutomationDetectionCandidate[] {
+  const candidates: AutomationDetectionCandidate[] = [];
+
+  // Look for large credits (>$500) that recur monthly within a 3-day window
+  const credits = input.transactions
+    .filter((tx) => tx.kind === 'income' && Math.abs(tx.amount) >= 500)
+    .sort((a, b) => a.occurredAtMs - b.occurredAtMs);
+
+  // Group by similar amount (within 10%) and merchant
+  const bySource = new Map<string, DetectionTx[]>();
+  for (const tx of credits) {
+    const key = tx.normalizedMerchant;
+    const bucket = bySource.get(key) || [];
+    bucket.push(tx);
+    bySource.set(key, bucket);
+  }
+
+  for (const [source, txs] of bySource.entries()) {
+    if (txs.length < 2) continue;
+
+    // Check if they fall within a 3-day window of the same day-of-month
+    const daysOfMonth = txs.map((tx) => new Date(tx.occurredAtMs).getDate());
+    const refDay = daysOfMonth[0];
+    const allWithin3Days = daysOfMonth.every((d) => Math.abs(d - refDay) <= 3 || Math.abs(d - refDay) >= 28);
+
+    if (!allWithin3Days) continue;
+
+    // Check intervals are roughly monthly (25-35 days)
+    const intervals: number[] = [];
+    for (let i = 1; i < txs.length; i++) {
+      intervals.push((txs[i].occurredAtMs - txs[i - 1].occurredAtMs) / MS_PER_DAY);
+    }
+    const allMonthly = intervals.every((d) => d >= 25 && d <= 35);
+    if (!allMonthly) continue;
+
+    const avgAmount = round(mean(txs.map((tx) => Math.abs(tx.amount))));
+    const suggestedSplit = round(avgAmount * 0.2);
+    const confidence = applyCoveragePenalty(0.74, input.coverage);
+
+    candidates.push(
+      toCandidate({
+        userId: input.userId,
+        nowIso: input.context.nowIso,
+        actionType: 'savings_transfer',
+        title: `Payday detected from ${txs[0].merchant}`,
+        summary: `Recurring income of ~${avgAmount.toFixed(2)} detected monthly. Consider allocating ${suggestedSplit.toFixed(2)} to savings on each payday.`,
+        confidence,
+        coverageConfidence: input.coverage.confidence,
+        factors: [
+          `${txs.length} monthly income transactions from ${txs[0].merchant}.`,
+          `Average amount: ${avgAmount.toFixed(2)} ${input.currency}.`,
+          `Suggested split allocation: ${suggestedSplit.toFixed(2)} ${input.currency} (20%).`,
+        ],
+        payload: {
+          source: 'payday_pattern',
+          merchant: txs[0].merchant,
+          avgAmount,
+          dayOfMonth: refDay,
+          occurrences: txs.length,
+          suggestedSplitAmount: suggestedSplit,
+        },
+        amount: suggestedSplit,
+        currency: input.currency,
+        window: monthWindow(input.context.nowIso),
+        entity: `payday:${source}`,
+        suggestedPolicy: 'user_confirm_required',
+      }),
+    );
+  }
+
+  return candidates.slice(0, 2);
+}
+
+function detectDebtOptimizationOpportunity(input: {
+  transactions: DetectionTx[];
+  affordability: MoneyAffordability;
+  coverage: MoneyCoverage;
+  context: AutomationDetectionContext;
+  userId: string;
+  currency: string;
+}): AutomationDetectionCandidate[] {
+  const candidates: AutomationDetectionCandidate[] = [];
+
+  // Estimate monthly bills from credit payment transactions
+  const creditPayments = input.transactions
+    .filter((tx) => tx.kind === 'credit_payment' || includesAny(`${tx.category} ${tx.merchant}`, CREDIT_PAYMENT_KEYWORDS));
+  const totalCreditPayments = creditPayments.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+  if (totalCreditPayments <= 0) return candidates;
+
+  // If there's surplus cash after bills + buffer, suggest extra debt payment
+  const buffer = 200;
+  const availableSurplus = input.affordability.safeToSpendThisMonth - buffer;
+
+  if (availableSurplus > 50 && totalCreditPayments > 100) {
+    const extraPayment = round(Math.min(availableSurplus * 0.4, availableSurplus));
+    const confidence = applyCoveragePenalty(0.68, input.coverage);
+
+    candidates.push(
+      toCandidate({
+        userId: input.userId,
+        nowIso: input.context.nowIso,
+        actionType: 'debt_optimize',
+        title: 'Extra debt payment opportunity',
+        summary: `You have ${availableSurplus.toFixed(2)} surplus this month. Consider an extra payment of ${extraPayment.toFixed(2)} toward credit card debt.`,
+        confidence,
+        coverageConfidence: input.coverage.confidence,
+        factors: [
+          `Monthly credit card payments detected: ${totalCreditPayments.toFixed(2)} ${input.currency}.`,
+          `Available surplus after buffer: ${availableSurplus.toFixed(2)} ${input.currency}.`,
+        ],
+        payload: {
+          source: 'debt_optimization_surplus',
+          totalCreditPayments: round(totalCreditPayments),
+          availableSurplus: round(availableSurplus),
+          suggestedExtraPayment: extraPayment,
+        },
+        amount: extraPayment,
+        currency: input.currency,
+        window: monthWindow(input.context.nowIso),
+        entity: 'debt_extra_payment',
+        suggestedPolicy: 'user_confirm_required',
+      }),
+    );
+  }
+
+  return candidates;
+}
+
+function detectRiskProtection(input: {
+  transactions: DetectionTx[];
+  coverage: MoneyCoverage;
+  context: AutomationDetectionContext;
+  userId: string;
+  currency: string;
+}): AutomationDetectionCandidate[] {
+  const candidates: AutomationDetectionCandidate[] = [];
+  const expenses = input.transactions.filter((tx) => tx.kind === 'expense');
+
+  // Build per-merchant statistics
+  const merchantStats = new Map<string, { amounts: number[]; count: number }>();
+  for (const tx of expenses) {
+    const key = tx.normalizedMerchant;
+    const stats = merchantStats.get(key) || { amounts: [], count: 0 };
+    stats.amounts.push(tx.amount);
+    stats.count += 1;
+    merchantStats.set(key, stats);
+  }
+
+  // Flag unusual amounts for known merchants (>2x the average)
+  for (const tx of expenses) {
+    const stats = merchantStats.get(tx.normalizedMerchant);
+    if (!stats || stats.count < 3) continue;
+
+    const avgAmount = mean(stats.amounts);
+    if (avgAmount <= 0) continue;
+
+    if (tx.amount > avgAmount * 2 && tx.amount > 30) {
+      const confidence = applyCoveragePenalty(0.7, input.coverage);
+      candidates.push(
+        toCandidate({
+          userId: input.userId,
+          nowIso: input.context.nowIso,
+          actionType: 'recurring_review',
+          title: `Unusual charge at ${tx.merchant}`,
+          summary: `Charge of ${tx.amount.toFixed(2)} is over 2x the average (${avgAmount.toFixed(2)}) for ${tx.merchant}. Please verify.`,
+          confidence,
+          coverageConfidence: input.coverage.confidence,
+          factors: [
+            `Charge amount: ${tx.amount.toFixed(2)} ${input.currency}.`,
+            `Merchant average: ${avgAmount.toFixed(2)} ${input.currency} over ${stats.count} transactions.`,
+          ],
+          payload: {
+            riskType: 'unusual_amount',
+            transactionId: tx.id,
+            merchant: tx.merchant,
+            chargeAmount: round(tx.amount),
+            merchantAverage: round(avgAmount),
+          },
+          amount: round(tx.amount),
+          currency: input.currency,
+          window: weekWindow(input.context.nowIso),
+          entity: `risk:${tx.id}`,
+          suggestedPolicy: 'suggest_only',
+        }),
+      );
+    }
+  }
+
+  // Flag unknown merchants with high amounts (>$200, seen only once)
+  const nowMs = parseDate(input.context.nowIso);
+  const recentExpenses = expenses.filter((tx) => nowMs - tx.occurredAtMs <= 14 * MS_PER_DAY);
+
+  for (const tx of recentExpenses) {
+    const stats = merchantStats.get(tx.normalizedMerchant);
+    if (!stats || stats.count > 1) continue;
+
+    if (tx.amount >= 200) {
+      const confidence = applyCoveragePenalty(0.64, input.coverage);
+      candidates.push(
+        toCandidate({
+          userId: input.userId,
+          nowIso: input.context.nowIso,
+          actionType: 'recurring_review',
+          title: `New high-value merchant: ${tx.merchant}`,
+          summary: `First-time charge of ${tx.amount.toFixed(2)} from ${tx.merchant}. Review to confirm this is legitimate.`,
+          confidence,
+          coverageConfidence: input.coverage.confidence,
+          factors: [
+            `First transaction from this merchant.`,
+            `Amount: ${tx.amount.toFixed(2)} ${input.currency} exceeds $200 threshold.`,
+          ],
+          payload: {
+            riskType: 'unknown_merchant_high_amount',
+            transactionId: tx.id,
+            merchant: tx.merchant,
+            chargeAmount: round(tx.amount),
+          },
+          amount: round(tx.amount),
+          currency: input.currency,
+          window: weekWindow(input.context.nowIso),
+          entity: `risk:unknown:${tx.id}`,
+          suggestedPolicy: 'suggest_only',
+        }),
+      );
+    }
+  }
+
+  return candidates.slice(0, 4);
+}
+
 export function detectAutomationCandidates(input: AutomationDetectorInput): AutomationDetectionCandidate[] {
   const context = deriveContext(input);
   const classified = classifyTransactions(input.transactions);
@@ -925,6 +1423,50 @@ export function detectAutomationCandidates(input: AutomationDetectorInput): Auto
     coverage: input.coverage,
     context,
     userId: input.userId,
+  }));
+
+  candidates.push(...detectSpendingGuardrails({
+    transactions: classified,
+    coverage: input.coverage,
+    context,
+    userId: input.userId,
+    currency: input.currency,
+  }));
+
+  candidates.push(...detectAutoSavingsOpportunity({
+    transactions: classified,
+    affordability: input.affordability,
+    coverage: input.coverage,
+    monthlySurvivalForecast: input.monthlySurvivalForecast,
+    billPredictions: input.billPredictions,
+    context,
+    userId: input.userId,
+    currency: input.currency,
+  }));
+
+  candidates.push(...detectPaydayPattern({
+    transactions: classified,
+    coverage: input.coverage,
+    context,
+    userId: input.userId,
+    currency: input.currency,
+  }));
+
+  candidates.push(...detectDebtOptimizationOpportunity({
+    transactions: classified,
+    affordability: input.affordability,
+    coverage: input.coverage,
+    context,
+    userId: input.userId,
+    currency: input.currency,
+  }));
+
+  candidates.push(...detectRiskProtection({
+    transactions: classified,
+    coverage: input.coverage,
+    context,
+    userId: input.userId,
+    currency: input.currency,
   }));
 
   const byDedup = new Map<string, AutomationDetectionCandidate>();

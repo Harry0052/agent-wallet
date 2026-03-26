@@ -77,14 +77,15 @@ export async function POST(req: NextRequest) {
     setSessionCookie(response, session.token, session.expiresAt);
     return response;
   } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : 'Failed to login';
     const message = error instanceof z.ZodError
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof RequestValidationError
         ? error.message
       : error instanceof AuthError
         ? error.message
-        : error instanceof Error
-          ? error.message
+        : /database|pool|connection|timeout|internal/i.test(rawMessage)
+          ? 'Service temporarily unavailable. Please try again.'
           : 'Failed to login';
 
     const status = error instanceof z.ZodError

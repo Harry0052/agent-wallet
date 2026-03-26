@@ -27,6 +27,7 @@ import {
 import { ManualEntryModal } from "@/components/finance/ManualDataControls";
 import { ComboboxInput } from "@/components/finance/ComboboxInput";
 import { useFinancialData } from "@/lib/useFinancialData";
+import { onCategoryCorrected } from "@/lib/cacheInvalidation";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS, type ManualAccountRecord } from "@/lib/manualMode";
 import { normalizeTransactionType, type ManualTransactionType } from "@/lib/manualTransactions";
@@ -298,6 +299,7 @@ export function TransactionsView() {
           : "Correction saved. Calico will activate learning after repeated consistent corrections.",
       );
       setCategoryCorrectionTx(null);
+      onCategoryCorrected();
       await financialData.refresh();
     } catch (e) {
       setCorrectionError(e instanceof Error ? e.message : "Failed to save category correction.");

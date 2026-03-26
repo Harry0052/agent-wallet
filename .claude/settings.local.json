@@ -53,7 +53,16 @@
       "Bash(npm install:*)",
       "mcp__supabase__get_project",
       "mcp__supabase__get_project_url",
-      "Bash(npx -y vercel --version)"
+      "Bash(npx -y vercel --version)",
+      "Bash(npm run:*)",
+      "Bash(node --experimental-strip-types --test 'tests/apiAuthCoverage.test.ts')",
+      "Bash(node --experimental-strip-types --test 'tests/smartHomePayload.test.ts')",
+      "Bash(node --experimental-strip-types --test 'tests/plaidWebhookReplay.test.ts')",
+      "Bash(vercel --version)",
+      "Bash(supabase --version)",
+      "Bash(brew install:*)",
+      "Bash(node --experimental-strip-types --test 'tests/automationPolicyGovernor.test.ts')",
+      "Bash(node --experimental-strip-types --test 'tests/authClientFlows.test.ts')"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Wallet, WalletSettings } from '@/lib/types';
+import { setCacheUserId } from '@/lib/cache';
+import { fetchAuthenticatedAccount } from '@/services/account';
 import * as walletService from '@/services/wallet';
 import * as fundingService from '@/services/funding';
 
@@ -39,7 +41,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    void refreshWallet();
+    // Scope the cache to the authenticated user before loading wallet data.
+    // This ensures all cached API responses are isolated per user.
+    fetchAuthenticatedAccount()
+      .then((account) => {
+        setCacheUserId(account.walletUserId);
+      })
+      .catch(() => {
+        // Auth check failed — cache will operate in anonymous mode
+      })
+      .finally(() => {
+        void refreshWallet();
+      });
   }, []);
 
   const refreshWallet = useCallback(async () => {

@@ -13,6 +13,7 @@ import {
   MessageSquarePlus,
   PieChart,
   Settings,
+  Shield,
   Target,
   TrendingUp,
   type LucideIcon,
@@ -43,6 +44,7 @@ const PRIMARY_GATES: Partial<Record<string, string>> = {
 const secondaryLinks: NavLink[] = [
   { href: "/cashflow", key: "cashflow", icon: TrendingUp },
   { href: "/tasks", key: "tasks", icon: ListChecks },
+  { href: "/control", key: "control", icon: Shield },
   { href: "/investments", key: "investments", icon: LineChart },
   { href: "/insights", key: "insights", icon: Lightbulb },
 ];
@@ -66,6 +68,7 @@ export function AppNav() {
     if (loading) return link.href === "/cashflow";
     if (link.href === "/cashflow") return can("monthly_cashflow");
     if (link.href === "/tasks") return can("ai_automation");
+    if (link.href === "/control") return can("ai_automation");
     if (link.href === "/investments") return can("investments");
     if (link.href === "/insights") return can("basic_insights");
     return false;

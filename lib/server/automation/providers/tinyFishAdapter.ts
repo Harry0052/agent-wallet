@@ -14,6 +14,9 @@ import type {
 } from './types';
 import { isActionLive } from './types';
 import { createActionPlan } from './actionPlanner';
+import { renderTinyFishGoal, selectBrowserProfile, selectEndpoint } from './goalRenderer';
+import { validateCompletion } from './completionValidator';
+import { getAutomationPolicyConfig } from '@/lib/server/automation/policyStore';
 import { logServerEvent } from '@/lib/server/observability';
 
 // ── Tiny Fish Configuration ─────────────────────────────────────────────────
@@ -29,6 +32,9 @@ const TINY_FISH_SUPPORTED_ACTIONS = new Set<AutomationActionType>([
   'subscription_cancel',
   'subscription_negotiate',
   'trial_conversion_review',
+  'savings_transfer',
+  'bill_pay',
+  'debt_optimize',
 ]);
 
 function isTinyFishConfigured(): boolean {
@@ -48,6 +54,8 @@ function buildTinyFishPayload(action: AutomationActionRecord): ExecutionTaskPayl
     targetService,
   });
 
+  const browserProfile = selectBrowserProfile(action);
+
   return {
     taskId: action.id,
     userId: action.userId,
@@ -66,6 +74,7 @@ function buildTinyFishPayload(action: AutomationActionRecord): ExecutionTaskPayl
         requiresCredentials: plan.requiresCredentials,
         estimatedDuration: plan.estimatedDuration,
       },
+      browserProfile,
     },
     riskLevel: plan.riskLevel,
     requiresApproval: action.requiresExplicitConfirmation,
@@ -231,15 +240,33 @@ class TinyFishIntegrationHook implements AutomationIntegrationHook {
 
     const payload = buildTinyFishPayload(action);
 
+    // Render the goal prompt using policy snapshot and action plan
+    const policySnapshot = await getAutomationPolicyConfig(action.userId);
+    const targetService = payload.targetService;
+    const plan = createActionPlan({ actionType: action.actionType, targetService });
+    const renderedGoal = renderTinyFishGoal(action, policySnapshot, plan);
+    const endpoint = selectEndpoint(action, false);
+
     logServerEvent('info', 'tinyfish.attempt.start', {
       actionId: action.id,
       actionType: action.actionType,
       targetService: payload.targetService,
       idempotencyKey: payload.idempotencyKey,
+      browserProfile: payload.parameters.browserProfile,
+      endpoint,
+      goalLength: renderedGoal.length,
     });
 
     try {
-      const result = await callTinyFishWithRetry('/v1/tasks/execute', payload);
+      const enrichedPayload = {
+        ...payload,
+        goal: renderedGoal,
+      };
+
+      const result = await callTinyFishWithRetry('/v1/tasks/execute', enrichedPayload);
+
+      // Validate completion against the original request and policy
+      const verdict = validateCompletion(action, policySnapshot, result);
 
       const status = normalizeStatus(result.status);
       const message = buildHumanOutcome(result);
@@ -256,6 +283,7 @@ class TinyFishIntegrationHook implements AutomationIntegrationHook {
           stepsCompleted: result.steps.filter((s) => s.status === 'completed').length,
           stepsTotal: result.steps.length,
           evidenceCount: result.evidence.length,
+          validationVerdict: verdict.verdict,
         },
       );
 
@@ -273,6 +301,19 @@ class TinyFishIntegrationHook implements AutomationIntegrationHook {
           executionDuration: result.completedAt && result.startedAt
             ? `${Math.round((Date.parse(result.completedAt) - Date.parse(result.startedAt)) / 1000)}s`
             : null,
+          renderedGoal,
+          validationVerdict: verdict.verdict,
+          validationReason: verdict.reason,
+          validationEvidence: verdict.evidence,
+          tinyFishResult: {
+            taskId: result.taskId,
+            providerTaskId: result.providerTaskId,
+            status: result.status,
+            outcome: result.outcome,
+            failureReason: result.failureReason,
+            stepsCompleted: result.steps.filter((s) => s.status === 'completed').length,
+            evidenceCount: result.evidence.length,
+          },
         },
       };
     } catch (error) {
@@ -292,7 +333,93 @@ class TinyFishIntegrationHook implements AutomationIntegrationHook {
           provider: 'tinyfish',
           reason: 'provider_error',
           error: message,
+          renderedGoal,
         },
+      };
+    }
+  }
+
+  /**
+   * Attempt execution with SSE streaming.
+   *
+   * Calls TinyFish's streaming endpoint and returns a ReadableStream of
+   * execution events. Falls back to non-streaming if the endpoint is
+   * not supported (404 or connection error).
+   */
+  async attemptWithStreaming(input: {
+    action: AutomationActionRecord;
+  }): Promise<{ stream: ReadableStream<Uint8Array> | null; fallbackResult: AutomationHookAttemptResult | null }> {
+    const { action } = input;
+
+    if (!isTinyFishConfigured()) {
+      return {
+        stream: null,
+        fallbackResult: await this.attempt(input),
+      };
+    }
+
+    const payload = buildTinyFishPayload(action);
+    const policySnapshot = await getAutomationPolicyConfig(action.userId);
+    const plan = createActionPlan({
+      actionType: action.actionType,
+      targetService: payload.targetService,
+    });
+    const renderedGoal = renderTinyFishGoal(action, policySnapshot, plan);
+
+    const url = `${TINY_FISH_BASE_URL}/v1/tasks/execute-stream`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TINY_FISH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${TINY_FISH_API_KEY}`,
+          'Accept': 'text/event-stream',
+          'X-Idempotency-Key': payload.idempotencyKey,
+        },
+        body: JSON.stringify({ ...payload, goal: renderedGoal }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok || !response.body) {
+        // Streaming not supported, fall back to regular attempt
+        logServerEvent('info', 'tinyfish.streaming.fallback', {
+          actionId: action.id,
+          status: response.status,
+          reason: response.body ? 'http_error' : 'no_body',
+        });
+
+        return {
+          stream: null,
+          fallbackResult: await this.attempt(input),
+        };
+      }
+
+      logServerEvent('info', 'tinyfish.streaming.connected', {
+        actionId: action.id,
+        actionType: action.actionType,
+      });
+
+      return {
+        stream: response.body,
+        fallbackResult: null,
+      };
+    } catch (error) {
+      clearTimeout(timeout);
+
+      logServerEvent('warn', 'tinyfish.streaming.error', {
+        actionId: action.id,
+        error: error instanceof Error ? error.message : 'Unknown streaming error',
+      });
+
+      // Fall back to non-streaming
+      return {
+        stream: null,
+        fallbackResult: await this.attempt(input),
       };
     }
   }

@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = '/Users/harry/agent wallet';
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const API_ROOT = join(ROOT, 'app/api');
 
 function walk(dir: string): string[] {

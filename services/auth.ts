@@ -52,6 +52,7 @@ export async function login(input: {
 }
 
 export async function logout(): Promise<void> {
+  try { const { clearAllCaches } = await import('@/lib/cache'); clearAllCaches(); } catch { /* cache module unavailable outside Next.js */ }
   await fetch('/api/auth/logout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -41,9 +41,14 @@ export function AdviceWidget(props: DashboardWidgetProps & { dragHandleProps?: H
               <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">{card.summary}</p>
             </div>
           ))}
-          <Link href="/insights" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
-            See all tips
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/insights" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
+              See all tips
+            </Link>
+            <Link href="/tasks" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
+              Open Task Center
+            </Link>
+          </div>
         </div>
       )}
     </WidgetContainer>

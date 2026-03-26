@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { CustomizableDashboard } from "@/components/dashboard/CustomizableDashboard";
 import type { DashboardGoalSummary, DashboardInvestmentHolding } from "@/components/dashboard/dashboardTypes";
@@ -10,7 +10,8 @@ import {
   MANUAL_STORAGE_KEYS,
   type ManualInvestmentHolding,
 } from "@/lib/manualMode";
-import type { Wallet } from "@/lib/types";
+import { FRESHNESS } from "@/lib/cache";
+import { useCachedFetch } from "@/lib/useCachedFetch";
 import { fetchSmartHomePayload, type SmartHomePayload } from "@/services/smartWallet";
 import { fetchWallet } from "@/services/wallet";
 import { calicoTheme } from "@/styles/theme";
@@ -24,10 +25,34 @@ function getGreeting(): string {
 
 export function SmartWalletHome() {
   const financialData = useFinancialData();
-  const [home, setHome] = useState<SmartHomePayload | null>(null);
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const {
+    data: home,
+    loading: homeLoading,
+    error: homeError,
+    stale: homeStale,
+  } = useCachedFetch<SmartHomePayload>(
+    'dashboard',
+    'home',
+    fetchSmartHomePayload,
+    FRESHNESS.dashboard,
+  );
+
+  const {
+    data: wallet,
+    loading: walletLoading,
+    stale: walletStale,
+  } = useCachedFetch(
+    'wallet',
+    'main',
+    fetchWallet,
+    FRESHNESS.wallet,
+  );
+
+  const loading = homeLoading || walletLoading;
+  const error = homeError;
+  const isStale = homeStale || walletStale;
+
   const [manualInvestments] = useLocalStorageState<ManualInvestmentHolding[]>(
     MANUAL_STORAGE_KEYS.investments,
     [],
@@ -42,32 +67,6 @@ export function SmartWalletHome() {
     saved?: number;
     manualContributionTotal?: number;
   }>>(MANUAL_STORAGE_KEYS.goals, []);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [homeResult, walletResult] = await Promise.allSettled([
-        fetchSmartHomePayload(),
-        fetchWallet(),
-      ]);
-
-      if (homeResult.status !== "fulfilled") {
-        throw homeResult.reason;
-      }
-
-      setHome(homeResult.value);
-      setWallet(walletResult.status === "fulfilled" ? walletResult.value : null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   // Skip redundant financialData.refresh() on /home — SmartHome API already
   // loads accounts, transactions, and recurring in buildSmartHomePayload().
@@ -104,8 +103,8 @@ export function SmartWalletHome() {
     [storedGoals],
   );
 
-  const dashboardLoading = loading || financialData.loading;
-  const dashboardError = error ?? financialData.error;
+  const dashboardLoading = loading && !home && financialData.loading;
+  const dashboardError = !home && error ? (error ?? financialData.error) : null;
   const hasLiveFinancialData =
     financialData.allAccounts.length > 0
     || financialData.allTransactions.length > 0
@@ -133,19 +132,26 @@ export function SmartWalletHome() {
   if (!home) return null;
 
   return (
-    <CustomizableDashboard
-      greeting={getGreeting()}
-      home={home}
-      wallet={wallet}
-      dataSource={{
-        accounts: financialData.allAccounts,
-        transactions: financialData.allTransactions,
-        recurring: financialData.allRecurring,
-        investments,
-        goals,
-      }}
-      accountsConnected={hasLiveFinancialData}
-      useLiveData
-    />
+    <>
+      {isStale && (
+        <div className="fixed top-2 right-4 z-50 rounded-full px-3 py-1 text-xs" style={{ background: calicoTheme.card, border: `1px solid ${calicoTheme.border}`, color: calicoTheme.text, opacity: 0.65 }}>
+          Updating...
+        </div>
+      )}
+      <CustomizableDashboard
+        greeting={getGreeting()}
+        home={home}
+        wallet={wallet}
+        dataSource={{
+          accounts: financialData.allAccounts,
+          transactions: financialData.allTransactions,
+          recurring: financialData.allRecurring,
+          investments,
+          goals,
+        }}
+        accountsConnected={hasLiveFinancialData}
+        useLiveData
+      />
+    </>
   );
 }

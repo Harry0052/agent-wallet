@@ -98,6 +98,7 @@ export interface SmartHomePayload {
     infers: string;
     recommends: string;
     canDo: string;
+    studentFocus: string;
   };
   actionableInsights?: {
     primary: ActionableInsight | null;
@@ -517,9 +518,10 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
     },
     healthScore,
     cashFlow,
-    // moneyIntelligence omitted from dashboard payload — only used by
+    // moneyIntelligence: deprecated — full payload only used by
     // /api/statements/unified (TransactionsView). Removing it cuts
     // the SmartHome JSON response by ~60%.
+    moneyIntelligence: undefined,
     automation: automationSummaryResult
       ? {
           summary: automationSummaryResult.summary,
@@ -552,6 +554,9 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
       canDo: lowData
         ? 'Calico can route you through setup and first analysis actions immediately, then expand recommendations once sync coverage improves.'
         : 'Calico can route you to statement drill-ins, recurring lifecycle actions, funding setup, and source reconnect immediately.',
+      studentFocus: lowData
+        ? 'Calico prioritizes student-friendly budgeting and subscription awareness to build strong financial habits early.'
+        : 'Calico adapts insights for student spending patterns including recurring subscriptions, meal plans, and textbook expenses.',
     },
   };
 }

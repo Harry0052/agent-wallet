@@ -101,7 +101,7 @@ export async function createUserLinkToken(userId: string): Promise<{
   const created = await plaid.createLinkToken({
     userId,
     clientName: "Calico",
-    products: ["auth", "transactions"],
+    products: ["auth", "transactions", "statements"],
     webhook: webhookUrl,
     redirectUri,
   });
@@ -278,4 +278,45 @@ export async function completeRelink(input: {
   ]);
 
   return { accounts, institutions };
+}
+
+/**
+ * Create a link token in update mode to add the "statements" product
+ * to an existing Plaid item that was linked without it.
+ */
+export async function upgradeExistingItemForStatements(
+  userId: string,
+  plaidItemId: string,
+): Promise<{ linkToken: string; expiration: string }> {
+  assertNoAiFinancialConnectorAccess("/financial_connectors/linkService.ts");
+  const plaid = getPlaidClient();
+
+  // Find the access token for this item
+  const items = await listConnectorItemSecretsForUser(userId);
+  const item = items.find((i) => i.plaid_item_id === plaidItemId);
+  if (!item) {
+    throw new Error("Item not found or not owned by this user.");
+  }
+
+  const webhookUrl = process.env.PLAID_WEBHOOK_URL?.trim() || undefined;
+  const redirectUri = process.env.PLAID_REDIRECT_URI?.trim() || undefined;
+
+  const created = await plaid.createLinkToken({
+    userId,
+    clientName: "Calico",
+    accessToken: item.plaid_access_token,
+    additionalConsentedProducts: ["statements"],
+    webhook: webhookUrl,
+    redirectUri,
+  });
+
+  logServerEvent("info", "connect.upgrade_statements.token_created", {
+    userId,
+    plaidItemId,
+  });
+
+  return {
+    linkToken: created.linkToken,
+    expiration: created.expiration,
+  };
 }

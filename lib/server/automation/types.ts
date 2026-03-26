@@ -19,6 +19,8 @@ export interface AutomationPolicyConfig {
   perActionMode: Partial<Record<AutomationActionType, AutomationPolicyMode>>;
   autopilotEnabledActions: Partial<Record<AutomationActionType, boolean>>;
   explicitConfirmEnabledActions: Partial<Record<AutomationActionType, boolean>>;
+  /** Window in minutes for duplicate action detection. Defaults to 30. */
+  duplicateWindowMinutes?: number;
 }
 
 export interface AutomationExplainabilityPayload {

@@ -448,6 +448,8 @@ export async function recordAutomationActionEvent(input: {
   reason?: string | null;
   idempotencyKey?: string | null;
   metadata?: Record<string, unknown>;
+  renderedGoal?: string | null;
+  tinyFishResult?: Record<string, unknown> | null;
 }): Promise<{ event: AutomationActionEvent; idempotentReplay: boolean }> {
   if (input.idempotencyKey) {
     const replay = await query<AutomationEventRow>(
@@ -491,7 +493,9 @@ export async function recordAutomationActionEvent(input: {
         to_status,
         reason,
         idempotency_key,
-        metadata
+        metadata,
+        rendered_goal,
+        tinyfish_result
       )
       VALUES (
         $1,
@@ -502,7 +506,9 @@ export async function recordAutomationActionEvent(input: {
         $6,
         $7,
         $8,
-        $9::jsonb
+        $9::jsonb,
+        $10,
+        $11::jsonb
       )
       RETURNING
         id,
@@ -526,6 +532,8 @@ export async function recordAutomationActionEvent(input: {
       input.reason || null,
       input.idempotencyKey || null,
       input.metadata ? JSON.stringify(input.metadata) : null,
+      input.renderedGoal || null,
+      input.tinyFishResult ? JSON.stringify(input.tinyFishResult) : null,
     ],
   );
 
@@ -672,4 +680,120 @@ export async function getAutomationSummary(input: {
     dismissed7dCount: Number(row?.dismissed_7d_count || 0),
     topActions,
   };
+}
+
+// ── Action Journal ──────────────────────────────────────────────────────────
+
+interface JournalRow extends QueryResultRow {
+  event_id: string;
+  event_type: string;
+  from_status: string | null;
+  to_status: string | null;
+  reason: string | null;
+  idempotency_key: string | null;
+  event_metadata: Record<string, unknown> | null;
+  rendered_goal: string | null;
+  tinyfish_result: Record<string, unknown> | null;
+  event_created_at: string;
+  action_id: string;
+  action_type: string;
+  action_title: string;
+  action_summary: string;
+  action_status: string;
+  action_amount: string | null;
+  action_currency: string | null;
+  action_created_at: string;
+  rollback_possible: boolean;
+  rollback_notes: string | null;
+}
+
+export interface ActionJournalEntry {
+  eventId: string;
+  eventType: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  reason: string | null;
+  idempotencyKey: string | null;
+  metadata: Record<string, unknown> | null;
+  renderedGoal: string | null;
+  tinyFishResult: Record<string, unknown> | null;
+  eventCreatedAt: string;
+  actionId: string;
+  actionType: string;
+  actionTitle: string;
+  actionSummary: string;
+  actionStatus: string;
+  actionAmount: number | null;
+  actionCurrency: string | null;
+  actionCreatedAt: string;
+  rollbackPossible: boolean;
+  rollbackNotes: string | null;
+}
+
+function toJournalEntry(row: JournalRow): ActionJournalEntry {
+  return {
+    eventId: row.event_id,
+    eventType: row.event_type,
+    fromStatus: row.from_status,
+    toStatus: row.to_status,
+    reason: row.reason,
+    idempotencyKey: row.idempotency_key,
+    metadata: row.event_metadata,
+    renderedGoal: row.rendered_goal,
+    tinyFishResult: row.tinyfish_result,
+    eventCreatedAt: row.event_created_at,
+    actionId: row.action_id,
+    actionType: row.action_type,
+    actionTitle: row.action_title,
+    actionSummary: row.action_summary,
+    actionStatus: row.action_status,
+    actionAmount: row.action_amount !== null ? Number(row.action_amount) : null,
+    actionCurrency: row.action_currency,
+    actionCreatedAt: row.action_created_at,
+    rollbackPossible: row.rollback_possible ?? false,
+    rollbackNotes: row.rollback_notes,
+  };
+}
+
+export async function getActionJournal(
+  userId: string,
+  options: { limit?: number; offset?: number } = {},
+): Promise<ActionJournalEntry[]> {
+  const limit = Math.max(1, Math.min(options.limit ?? 20, 200));
+  const offset = Math.max(0, options.offset ?? 0);
+
+  const result = await query<JournalRow>(
+    `
+      SELECT
+        e.id AS event_id,
+        e.event_type,
+        e.from_status,
+        e.to_status,
+        e.reason,
+        e.idempotency_key,
+        e.metadata AS event_metadata,
+        e.rendered_goal,
+        e.tinyfish_result,
+        e.created_at::text AS event_created_at,
+        a.id AS action_id,
+        a.action_type,
+        a.title AS action_title,
+        a.summary AS action_summary,
+        a.status AS action_status,
+        a.amount::text AS action_amount,
+        a.currency AS action_currency,
+        a.created_at::text AS action_created_at,
+        COALESCE(a.rollback_possible, FALSE) AS rollback_possible,
+        a.rollback_notes
+      FROM automation_action_events e
+      JOIN automation_actions a ON a.id = e.action_id
+      WHERE e.user_id = $1
+      ORDER BY e.created_at DESC
+      LIMIT $2
+      OFFSET $3
+    `,
+    [userId, limit, offset],
+  );
+
+  return result.rows.map(toJournalEntry);
 }

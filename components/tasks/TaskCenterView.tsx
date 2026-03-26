@@ -8,6 +8,7 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  attemptTaskCenterAction,
   confirmTaskCenterAction,
   detectTaskCenterActions,
   dismissTaskCenterAction,
@@ -372,7 +373,7 @@ export function TaskCenterView() {
                   key={action.id}
                   action={action}
                   busy={busyActionId === action.id}
-                  onApprove={() => { void withBusy(action.id, () => confirmTaskCenterAction(action.id)); }}
+                  onApprove={() => { void withBusy(action.id, async () => { await attemptTaskCenterAction(action.id); await confirmTaskCenterAction(action.id); }); }}
                   onSnooze={() => { void withBusy(action.id, () => snoozeTaskCenterAction(action.id, 3)); }}
                   onDismiss={() => { void withBusy(action.id, () => dismissTaskCenterAction(action.id)); }}
                   onReopen={() => { void withBusy(action.id, () => reopenTaskCenterAction(action.id)); }}

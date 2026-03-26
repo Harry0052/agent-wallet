@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { enforceApiAuth } from '@/security/authGuard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,7 +11,9 @@ export const dynamic = 'force-dynamic';
  *
  * DELETE THIS ROUTE after debugging is complete.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await enforceApiAuth(request);
+  if (!auth.ok) return auth.response;
   const required = [
     'DATABASE_URL',
     'AUTH_SESSION_SECRET',

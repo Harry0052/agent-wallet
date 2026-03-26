@@ -155,7 +155,7 @@ export const SUPPORTED_ACTIONS: SupportedActionDefinition[] = [
     riskLevel: 'high',
     requiresCredentials: true,
     supportedServices: 'all',
-    live: false, // stub: requires bank integration
+    live: true,
   },
   {
     actionType: 'bill_pay',
@@ -164,7 +164,7 @@ export const SUPPORTED_ACTIONS: SupportedActionDefinition[] = [
     riskLevel: 'critical',
     requiresCredentials: true,
     supportedServices: 'all',
-    live: false, // stub: requires payment rail
+    live: true,
   },
   {
     actionType: 'debt_optimize',
@@ -173,7 +173,7 @@ export const SUPPORTED_ACTIONS: SupportedActionDefinition[] = [
     riskLevel: 'high',
     requiresCredentials: true,
     supportedServices: 'all',
-    live: false, // stub: requires bank integration
+    live: true,
   },
   {
     actionType: 'bill_split',

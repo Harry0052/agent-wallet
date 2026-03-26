@@ -113,6 +113,30 @@ export interface PlaidSyncTransaction {
   } | null;
 }
 
+export interface PlaidStatementMetadata {
+  statement_id: string;
+  account_id: string;
+  month: number;
+  year: number;
+  institution_id: string;
+  institution_name: string;
+}
+
+export interface PlaidStatementsListResponse {
+  accounts: Array<{
+    account_id: string;
+    statements: PlaidStatementMetadata[];
+  }>;
+  institution_id: string;
+  institution_name: string;
+  item_id: string;
+  request_id: string;
+}
+
+export interface PlaidStatementsRefreshResponse {
+  request_id: string;
+}
+
 interface TransactionsSyncResponse {
   added: PlaidSyncTransaction[];
   modified: PlaidSyncTransaction[];
@@ -166,6 +190,7 @@ export class PlaidClient {
     countryCodes?: string[];
     language?: string;
     products?: string[];
+    additionalConsentedProducts?: string[];
     accessToken?: string;
     webhook?: string;
     redirectUri?: string;
@@ -190,6 +215,9 @@ export class PlaidClient {
       payload.products = input.products ?? ["auth", "transactions"];
     }
 
+    if (input.additionalConsentedProducts?.length) {
+      payload.additional_consented_products = input.additionalConsentedProducts;
+    }
     if (input.webhook) {
       payload.webhook = input.webhook;
     }
@@ -315,6 +343,78 @@ export class PlaidClient {
       hasMore: response.has_more,
       requestId: response.request_id,
     };
+  }
+
+  /** List statements available for a Plaid item */
+  async listStatements(
+    accessToken: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<PlaidStatementsListResponse> {
+    return this.request<PlaidStatementsListResponse>("/statements/list", {
+      access_token: accessToken,
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  /** Download a statement PDF */
+  async getStatementPdf(
+    accessToken: string,
+    statementId: string,
+  ): Promise<Buffer> {
+    return this.requestBinary("/statements/download", {
+      access_token: accessToken,
+      statement_id: statementId,
+    });
+  }
+
+  /** Refresh statements for an item (triggers async generation) */
+  async refreshStatements(
+    accessToken: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<PlaidStatementsRefreshResponse> {
+    return this.request<PlaidStatementsRefreshResponse>("/statements/refresh", {
+      access_token: accessToken,
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  private async requestBinary(
+    path: string,
+    payload: Record<string, unknown>,
+  ): Promise<Buffer> {
+    const body = {
+      client_id: this.config.clientId,
+      secret: this.config.secret,
+      ...payload,
+    };
+
+    const response = await fetch(`${plaidBaseUrl(this.config)}${path}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/pdf",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      // Attempt to parse JSON error body from Plaid
+      const parsed = (await response.json().catch(() => null)) as
+        | PlaidApiErrorResponse
+        | null;
+      if (parsed?.error_code || parsed?.error_message) {
+        throw new PlaidApiError(parsed, response.status);
+      }
+      throw new Error(`Plaid API binary request failed (${response.status}).`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
   }
 
   private async request<T extends object>(

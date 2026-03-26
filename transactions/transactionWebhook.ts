@@ -5,6 +5,8 @@ import {
   updateItemStatus,
 } from "@/financial_connectors/tokenVault";
 import { syncPlaidTransactionsForConnectorItem } from "@/transactions/transactionSync";
+import { runStatementPipeline } from "@/statements/statementSync";
+import { reconcileAllForUser } from "@/statements/statementReconciler";
 import { logServerEvent } from "@/lib/server/observability";
 
 export interface PlaidWebhookPayload {
@@ -124,6 +126,89 @@ async function handleItemWebhook(
   return { handled: false, reason: `Unhandled ITEM webhook code: ${webhookCode}.`, synced_items: 0, synced_users: 0 };
 }
 
+const STATEMENTS_SYNC_CODES = new Set([
+  "STATEMENTS_REFRESH_COMPLETE",
+]);
+
+async function handleStatementsWebhook(
+  payload: PlaidWebhookPayload,
+): Promise<TransactionWebhookResult> {
+  const webhookCode = payload.webhook_code?.trim().toUpperCase();
+  const itemId = payload.item_id?.trim();
+
+  if (!webhookCode || !STATEMENTS_SYNC_CODES.has(webhookCode)) {
+    return {
+      handled: false,
+      reason: `Ignored unsupported STATEMENTS webhook code: ${webhookCode}.`,
+      synced_items: 0,
+      synced_users: 0,
+    };
+  }
+
+  if (!itemId) {
+    return {
+      handled: false,
+      reason: "STATEMENTS webhook missing item_id.",
+      synced_items: 0,
+      synced_users: 0,
+    };
+  }
+
+  const secrets = await listConnectorItemSecretsByPlaidItemId(itemId);
+  if (secrets.length === 0) {
+    return {
+      handled: true,
+      reason: "No linked users found for STATEMENTS webhook item_id.",
+      synced_items: 0,
+      synced_users: 0,
+    };
+  }
+
+  const seenUsers = new Set<string>();
+  let syncedItems = 0;
+
+  for (const secret of secrets) {
+    try {
+      // Run full statement pipeline: metadata sync + download + parse
+      const pipelineResult = await runStatementPipeline({
+        userId: secret.user_id,
+        itemId: secret.plaid_item_id,
+        plaidItemId: secret.plaid_item_id,
+        accessToken: secret.plaid_access_token,
+        institutionId: null,
+        institutionName: null,
+      });
+
+      // Reconcile extracted transactions against live data
+      await reconcileAllForUser(secret.user_id);
+
+      seenUsers.add(secret.user_id);
+      syncedItems += 1;
+
+      logServerEvent("info", "connect.webhook.statements.synced", {
+        userId: secret.user_id,
+        itemId: secret.plaid_item_id,
+        metadataSynced: pipelineResult.metadataSynced,
+        downloaded: pipelineResult.downloaded,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Statement sync failed.";
+      logServerEvent("error", "connect.webhook.statements.sync_failed", {
+        userId: secret.user_id,
+        itemId: secret.plaid_item_id,
+        message,
+      });
+    }
+  }
+
+  return {
+    handled: true,
+    reason: `Statement sync completed for ${syncedItems} item(s).`,
+    synced_items: syncedItems,
+    synced_users: seenUsers.size,
+  };
+}
+
 export async function handlePlaidTransactionWebhook(
   payload: PlaidWebhookPayload,
 ): Promise<TransactionWebhookResult> {
@@ -136,10 +221,15 @@ export async function handlePlaidTransactionWebhook(
     return handleItemWebhook(payload);
   }
 
+  // Handle STATEMENTS webhooks for statement refresh completion
+  if (webhookType === "STATEMENTS") {
+    return handleStatementsWebhook(payload);
+  }
+
   if (webhookType !== "TRANSACTIONS") {
     return {
       handled: false,
-      reason: "Ignored non-TRANSACTIONS webhook.",
+      reason: "Ignored non-TRANSACTIONS/STATEMENTS webhook.",
       synced_items: 0,
       synced_users: 0,
     };

@@ -23,6 +23,8 @@ export interface AutomationPolicyConfig {
   perActionMode: Partial<Record<AutomationActionType, AutomationPolicyMode>>;
   autopilotEnabledActions: Partial<Record<AutomationActionType, boolean>>;
   explicitConfirmEnabledActions: Partial<Record<AutomationActionType, boolean>>;
+  /** Window in minutes for duplicate action detection. Defaults to 30. */
+  duplicateWindowMinutes?: number;
 }
 
 export interface TaskCenterSnapshot {
@@ -155,4 +157,71 @@ export async function updateTaskCenterPolicy(input: {
       ...(input.explicitConfirmEnabledActions ? { explicitConfirmEnabledActions: input.explicitConfirmEnabledActions } : {}),
     },
   });
+}
+
+// ── Action Journal ──────────────────────────────────────────────────────────
+
+export interface ActionJournalEntry {
+  eventId: string;
+  eventType: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  reason: string | null;
+  idempotencyKey: string | null;
+  metadata: Record<string, unknown> | null;
+  renderedGoal: string | null;
+  tinyFishResult: Record<string, unknown> | null;
+  eventCreatedAt: string;
+  actionId: string;
+  actionType: string;
+  actionTitle: string;
+  actionSummary: string;
+  actionStatus: string;
+  actionAmount: number | null;
+  actionCurrency: string | null;
+  actionCreatedAt: string;
+  rollbackPossible: boolean;
+  rollbackNotes: string | null;
+}
+
+export async function fetchActionJournal(
+  limit = 20,
+  offset = 0,
+): Promise<{
+  journal: ActionJournalEntry[];
+  pagination: { limit: number; offset: number; count: number };
+}> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+
+  const response = await fetch(`/api/tasks/journal?${params.toString()}`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+
+  const payload = (await response.json()) as {
+    ok?: boolean;
+    journal?: ActionJournalEntry[];
+    pagination?: { limit: number; offset: number; count: number };
+    error?: string;
+    errorCode?: string;
+  };
+
+  if (!response.ok || !payload.ok || !payload.journal) {
+    throw toError(payload);
+  }
+
+  return {
+    journal: payload.journal,
+    pagination: payload.pagination ?? { limit, offset, count: payload.journal.length },
+  };
+}
+
+// ── Action Execution Streaming ──────────────────────────────────────────────
+
+export function streamActionExecution(actionId: string): EventSource {
+  const params = new URLSearchParams({ actionId });
+  return new EventSource(`/api/tasks/stream?${params.toString()}`);
 }

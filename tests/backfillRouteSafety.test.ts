@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const SOURCE = readFileSync(
-  '/Users/harry/agent wallet/app/api/ai/backfill/route.ts',
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'app/api/ai/backfill/route.ts'),
   'utf8',
 );
 
