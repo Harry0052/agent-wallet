@@ -122,6 +122,106 @@ export interface PlaidStatementMetadata {
   institution_name: string;
 }
 
+// ── Investment types ──────────────────────────────────────────────────
+
+export interface PlaidSecurity {
+  security_id: string;
+  name: string | null;
+  ticker_symbol: string | null;
+  type: string | null;
+  close_price: number | null;
+  close_price_as_of: string | null;
+  iso_currency_code: string | null;
+  unofficial_currency_code: string | null;
+}
+
+export interface PlaidHolding {
+  account_id: string;
+  security_id: string;
+  quantity: number;
+  institution_price: number;
+  institution_price_as_of: string | null;
+  institution_value: number;
+  cost_basis: number | null;
+  iso_currency_code: string | null;
+  unofficial_currency_code: string | null;
+}
+
+interface InvestmentsHoldingsGetResponse {
+  accounts: PlaidAccount[];
+  holdings: PlaidHolding[];
+  securities: PlaidSecurity[];
+  request_id: string;
+}
+
+// ── Liability types ──────────────────────────────────────────────────
+
+export interface PlaidCreditLiability {
+  account_id: string;
+  aprs: Array<{
+    apr_percentage: number;
+    apr_type: string;
+    balance_subject_to_apr: number | null;
+    interest_charge_amount: number | null;
+  }>;
+  is_overdue: boolean | null;
+  last_payment_amount: number | null;
+  last_payment_date: string | null;
+  last_statement_balance: number | null;
+  last_statement_issue_date: string | null;
+  minimum_payment_amount: number | null;
+  next_payment_due_date: string | null;
+}
+
+export interface PlaidStudentLoanLiability {
+  account_id: string;
+  account_number: string | null;
+  disbursement_dates: string[] | null;
+  expected_payoff_date: string | null;
+  interest_rate_percentage: number;
+  is_overdue: boolean | null;
+  last_payment_amount: number | null;
+  last_payment_date: string | null;
+  loan_name: string | null;
+  loan_status: { type: string | null; end_date: string | null } | null;
+  minimum_payment_amount: number | null;
+  next_payment_due_date: string | null;
+  origination_date: string | null;
+  origination_principal_amount: number | null;
+  outstanding_interest_amount: number | null;
+  repayment_plan: { type: string | null; description: string | null } | null;
+}
+
+export interface PlaidMortgageLiability {
+  account_id: string;
+  account_number: string | null;
+  current_late_fee: number | null;
+  escrow_balance: number | null;
+  has_pmi: boolean | null;
+  interest_rate: { percentage: number | null; type: string | null } | null;
+  last_payment_amount: number | null;
+  last_payment_date: string | null;
+  loan_term: string | null;
+  maturity_date: string | null;
+  next_monthly_payment: number | null;
+  next_payment_due_date: string | null;
+  origination_date: string | null;
+  origination_principal_amount: number | null;
+  past_due_amount: number | null;
+  ytd_interest_paid: number | null;
+  ytd_principal_paid: number | null;
+}
+
+interface LiabilitiesGetResponse {
+  accounts: PlaidAccount[];
+  liabilities: {
+    credit: PlaidCreditLiability[] | null;
+    mortgage: PlaidMortgageLiability[] | null;
+    student: PlaidStudentLoanLiability[] | null;
+  };
+  request_id: string;
+}
+
 export interface PlaidStatementsListResponse {
   accounts: Array<{
     account_id: string;
@@ -192,6 +292,7 @@ export class PlaidClient {
     products?: string[];
     additionalConsentedProducts?: string[];
     accessToken?: string;
+    accountSelectionEnabled?: boolean;
     webhook?: string;
     redirectUri?: string;
   }): Promise<{
@@ -211,6 +312,9 @@ export class PlaidClient {
     // Update mode: pass access_token instead of products
     if (input.accessToken) {
       payload.access_token = input.accessToken;
+      if (input.accountSelectionEnabled) {
+        payload.update = { account_selection_enabled: true };
+      }
     } else {
       payload.products = input.products ?? ["auth", "transactions"];
     }
@@ -341,6 +445,83 @@ export class PlaidClient {
       removed: response.removed,
       nextCursor: response.next_cursor,
       hasMore: response.has_more,
+      requestId: response.request_id,
+    };
+  }
+
+  // ── Item removal ────────────────────────────────────────────────────
+
+  async removeItem(accessToken: string): Promise<{
+    requestId: string;
+  }> {
+    const response = await this.request<{ request_id: string }>(
+      "/item/remove",
+      { access_token: accessToken },
+    );
+
+    return {
+      requestId: response.request_id,
+    };
+  }
+
+  // ── Investments ──────────────────────────────────────────────────────
+
+  async getInvestmentHoldings(accessToken: string, options?: {
+    accountIds?: string[];
+  }): Promise<{
+    accounts: PlaidAccount[];
+    holdings: PlaidHolding[];
+    securities: PlaidSecurity[];
+    requestId: string;
+  }> {
+    const payload: Record<string, unknown> = {
+      access_token: accessToken,
+    };
+    if (options?.accountIds?.length) {
+      payload.options = { account_ids: options.accountIds };
+    }
+
+    const response = await this.request<InvestmentsHoldingsGetResponse>(
+      "/investments/holdings/get",
+      payload,
+    );
+
+    return {
+      accounts: response.accounts,
+      holdings: response.holdings,
+      securities: response.securities,
+      requestId: response.request_id,
+    };
+  }
+
+  // ── Liabilities ─────────────────────────────────────────────────────
+
+  async getLiabilities(accessToken: string, options?: {
+    accountIds?: string[];
+  }): Promise<{
+    accounts: PlaidAccount[];
+    liabilities: {
+      credit: PlaidCreditLiability[] | null;
+      mortgage: PlaidMortgageLiability[] | null;
+      student: PlaidStudentLoanLiability[] | null;
+    };
+    requestId: string;
+  }> {
+    const payload: Record<string, unknown> = {
+      access_token: accessToken,
+    };
+    if (options?.accountIds?.length) {
+      payload.options = { account_ids: options.accountIds };
+    }
+
+    const response = await this.request<LiabilitiesGetResponse>(
+      "/liabilities/get",
+      payload,
+    );
+
+    return {
+      accounts: response.accounts,
+      liabilities: response.liabilities,
       requestId: response.request_id,
     };
   }

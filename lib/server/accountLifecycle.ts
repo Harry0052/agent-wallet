@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { SecureDbClient } from '@/database/dbService';
 import { withDbTransaction } from '@/lib/server/db';
+import { logServerEvent } from '@/lib/server/observability';
 
 const APP_SCOPED_TABLES = [
   'app_account_audit_events',
@@ -11,6 +12,12 @@ const WALLET_SCOPED_TABLES = [
   'wallet_payment_methods',
   'wallet_recipients',
   'recipients',
+  // Plaid-derived data — clean up before removing items
+  'investment_holdings',
+  'liability_details',
+  'statement_extracted_transactions',
+  'statement_documents',
+  // Core financial connector tables
   'financial_connector_accounts',
   'financial_connector_items',
   'transactions',
@@ -79,10 +86,60 @@ async function deleteWalletScopedData(
   }
 }
 
+/**
+ * Call Plaid /item/remove for all active Items belonging to a user.
+ * Best-effort: failures are logged but do not block account deletion.
+ * Must be called BEFORE DB rows are deleted (needs access tokens).
+ */
+async function removeAllPlaidItemsForUser(walletUserId: string): Promise<void> {
+  try {
+    // Dynamic import to avoid circular deps and keep this module lightweight
+    const { listConnectorItemSecretsForUser } = await import(
+      '@/financial_connectors/tokenVault'
+    );
+    const { getPlaidClient } = await import(
+      '@/financial_connectors/plaidClient'
+    );
+
+    const secrets = await listConnectorItemSecretsForUser(walletUserId);
+    if (secrets.length === 0) return;
+
+    const plaid = getPlaidClient();
+    for (const item of secrets) {
+      try {
+        await plaid.removeItem(item.plaid_access_token);
+        logServerEvent('info', 'account.deletion.plaid_item_removed', {
+          walletUserId,
+          plaidItemId: item.plaid_item_id,
+        });
+      } catch (error) {
+        // INVALID_ACCESS_TOKEN means already removed — that's fine.
+        const message = error instanceof Error ? error.message : 'unknown';
+        logServerEvent('warn', 'account.deletion.plaid_item_remove_failed', {
+          walletUserId,
+          plaidItemId: item.plaid_item_id,
+          message,
+        });
+      }
+    }
+  } catch (error) {
+    // If the entire lookup fails, log and proceed with local deletion
+    const message = error instanceof Error ? error.message : 'unknown';
+    logServerEvent('warn', 'account.deletion.plaid_items_lookup_failed', {
+      walletUserId,
+      message,
+    });
+  }
+}
+
 export async function deleteUserAccountData(input: {
   appUserId: string;
   walletUserId: string;
 }): Promise<void> {
+  // Remove Plaid Items from Plaid's side BEFORE deleting local DB rows
+  // (we need the encrypted access tokens which live in the DB).
+  await removeAllPlaidItemsForUser(input.walletUserId);
+
   await withDbTransaction(async (client) => {
     // Purge application events/logs that are not covered by FK cascades.
     await deleteAppScopedData(client, input.appUserId);

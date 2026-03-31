@@ -28,6 +28,7 @@ export interface ConnectedAccount {
   last_synced_at: string | null;
   item_status: "good" | "error" | "relink_required";
   item_error_code: string | null;
+  new_accounts_available: boolean;
 }
 
 interface ConnectedAccountRow {
@@ -48,6 +49,7 @@ interface ConnectedAccountRow {
   last_synced_at: string | null;
   item_status: string | null;
   item_error_code: string | null;
+  new_accounts_available: boolean | null;
 }
 
 interface StoredAccountInput {
@@ -132,6 +134,7 @@ function rowToConnectedAccount(row: ConnectedAccountRow): ConnectedAccount {
     last_synced_at: row.last_synced_at ?? null,
     item_status: status === "error" ? "error" : status === "relink_required" ? "relink_required" : "good",
     item_error_code: row.item_error_code ?? null,
+    new_accounts_available: Boolean(row.new_accounts_available),
   };
 }
 
@@ -237,6 +240,7 @@ export async function ensureFinancialConnectorSchema(): Promise<void> {
       { name: "status", definition: "TEXT NOT NULL DEFAULT 'good'" },
       { name: "error_code", definition: "TEXT" },
       { name: "consent_expiration_time", definition: "TIMESTAMPTZ" },
+      { name: "new_accounts_available", definition: "BOOLEAN NOT NULL DEFAULT FALSE" },
     ];
     for (const col of itemStatusColumns) {
       await query(`
@@ -375,7 +379,8 @@ export async function listStoredConnectedAccounts(
         a.balance_refreshed_at::text AS balance_refreshed_at,
         i.updated_at::text AS last_synced_at,
         i.status AS item_status,
-        i.error_code AS item_error_code
+        i.error_code AS item_error_code,
+        COALESCE(i.new_accounts_available, FALSE) AS new_accounts_available
       FROM financial_connector_accounts a
       JOIN financial_connector_items i
         ON i.id = a.item_id
@@ -564,12 +569,34 @@ export async function updateItemStatus(input: {
   );
 }
 
+export async function setNewAccountsAvailable(input: {
+  userId: string;
+  plaidItemId: string;
+  available: boolean;
+}): Promise<void> {
+  assertNoAiFinancialConnectorAccess("/financial_connectors/tokenVault.ts");
+  await ensureFinancialConnectorSchema();
+
+  await query(
+    `
+      UPDATE financial_connector_items
+      SET
+        new_accounts_available = $1,
+        updated_at = NOW()
+      WHERE user_id = $2
+        AND plaid_item_id = $3
+    `,
+    [input.available, input.userId, input.plaidItemId],
+  );
+}
+
 export async function removeStoredConnectedAccount(input: {
   userId: string;
   accountId: string;
 }): Promise<{
   removed: boolean;
   removedItem: boolean;
+  removedPlaidItemId: string | null;
   transactionsRemoved: number;
 }> {
   assertNoAiFinancialConnectorAccess("/financial_connectors/tokenVault.ts");
@@ -591,6 +618,7 @@ export async function removeStoredConnectedAccount(input: {
     return {
       removed: false,
       removedItem: false,
+      removedPlaidItemId: null,
       transactionsRemoved: 0,
     };
   }
@@ -606,6 +634,28 @@ export async function removeStoredConnectedAccount(input: {
     [input.userId, input.accountId],
   );
   const transactionsRemoved = txRemoval.rows.length;
+
+  // Clean up investment holdings for this account
+  await query(
+    `DELETE FROM investment_holdings WHERE user_id = $1 AND plaid_account_id = $2`,
+    [input.userId, account.plaid_account_id],
+  ).catch(() => { /* table may not exist yet */ });
+
+  // Clean up liability details for this account
+  await query(
+    `DELETE FROM liability_details WHERE user_id = $1 AND plaid_account_id = $2`,
+    [input.userId, account.plaid_account_id],
+  ).catch(() => { /* table may not exist yet */ });
+
+  // Clean up statement documents and extracted transactions for this account
+  await query(
+    `DELETE FROM statement_extracted_transactions WHERE user_id = $1 AND plaid_account_id = $2`,
+    [input.userId, account.plaid_account_id],
+  ).catch(() => { /* table may not exist yet */ });
+  await query(
+    `DELETE FROM statement_documents WHERE user_id = $1 AND plaid_account_id = $2`,
+    [input.userId, account.plaid_account_id],
+  ).catch(() => { /* table may not exist yet */ });
 
   await query(
     `
@@ -631,9 +681,17 @@ export async function removeStoredConnectedAccount(input: {
     return {
       removed: true,
       removedItem: false,
+      removedPlaidItemId: null,
       transactionsRemoved,
     };
   }
+
+  // Retrieve plaid_item_id before deleting the item row
+  const itemRow = await query<{ plaid_item_id: string }>(
+    `SELECT plaid_item_id FROM financial_connector_items WHERE user_id = $1 AND id = $2`,
+    [input.userId, account.item_id],
+  );
+  const removedPlaidItemId = itemRow.rows[0]?.plaid_item_id ?? null;
 
   // Also clean up sync cursors for the removed item
   await query(
@@ -660,6 +718,7 @@ export async function removeStoredConnectedAccount(input: {
   return {
     removed: true,
     removedItem: true,
+    removedPlaidItemId,
     transactionsRemoved,
   };
 }

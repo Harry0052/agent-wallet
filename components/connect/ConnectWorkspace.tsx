@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, ArrowLeft, Landmark, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Landmark, Loader2, Plus, RefreshCw, Shield, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
   ConnectApiError,
@@ -10,6 +10,7 @@ import {
   refreshConnectedBalances,
   relinkAccount,
   removeConnectedAccount,
+  reviewNewAccounts,
   syncConnectedTransactions,
   type ConnectedAccountRecord,
 } from "@/services/connect";
@@ -96,6 +97,7 @@ export function ConnectWorkspace() {
   const [accounts, setAccounts] = useState<ConnectedAccountRecord[]>([]);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [relinkingItemId, setRelinkingItemId] = useState<string | null>(null);
+  const [reviewingNewAccountsItemId, setReviewingNewAccountsItemId] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -217,6 +219,34 @@ export function ConnectWorkspace() {
     (a) => a.item_status === "relink_required" || a.item_status === "error",
   );
 
+  // Deduplicate by plaid_item_id to avoid showing one banner per account
+  const newAccountsItemIds = [
+    ...new Set(
+      accounts
+        .filter((a) => a.new_accounts_available && a.plaid_item_id)
+        .map((a) => a.plaid_item_id!),
+    ),
+  ];
+
+  const onReviewNewAccounts = async (plaidItemId: string) => {
+    setError(null);
+    setNotice(null);
+    setReviewingNewAccountsItemId(plaidItemId);
+    try {
+      await reviewNewAccounts(plaidItemId);
+      setNotice("New accounts have been added successfully.");
+      await load();
+    } catch (e) {
+      const parsed = toConnectionFlowError(e);
+      if (parsed.message !== "Account linking was canceled.") {
+        setError(parsed.message);
+      }
+      setErrorCanRetry(parsed.canRetry);
+    } finally {
+      setReviewingNewAccountsItemId(null);
+    }
+  };
+
   const addManualAccount = () => {
     setManualError(null);
     const name = manualName.trim();
@@ -292,6 +322,28 @@ export function ConnectWorkspace() {
         </div>
       </div>
 
+      {sourceMode === "connected" && accounts.length === 0 ? (
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-4 py-3">
+          <Shield size={16} className="mt-0.5 shrink-0 text-[var(--aw-text-muted)]" />
+          <p className="text-xs leading-relaxed text-[var(--aw-text-muted)]">
+            Calico uses{" "}
+            <a href="https://plaid.com" target="_blank" rel="noopener noreferrer" className="underline">
+              Plaid
+            </a>{" "}
+            to securely connect your financial accounts. Your bank credentials are never shared with Calico.
+            By connecting, you agree to share account and transaction data in accordance with our{" "}
+            <a
+              href="https://www.freeprivacypolicy.com/live/ab2b2a8a-1946-4178-ad49-1cde9a62f587"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              Privacy Policy
+            </a>.
+          </p>
+        </div>
+      ) : null}
+
       {relinkRequiredAccounts.length > 0 && sourceMode === "connected" ? (
         <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-300/40 bg-amber-50 px-4 py-3">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
@@ -305,6 +357,35 @@ export function ConnectWorkspace() {
               Your bank requires you to re-authenticate. Tap Reconnect next to the affected account below.
             </p>
           </div>
+        </div>
+      ) : null}
+
+      {newAccountsItemIds.length > 0 && sourceMode === "connected" ? (
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-[var(--aw-primary)]/20 bg-[var(--aw-primary)]/5 px-4 py-3">
+          <Plus size={16} className="mt-0.5 shrink-0 text-[var(--aw-primary)]" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-[var(--aw-text)]">
+              New accounts available
+            </p>
+            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
+              Your bank has new accounts you can add to Calico.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { void onReviewNewAccounts(newAccountsItemIds[0]); }}
+            disabled={reviewingNewAccountsItemId !== null}
+            className="shrink-0 rounded-lg border border-[var(--aw-primary)]/30 bg-[var(--aw-primary)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--aw-primary)] transition hover:bg-[var(--aw-primary)]/20 disabled:opacity-50"
+          >
+            {reviewingNewAccountsItemId ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 size={12} className="animate-spin" />
+                Reviewing...
+              </span>
+            ) : (
+              "Review accounts"
+            )}
+          </button>
         </div>
       ) : null}
 

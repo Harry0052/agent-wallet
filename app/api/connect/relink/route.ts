@@ -5,7 +5,7 @@ import {
   classifyTaskError,
   logServerEvent,
 } from "@/lib/server/observability";
-import { createRelinkToken, completeRelink } from "@/financial_connectors/linkService";
+import { createRelinkToken, completeRelink, createNewAccountsToken, completeNewAccountsReview } from "@/financial_connectors/linkService";
 import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
 
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as {
       plaid_item_id?: string;
-      action?: "create_token" | "complete";
+      action?: "create_token" | "complete" | "new_accounts" | "complete_new_accounts";
     };
 
     const plaidItemId = body.plaid_item_id?.trim();
@@ -48,6 +48,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true,
         action: "completed",
+        accounts: result.accounts,
+        institutions: result.institutions,
+      });
+    }
+
+    // New accounts: create update-mode token with account_selection_enabled
+    if (action === "new_accounts") {
+      const token = await createNewAccountsToken({ userId, plaidItemId });
+
+      logServerEvent("info", "connect.relink.route.new_accounts_token_created", {
+        userId,
+        plaidItemId,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        action: "new_accounts_token_created",
+        link_token: token.linkToken,
+        expiration: token.expiration,
+      });
+    }
+
+    // Complete new accounts review: clear flag and refresh accounts
+    if (action === "complete_new_accounts") {
+      const result = await completeNewAccountsReview({ userId, plaidItemId });
+
+      logServerEvent("info", "connect.relink.route.new_accounts_completed", {
+        userId,
+        plaidItemId,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        action: "new_accounts_completed",
         accounts: result.accounts,
         institutions: result.institutions,
       });

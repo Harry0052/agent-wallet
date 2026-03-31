@@ -6,6 +6,7 @@ import {
   upsertConnectedItem,
   updateAccountBalances,
   updateItemStatus,
+  setNewAccountsAvailable,
   listConnectorItemSecretsForUser,
   type ConnectedAccount,
   type ConnectedAccountType,
@@ -101,7 +102,8 @@ export async function createUserLinkToken(userId: string): Promise<{
   const created = await plaid.createLinkToken({
     userId,
     clientName: "Calico",
-    products: ["auth", "transactions", "statements"],
+    products: ["auth", "transactions"],
+    additionalConsentedProducts: ["statements", "investments", "liabilities"],
     webhook: webhookUrl,
     redirectUri,
   });
@@ -319,4 +321,131 @@ export async function upgradeExistingItemForStatements(
     linkToken: created.linkToken,
     expiration: created.expiration,
   };
+}
+
+/**
+ * Create a link token in update mode with account_selection_enabled
+ * for reviewing new accounts available at an institution.
+ */
+export async function createNewAccountsToken(input: {
+  userId: string;
+  plaidItemId: string;
+}): Promise<{
+  linkToken: string;
+  expiration: string;
+}> {
+  assertNoAiFinancialConnectorAccess("/financial_connectors/linkService.ts");
+  const plaid = getPlaidClient();
+
+  const items = await listConnectorItemSecretsForUser(input.userId);
+  const item = items.find((i) => i.plaid_item_id === input.plaidItemId);
+  if (!item) {
+    throw new Error("Item not found or not owned by this user.");
+  }
+
+  const webhookUrl = process.env.PLAID_WEBHOOK_URL?.trim() || undefined;
+  const redirectUri = process.env.PLAID_REDIRECT_URI?.trim() || undefined;
+
+  const created = await plaid.createLinkToken({
+    userId: input.userId,
+    clientName: "Calico",
+    accessToken: item.plaid_access_token,
+    accountSelectionEnabled: true,
+    webhook: webhookUrl,
+    redirectUri,
+  });
+
+  logServerEvent("info", "connect.new_accounts.token_created", {
+    userId: input.userId,
+    plaidItemId: input.plaidItemId,
+  });
+
+  return {
+    linkToken: created.linkToken,
+    expiration: created.expiration,
+  };
+}
+
+/**
+ * After a user reviews new accounts, clear the flag and refresh account data.
+ */
+export async function completeNewAccountsReview(input: {
+  userId: string;
+  plaidItemId: string;
+}): Promise<{
+  accounts: ConnectedAccount[];
+  institutions: Array<{ institution_name: string; account_count: number }>;
+}> {
+  assertNoAiFinancialConnectorAccess("/financial_connectors/linkService.ts");
+
+  await setNewAccountsAvailable({
+    userId: input.userId,
+    plaidItemId: input.plaidItemId,
+    available: false,
+  });
+
+  const plaid = getPlaidClient();
+  const items = await listConnectorItemSecretsForUser(input.userId);
+  const item = items.find((i) => i.plaid_item_id === input.plaidItemId);
+
+  if (item) {
+    try {
+      const accountsSnapshot = await plaid.getAccounts(item.plaid_access_token);
+      let institutionName = "Connected Institution";
+      if (accountsSnapshot.institutionId) {
+        try {
+          const institution = await plaid.getInstitutionById(accountsSnapshot.institutionId);
+          institutionName = institution.name;
+        } catch {
+          institutionName = "Connected Institution";
+        }
+      }
+
+      const normalizedAccounts = accountsSnapshot.accounts
+        .map((account) => {
+          const accountType = mapPlaidAccountType(account);
+          if (!accountType) return null;
+          const mask = normalizeMask(account.mask);
+          const nickname = normalizeNickname(account, mask);
+          return {
+            plaidAccountId: account.account_id,
+            accountType,
+            subtype: account.subtype || null,
+            mask,
+            nickname,
+            officialName: account.official_name || null,
+          };
+        })
+        .filter((a): a is NonNullable<typeof a> => a !== null);
+
+      if (normalizedAccounts.length > 0) {
+        await upsertConnectedItem({
+          userId: input.userId,
+          plaidItemId: input.plaidItemId,
+          plaidAccessToken: item.plaid_access_token,
+          institutionId: accountsSnapshot.institutionId,
+          institutionName,
+          accounts: normalizedAccounts,
+        });
+      }
+    } catch (error) {
+      logServerEvent("warn", "connect.new_accounts.refresh_failed", {
+        userId: input.userId,
+        plaidItemId: input.plaidItemId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  }
+
+  logServerEvent("info", "connect.new_accounts.completed", {
+    userId: input.userId,
+    plaidItemId: input.plaidItemId,
+  });
+
+  const [accounts, institutions] = await Promise.all([
+    listConnectedAccounts(input.userId),
+    listConnectedInstitutions(input.userId),
+  ]);
+
+  return { accounts, institutions };
 }

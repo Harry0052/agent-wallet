@@ -24,6 +24,7 @@ export interface ConnectedAccountRecord {
   balance_refreshed_at?: string | null;
   item_status?: "good" | "error" | "relink_required";
   item_error_code?: string | null;
+  new_accounts_available?: boolean;
   sourceType?: RecordSourceType;
 }
 
@@ -488,6 +489,56 @@ export async function relinkAccount(plaidItemId: string): Promise<ConnectedAccou
   return completeRelink(plaidItemId);
 }
 
+/**
+ * Full new-accounts review flow: create update-mode token with account selection
+ * → open Plaid Link → complete review (clears flag, refreshes accounts).
+ */
+export async function reviewNewAccounts(plaidItemId: string): Promise<ConnectedAccountExchangeResult> {
+  const response = await fetch("/api/connect/relink", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plaid_item_id: plaidItemId, action: "new_accounts" }),
+  });
+
+  const payload = await safeJson<{
+    ok?: boolean;
+    link_token?: string;
+    expiration?: string;
+    error?: string;
+    errorCode?: string;
+  }>(response);
+
+  if (!response.ok || !payload.ok || !payload.link_token) {
+    throw toError(payload);
+  }
+
+  await openPlaidProviderFlow(payload.link_token);
+
+  // Complete: clear new_accounts_available flag and refresh accounts
+  const completeResponse = await fetch("/api/connect/relink", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plaid_item_id: plaidItemId, action: "complete_new_accounts" }),
+  });
+
+  const completePayload = await safeJson<{
+    ok?: boolean;
+    accounts?: ConnectedAccountRecord[];
+    institutions?: ConnectedInstitutionRecord[];
+    error?: string;
+    errorCode?: string;
+  }>(completeResponse);
+
+  if (!completeResponse.ok || !completePayload.ok) {
+    throw toError(completePayload);
+  }
+
+  return {
+    accounts: Array.isArray(completePayload.accounts) ? completePayload.accounts : [],
+    institutions: Array.isArray(completePayload.institutions) ? completePayload.institutions : [],
+  };
+}
+
 export async function removeConnectedAccount(accountId: string): Promise<{
   removed: boolean;
   removedItem: boolean;
@@ -561,6 +612,143 @@ export async function fetchTrackedRecurring(): Promise<TrackedRecurringRecord[]>
   }
 
   return payload.subscriptions;
+}
+
+// ── Investment holdings ────────────────────────────────────────────────
+
+export interface InvestmentHoldingRecord {
+  id: string;
+  user_id: string;
+  plaid_account_id: string;
+  plaid_security_id: string;
+  quantity: number;
+  institution_price: number;
+  institution_value: number;
+  cost_basis: number | null;
+  currency: string;
+  institution_price_as_of: string | null;
+  updated_at: string;
+  security_name?: string | null;
+  ticker_symbol?: string | null;
+  security_type?: string | null;
+}
+
+export async function fetchInvestmentHoldings(): Promise<InvestmentHoldingRecord[]> {
+  const response = await fetch("/api/connect/investments", {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  const payload = await safeJson<{
+    ok?: boolean;
+    holdings?: InvestmentHoldingRecord[];
+    error?: string;
+    errorCode?: string;
+  }>(response);
+
+  if (!response.ok || !payload.ok || !Array.isArray(payload.holdings)) {
+    throw toError(payload);
+  }
+
+  return payload.holdings;
+}
+
+export async function syncInvestmentHoldings(): Promise<{
+  sync: Array<{ user_id: string; plaid_item_id: string; holdings_synced: number; status: string }>;
+  holdings: InvestmentHoldingRecord[];
+}> {
+  const response = await fetch("/api/connect/investments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+
+  const payload = await safeJson<{
+    ok?: boolean;
+    sync?: Array<{ user_id: string; plaid_item_id: string; holdings_synced: number; status: string }>;
+    holdings?: InvestmentHoldingRecord[];
+    error?: string;
+    errorCode?: string;
+  }>(response);
+
+  if (!response.ok || !payload.ok) {
+    throw toError(payload);
+  }
+
+  return {
+    sync: Array.isArray(payload.sync) ? payload.sync : [],
+    holdings: Array.isArray(payload.holdings) ? payload.holdings : [],
+  };
+}
+
+// ── Liability details ─────────────────────────────────────────────────
+
+export interface LiabilityDetailRecord {
+  id: string;
+  user_id: string;
+  plaid_account_id: string;
+  liability_type: "credit" | "mortgage" | "student";
+  interest_rate: number | null;
+  interest_rate_type: string | null;
+  minimum_payment: number | null;
+  next_payment_due_date: string | null;
+  last_payment_amount: number | null;
+  last_payment_date: string | null;
+  last_statement_balance: number | null;
+  is_overdue: boolean | null;
+  origination_date: string | null;
+  origination_principal: number | null;
+  loan_term: string | null;
+  maturity_date: string | null;
+  updated_at: string;
+}
+
+export async function fetchLiabilityDetails(): Promise<LiabilityDetailRecord[]> {
+  const response = await fetch("/api/connect/liabilities", {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  const payload = await safeJson<{
+    ok?: boolean;
+    liabilities?: LiabilityDetailRecord[];
+    error?: string;
+    errorCode?: string;
+  }>(response);
+
+  if (!response.ok || !payload.ok || !Array.isArray(payload.liabilities)) {
+    throw toError(payload);
+  }
+
+  return payload.liabilities;
+}
+
+export async function syncLiabilityDetails(): Promise<{
+  sync: Array<{ user_id: string; plaid_item_id: string; liabilities_synced: number; status: string }>;
+  liabilities: LiabilityDetailRecord[];
+}> {
+  const response = await fetch("/api/connect/liabilities", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+
+  const payload = await safeJson<{
+    ok?: boolean;
+    sync?: Array<{ user_id: string; plaid_item_id: string; liabilities_synced: number; status: string }>;
+    liabilities?: LiabilityDetailRecord[];
+    error?: string;
+    errorCode?: string;
+  }>(response);
+
+  if (!response.ok || !payload.ok) {
+    throw toError(payload);
+  }
+
+  return {
+    sync: Array.isArray(payload.sync) ? payload.sync : [],
+    liabilities: Array.isArray(payload.liabilities) ? payload.liabilities : [],
+  };
 }
 
 export async function fetchFundingMethods(): Promise<SavedPaymentMethod[]> {
