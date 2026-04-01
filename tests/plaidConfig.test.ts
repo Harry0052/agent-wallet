@@ -99,6 +99,29 @@ test('exchange-token route validates public_token is non-empty', () => {
   assert.match(source, /public_token.*min\(1\)|z\.string\(\).*trim\(\).*min\(1\)/);
 });
 
+// ── Fallback / retry logic ───────────────────────────────────────────
+
+test('linkService has INVALID_FIELD fallback retry in createUserLinkToken', () => {
+  const source = read('financial_connectors/linkService.ts');
+  // Must catch INVALID_FIELD and retry with minimal payload
+  assert.match(source, /INVALID_FIELD/);
+  assert.match(source, /MISSING_FIELDS/);
+  assert.match(source, /fallback/i);
+  // The fallback must use only essential products (transactions)
+  assert.match(source, /products.*\["transactions"\]/);
+});
+
+test('linkService imports PlaidApiError for fallback logic', () => {
+  const source = read('financial_connectors/linkService.ts');
+  assert.match(source, /import.*PlaidApiError.*from.*plaidClient/);
+});
+
+test('PlaidApiError captures errorDetail for diagnostics', () => {
+  const source = read('financial_connectors/plaidClient.ts');
+  assert.match(source, /errorDetail/);
+  assert.match(source, /error_message/);
+});
+
 // ── Frontend flow ───────────────────────────────────────────────────
 
 test('connect service loads Plaid Link from official CDN', () => {

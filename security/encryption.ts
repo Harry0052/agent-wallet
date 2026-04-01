@@ -87,7 +87,8 @@ function parseKeyring(): EncryptionKeyring {
       if (separator <= 0 || separator === part.length - 1) continue;
 
       const version = part.slice(0, separator).trim();
-      const keyRaw = part.slice(separator + 1).trim();
+      // Strip surrounding quotes (single or double) that env files may add
+      const keyRaw = part.slice(separator + 1).trim().replace(/^["']|["']$/g, '');
       if (!version || !keyRaw) continue;
       keyring.set(version, decodeFixedLengthKey(keyRaw, 32));
     }

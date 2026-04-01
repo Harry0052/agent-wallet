@@ -25,6 +25,7 @@ export class PlaidApiError extends Error {
   readonly errorType: string;
   readonly displayMessage: string | null;
   readonly requestId: string;
+  readonly errorDetail: string | null;
 
   constructor(response: PlaidApiErrorResponse, httpStatus: number) {
     const userMessage = response.display_message
@@ -36,6 +37,8 @@ export class PlaidApiError extends Error {
     this.errorType = response.error_type || "API_ERROR";
     this.displayMessage = response.display_message ?? null;
     this.requestId = response.request_id || "unknown";
+    // Capture the raw error_message for diagnostics (distinct from display_message)
+    this.errorDetail = response.error_message ?? null;
   }
 }
 

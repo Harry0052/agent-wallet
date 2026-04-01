@@ -129,7 +129,11 @@ export async function POST(req: NextRequest) {
         plaidErrorCode: error.errorCode,
         plaidErrorType: error.errorType,
         plaidRequestId: error.requestId,
+        plaidErrorDetail: error.errorDetail,
         internalMessage: error.message,
+        plaidEnv: process.env.PLAID_ENV,
+        hasRedirectUri: Boolean(process.env.PLAID_REDIRECT_URI?.trim()),
+        hasWebhookUrl: Boolean(process.env.PLAID_WEBHOOK_URL?.trim()),
       });
 
       // Map known Plaid error codes to safe, user-friendly messages

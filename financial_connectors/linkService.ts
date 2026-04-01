@@ -1,7 +1,7 @@
 import "server-only";
 import { assertNoAiFinancialConnectorAccess } from "@/security/secretsGuard";
 
-import { getPlaidClient, type PlaidAccount } from "@/financial_connectors/plaidClient";
+import { getPlaidClient, PlaidApiError, type PlaidAccount } from "@/financial_connectors/plaidClient";
 import {
   upsertConnectedItem,
   updateAccountBalances,
@@ -99,19 +99,58 @@ export async function createUserLinkToken(userId: string): Promise<{
   const plaid = getPlaidClient();
   const webhookUrl = process.env.PLAID_WEBHOOK_URL?.trim() || undefined;
   const redirectUri = process.env.PLAID_REDIRECT_URI?.trim() || undefined;
-  const created = await plaid.createLinkToken({
-    userId,
-    clientName: "Calico",
-    products: ["auth", "transactions"],
-    additionalConsentedProducts: ["statements", "investments", "liabilities"],
-    webhook: webhookUrl,
-    redirectUri,
-  });
 
-  return {
-    linkToken: created.linkToken,
-    expiration: created.expiration,
-  };
+  // Try with full feature set first. If Plaid rejects optional fields
+  // (redirect_uri not registered, products not enabled), fall back to essentials.
+  try {
+    const created = await plaid.createLinkToken({
+      userId,
+      clientName: "Calico",
+      products: ["auth", "transactions"],
+      additionalConsentedProducts: ["statements", "investments", "liabilities"],
+      webhook: webhookUrl,
+      redirectUri,
+    });
+
+    return {
+      linkToken: created.linkToken,
+      expiration: created.expiration,
+    };
+  } catch (firstError) {
+    const isFieldError =
+      firstError instanceof PlaidApiError &&
+      (firstError.errorCode === "INVALID_FIELD" || firstError.errorCode === "MISSING_FIELDS");
+
+    if (!isFieldError) throw firstError;
+
+    // Log the exact field Plaid rejected for diagnostics
+    logServerEvent("warn", "connect.link_token.field_rejected", {
+      userId,
+      plaidErrorCode: (firstError as PlaidApiError).errorCode,
+      plaidErrorDetail: (firstError as PlaidApiError).errorDetail,
+      plaidRequestId: (firstError as PlaidApiError).requestId,
+      hadRedirectUri: Boolean(redirectUri),
+      hadWebhookUrl: Boolean(webhookUrl),
+    });
+
+    // Retry with minimal required fields only — no redirect_uri,
+    // no additional_consented_products, no webhook
+    const fallback = await plaid.createLinkToken({
+      userId,
+      clientName: "Calico",
+      products: ["transactions"],
+    });
+
+    logServerEvent("info", "connect.link_token.fallback_succeeded", {
+      userId,
+      requestId: fallback.requestId,
+    });
+
+    return {
+      linkToken: fallback.linkToken,
+      expiration: fallback.expiration,
+    };
+  }
 }
 
 export async function exchangePublicTokenForAccounts(input: {
