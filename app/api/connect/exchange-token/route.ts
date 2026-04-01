@@ -7,6 +7,7 @@ import {
 } from "@/lib/server/observability";
 import { PlaidApiError } from "@/financial_connectors/plaidClient";
 import { exchangePublicTokenForAccounts } from "@/financial_connectors/linkService";
+import { checkPlaidConfig } from "@/lib/server/plaidConfigCheck";
 import { enforceApiAuth } from "@/security/authGuard";
 import { enforceRateLimit } from "@/security/rateLimiter";
 import { RequestValidationError, validateJsonBody } from "@/security/requestValidator";
@@ -42,6 +43,18 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
+    const plaidStatus = checkPlaidConfig();
+    if (!plaidStatus.ready) {
+      logServerEvent("error", "connect.exchange_token.config_check_failed", {
+        missing: plaidStatus.missing,
+        warnings: plaidStatus.warnings,
+      });
+      return NextResponse.json(
+        apiError("UNKNOWN_FAILURE", "Account linking is not available. Please contact support.", false),
+        { status: 503 },
+      );
+    }
+
     const body = await validateJsonBody(req, BodySchema);
     const userId = auth.auth.walletUserId;
     const ip = resolveClientIp(req);

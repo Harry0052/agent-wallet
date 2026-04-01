@@ -270,7 +270,12 @@ export function PersonaOnboarding() {
       if (/cancel|exit|dismiss/i.test(msg)) {
         // User closed Plaid — stay on connect phase, don't show error
       } else {
-        setError("Could not connect your account. You can try again later from Settings.");
+        // Surface the real error so users (and support) can diagnose failures
+        const displayMsg = msg && !/request failed/i.test(msg)
+          ? msg
+          : "Could not connect your account. You can try again later from Settings.";
+        setError(displayMsg);
+        console.error("[Onboarding] Plaid connect failed:", msg);
       }
     } finally {
       setIsConnecting(false);
