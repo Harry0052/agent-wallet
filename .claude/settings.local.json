@@ -71,7 +71,9 @@
       "Bash(node --experimental-strip-types --import ./tests/setup.mjs --test tests/moneyIntelligenceCore.test.ts)",
       "Bash(node --experimental-strip-types --import ./tests/setup.mjs --test --test-concurrency=1 'tests/*.test.ts' 'security/tests/*.test.ts')",
       "Bash(node --experimental-strip-types --test 'tests/plaidConfig.test.ts')",
-      "Bash(node --experimental-strip-types --import ./tests/setup.mjs --test --test-concurrency=1 'tests/plaidConfig.test.ts' 'tests/plaidWebhookReplay.test.ts')"
+      "Bash(node --experimental-strip-types --import ./tests/setup.mjs --test --test-concurrency=1 'tests/plaidConfig.test.ts' 'tests/plaidWebhookReplay.test.ts')",
+      "Bash(identify \"/Users/harry/Desktop/agent wallet/public/calico-icon.png\")",
+      "Bash(sips -g pixelWidth -g pixelHeight \"/Users/harry/Desktop/agent wallet/public/calico-icon.png\")"
     ]
   },
   "enableAllProjectMcpServers": true,
