@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Send, X, Loader2 } from "lucide-react";
+import { Send, X } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 
 type CalicoTier = "starter" | "pro" | "autonomous" | null;
 
@@ -185,7 +186,7 @@ export function CalicoAssistant() {
                   <div className="flex justify-start">
                     <div className="rounded-2xl bg-[var(--aw-surface-subtle,#f5f5f5)] px-3 py-2 text-sm text-[var(--aw-text-muted,#888)]">
                       <span className="mr-1">🐱</span>
-                      <Loader2 size={12} className="inline animate-spin" /> Thinking...
+                      <InlineSpinner size={12} className="inline-block" /> Thinking...
                     </div>
                   </div>
                 )}

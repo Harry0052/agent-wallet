@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { ReportsSkeleton } from "@/components/skeleton";
 import { useMemo, useState } from "react";
 import { fmt } from "@/lib/utils";
 import {
@@ -207,11 +207,7 @@ export function ReportsView() {
   const hasConnectedAccounts = connectedAccounts.length > 0;
 
   if (loading) {
-    return (
-      <div className="aw-workspace-page flex items-center justify-center py-32">
-        <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-      </div>
-    );
+    return <ReportsSkeleton />;
   }
 
   return (

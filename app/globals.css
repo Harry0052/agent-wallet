@@ -851,6 +851,17 @@ button {
   animation: calico-ambient-drift 12s ease-in-out infinite;
 }
 
+@keyframes aw-skeleton-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.aw-skeleton {
+  background: linear-gradient(90deg, var(--aw-surface-muted) 0%, var(--aw-surface-emphasis) 40%, var(--aw-surface-muted) 80%);
+  background-size: 800px 100%;
+  animation: aw-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;

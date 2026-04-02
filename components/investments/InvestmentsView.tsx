@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { InvestmentsSkeleton } from "@/components/skeleton";
 import { useEffect, useMemo, useState } from "react";
 import { fmt } from "@/lib/utils";
 import {
@@ -250,11 +251,7 @@ export function InvestmentsView() {
   };
 
   if (loading) {
-    return (
-      <div className="aw-workspace-page flex items-center justify-center py-32">
-        <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-      </div>
-    );
+    return <InvestmentsSkeleton />;
   }
 
   return (

@@ -6,7 +6,6 @@ import {
   ArrowLeftRight,
   PencilLine,
   Filter,
-  Loader2,
   Plus,
   Search,
   Trash2,
@@ -28,6 +27,7 @@ import { ManualEntryModal } from "@/components/finance/ManualDataControls";
 import { ComboboxInput } from "@/components/finance/ComboboxInput";
 import { useFinancialData } from "@/lib/useFinancialData";
 import { onCategoryCorrected } from "@/lib/cacheInvalidation";
+import { TransactionTableSkeleton } from "@/components/skeleton";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS, type ManualAccountRecord } from "@/lib/manualMode";
 import { normalizeTransactionType, type ManualTransactionType } from "@/lib/manualTransactions";
@@ -416,9 +416,7 @@ export function TransactionsView() {
 
       <WorkspacePanel>
         {pageLoading ? (
-          <div className="flex min-h-[480px] items-center justify-center">
-            <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-          </div>
+          <TransactionTableSkeleton rows={8} />
         ) : filteredTransactions.length === 0 ? (
           <WorkspaceEmpty
             icon={<ArrowLeftRight size={22} />}

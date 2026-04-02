@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 import { fmtFull } from "@/lib/utils";
 import {
   fetchSubscriptionStatus,
@@ -142,7 +142,7 @@ export function NotificationSettingsModal({
 
       {loading ? (
         <p className="mt-3 inline-flex items-center gap-2 text-xs text-[var(--aw-text-muted)]">
-          <Loader2 size={12} className="animate-spin" />
+          <InlineSpinner size={12} />
           Loading subscriptions...
         </p>
       ) : subscriptions.length === 0 ? (

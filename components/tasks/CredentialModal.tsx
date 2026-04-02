@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { AlertTriangle, Eye, EyeOff, Loader2, Lock, Shield, X } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Lock, Shield, X } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 
 export interface CredentialRequestDisplay {
   id: string;
@@ -236,7 +237,7 @@ export function CredentialModal({
             >
               {submitting ? (
                 <span className="inline-flex items-center gap-2">
-                  <Loader2 size={15} className="animate-spin" />
+                  <InlineSpinner size={15} />
                   Sending securely...
                 </span>
               ) : (

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 import type { AutomationActionRecord, AutomationActionType } from "@/lib/types";
 import { fmt } from "@/lib/utils";
 import {
@@ -237,7 +238,7 @@ export function SuggestionCard({
             opacity: busy ? 0.5 : 1,
           }}
         >
-          {busy ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={14} />}
+          {busy ? <InlineSpinner size={14} /> : <Check size={14} />}
           Accept
         </button>
         <button

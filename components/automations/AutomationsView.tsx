@@ -87,7 +87,7 @@ export function AutomationsView() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--calico-primary,#FDBA74)] border-t-transparent" />
+        <div className="h-5 w-5 rounded-full border-2 border-[var(--aw-surface-emphasis)] border-t-[var(--aw-primary)]" style={{ animation: "spin 0.8s linear infinite" }} />
       </div>
     );
   }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, Radio } from "lucide-react";
+import { AlertCircle, CheckCircle2, Radio } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 import type { AutomationActionRecord } from "@/lib/types";
 import { acpTheme, acpCard, acpLabel } from "./controlStyles";
 
@@ -227,7 +228,7 @@ export function LiveAgentPanel({ actionId, action }: LiveAgentPanelProps) {
               gap: 10,
             }}
           >
-            <Loader2 size={20} style={{ color: acpTheme.primary, animation: "spin 1s linear infinite" }} />
+            <InlineSpinner size={20} />
             <p
               style={{
                 fontSize: "0.82rem",

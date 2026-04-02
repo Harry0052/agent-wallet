@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, Loader2, Shield } from "lucide-react";
+import { AlertTriangle, Shield } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 import type { AutomationActionRecord } from "@/lib/types";
 import { fmt } from "@/lib/utils";
 import { isDestructive } from "@/components/tasks/ActionCenterTypes";
@@ -205,7 +206,7 @@ export function ApprovalModal({
             >
               {loading ? (
                 <>
-                  <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />
+                  <InlineSpinner size={15} />
                   Executing...
                 </>
               ) : (

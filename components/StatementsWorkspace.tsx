@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, CheckCircle2, Sparkles } from "lucide-react";
+import { StatementsInlineSkeleton, StatementsRecurringSkeleton, InlineSpinner } from "@/components/skeleton";
 import { SourceStateBadge } from "@/components/SourceStateBadge";
 import { fmt, fmtDate } from "@/lib/utils";
 import { emitSmartTelemetry } from "@/services/smartWallet";
@@ -635,10 +636,9 @@ export function StatementsWorkspace() {
           <SourceStateBadge state="Synced" />
         </div>
         {isLoading ? (
-          <p className="mt-3 inline-flex items-center gap-2 text-sm text-[var(--aw-text-muted)]">
-            <Loader2 size={14} className="animate-spin" />
-            Loading summary...
-          </p>
+          <div className="mt-3">
+            <StatementsInlineSkeleton />
+          </div>
         ) : (
           <>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -859,10 +859,7 @@ export function StatementsWorkspace() {
 
         {detailView === "subscriptions" ? (
           isLoading ? (
-            <p className="mt-4 inline-flex items-center gap-2 text-sm text-[var(--aw-text-muted)]">
-              <Loader2 size={14} className="animate-spin" />
-              Loading recurring items...
-            </p>
+            <StatementsRecurringSkeleton />
           ) : (
             <div className="mt-3 space-y-3">
               <form
@@ -1212,7 +1209,7 @@ export function StatementsWorkspace() {
 
             {statementLoading ? (
               <p className="mt-4 inline-flex items-center gap-2 text-sm text-[var(--aw-text-muted)]">
-                <Loader2 size={14} className="animate-spin" />
+                <InlineSpinner size={14} />
                 Loading transactions...
               </p>
             ) : (

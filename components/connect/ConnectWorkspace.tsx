@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, ArrowLeft, Landmark, Loader2, Plus, RefreshCw, Shield, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Landmark, Plus, RefreshCw, Shield, Trash2 } from "lucide-react";
+import { ConnectSkeleton, InlineSpinner } from "@/components/skeleton";
 import Link from "next/link";
 import {
   ConnectApiError,
@@ -312,7 +313,7 @@ export function ConnectWorkspace() {
               disabled={linking || syncing}
               className="aw-button-primary inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold"
             >
-              {linking ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              {linking ? <InlineSpinner size={14} /> : <Plus size={14} />}
               {linking ? "Linking..." : syncing ? "Syncing..." : "Connect account"}
             </button>
           ) : null}
@@ -379,7 +380,7 @@ export function ConnectWorkspace() {
           >
             {reviewingNewAccountsItemId ? (
               <span className="inline-flex items-center gap-1.5">
-                <Loader2 size={12} className="animate-spin" />
+                <InlineSpinner size={12} />
                 Reviewing...
               </span>
             ) : (
@@ -415,9 +416,7 @@ export function ConnectWorkspace() {
       ) : null}
 
       {loading ? (
-        <div className="flex justify-center py-24">
-          <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-        </div>
+        <ConnectSkeleton />
       ) : sourceMode === "manual" ? (
         manualAccounts.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-center">
@@ -548,7 +547,7 @@ export function ConnectWorkspace() {
                       className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
                     >
                       {isRelinking ? (
-                        <Loader2 size={12} className="animate-spin" />
+                        <InlineSpinner size={12} />
                       ) : (
                         <RefreshCw size={12} />
                       )}

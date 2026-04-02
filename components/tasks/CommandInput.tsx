@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { ArrowUp, Loader2 } from "lucide-react";
+import { ArrowUp } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 
 interface CommandInputProps {
   onSubmit: (input: string) => void;
@@ -53,7 +54,7 @@ export function CommandInput({ onSubmit, loading, placeholder }: CommandInputPro
         }}
       >
         {loading ? (
-          <Loader2 size={16} className="animate-spin" />
+          <InlineSpinner size={16} />
         ) : (
           <ArrowUp size={16} />
         )}

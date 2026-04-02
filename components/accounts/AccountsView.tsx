@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Landmark, Loader2, Plus, RefreshCw } from "lucide-react";
+import { Landmark, Plus, RefreshCw } from "lucide-react";
+import { AccountsSkeleton, InlineSpinner } from "@/components/skeleton";
 import {
   AreaChart,
   Area,
@@ -491,11 +492,7 @@ export function AccountsView() {
   };
 
   if (loading) {
-    return (
-      <div className="aw-workspace-page flex items-center justify-center py-32">
-        <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-      </div>
-    );
+    return <AccountsSkeleton />;
   }
 
   if (error) {
@@ -539,7 +536,7 @@ export function AccountsView() {
           title="Account Overview"
           action={financialInfraLoading ? (
             <div className="inline-flex items-center gap-2 text-xs text-[var(--aw-text-muted)]">
-              <Loader2 size={12} className="animate-spin" />
+              <InlineSpinner size={12} />
               Refreshing
             </div>
           ) : null}

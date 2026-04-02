@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { CashFlowSkeleton } from "@/components/skeleton";
 import { fmt, fmtDate } from "@/lib/utils";
 
 /* ── Category color map (reused from Sankey for visual consistency) ── */
@@ -344,11 +344,7 @@ export function CashFlowView() {
   };
 
   if (loading) {
-    return (
-      <div className="aw-workspace-page flex items-center justify-center py-32">
-        <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-      </div>
-    );
+    return <CashFlowSkeleton />;
   }
 
   if (error) {

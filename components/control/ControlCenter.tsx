@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
+import { ControlCenterSkeleton } from "@/components/skeleton";
 import {
   fetchTaskCenterSnapshot,
   type TaskCenterSnapshot,
@@ -166,9 +167,7 @@ export function ControlCenter() {
 
       {/* Loading */}
       {loading && (
-        <div style={{ display: "flex", justifyContent: "center", padding: "80px 0" }}>
-          <Loader2 size={22} style={{ color: acpTheme.primary, animation: "spin 1s linear infinite" }} />
-        </div>
+        <ControlCenterSkeleton />
       )}
 
       {/* Error */}
@@ -239,7 +238,7 @@ export function ControlCenter() {
         />
       )}
 
-      {/* Spin animation for Loader2 */}
+      {/* Spin animation for inline spinners */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }

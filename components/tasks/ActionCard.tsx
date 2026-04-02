@@ -7,12 +7,12 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  Loader2,
   RotateCcw,
   Shield,
   X,
   Zap,
 } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 import type { AutomationActionRecord } from "@/lib/types";
 import { fmt } from "@/lib/utils";
 import {
@@ -203,7 +203,7 @@ export function ActionCard({
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-[0.78rem] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ background: "var(--aw-text)" }}
               >
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                {busy ? <InlineSpinner size={14} /> : <Check size={14} />}
                 Yes, proceed
               </button>
               <button
@@ -228,7 +228,7 @@ export function ActionCard({
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-[0.78rem] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ background: "var(--aw-text)" }}
               >
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                {busy ? <InlineSpinner size={14} /> : <Zap size={14} />}
                 Approve
               </button>
             )}

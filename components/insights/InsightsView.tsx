@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Lightbulb, Loader2 } from "lucide-react";
+import { Lightbulb } from "lucide-react";
+import { InsightsSkeleton } from "@/components/skeleton";
 import { fmt } from "@/lib/utils";
 import type { Insight } from "@/lib/types";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
@@ -252,9 +253,7 @@ export function InsightsView() {
       />
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-        </div>
+        <InsightsSkeleton />
       ) : allInsights.length === 0 ? (
         <WorkspaceEmpty
           icon={<Lightbulb size={24} />}

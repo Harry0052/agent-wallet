@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
-  Loader2,
   RefreshCw,
   Zap,
 } from "lucide-react";
+import { TaskCenterSkeleton } from "@/components/skeleton";
 import {
   attemptTaskCenterAction,
   confirmTaskCenterAction,
@@ -303,9 +303,7 @@ export function TaskCenterView() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex justify-center py-20">
-          <Loader2 size={20} className="animate-spin text-[#3B82F6]" />
-        </div>
+        <TaskCenterSkeleton />
       )}
 
       {/* Error */}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { HomeSkeleton } from "@/components/skeleton";
 import { CustomizableDashboard } from "@/components/dashboard/CustomizableDashboard";
 import type { DashboardGoalSummary, DashboardInvestmentHolding } from "@/components/dashboard/dashboardTypes";
 import { useFinancialData } from "@/lib/useFinancialData";
@@ -112,11 +112,7 @@ export function SmartWalletHome() {
     || investments.length > 0;
 
   if (dashboardLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center py-32" style={{ background: calicoTheme.background }}>
-        <Loader2 size={20} className="animate-spin" color={calicoTheme.primary} />
-      </div>
-    );
+    return <HomeSkeleton />;
   }
 
   if (dashboardError) {

@@ -3,7 +3,6 @@
 import {
   CheckCircle2,
   ChevronRight,
-  Loader2,
   PencilLine,
   Plus,
   Target,
@@ -20,6 +19,7 @@ import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
 import { contributionAmount, parseGoalContributionTarget } from "@/lib/manualTransactions";
 import { useFinancialData } from "@/lib/useFinancialData";
+import { GoalsSkeleton } from "@/components/skeleton";
 
 type GoalSource = "manual" | "connected";
 type GoalPriority = "high" | "medium" | "low";
@@ -405,11 +405,7 @@ export function GoalsView() {
   };
 
   if (financialData.loading) {
-    return (
-      <div className="aw-page flex items-center justify-center py-32">
-        <Loader2 size={20} className="animate-spin text-[var(--calico-primary, #FDBA74)]" />
-      </div>
-    );
+    return <GoalsSkeleton />;
   }
 
   return (

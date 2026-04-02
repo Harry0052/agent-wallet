@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  Loader2,
   PencilLine,
   RefreshCw,
   Trash2,
@@ -31,6 +30,7 @@ import {
 } from "@/components/finance/ManualDataControls";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { MANUAL_STORAGE_KEYS } from "@/lib/manualMode";
+import { SubscriptionsSkeleton } from "@/components/skeleton";
 
 type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
 type RecurringCashflowType = "income" | "expense" | "transfer";
@@ -552,11 +552,7 @@ export function SubscriptionsView() {
   const netExpected = monthTotals.income - monthTotals.expenses;
 
   if (loading) {
-    return (
-      <div className="aw-workspace-page flex items-center justify-center py-32">
-        <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-      </div>
-    );
+    return <SubscriptionsSkeleton />;
   }
 
   return (

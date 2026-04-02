@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
+import { InlineSpinner } from "@/components/skeleton";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 
 interface FeedbackModalProps {
@@ -176,7 +177,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
             >
               {submitting ? (
                 <>
-                  <Loader2 size={15} className="animate-spin" />
+                  <InlineSpinner size={15} />
                   Sending...
                 </>
               ) : (

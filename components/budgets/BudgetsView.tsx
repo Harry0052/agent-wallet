@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Loader2, PencilLine, PieChart, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, PencilLine, PieChart, Trash2 } from "lucide-react";
+import { BudgetsSkeleton } from "@/components/skeleton";
 import { useEffect, useMemo, useState } from "react";
 import { fmt } from "@/lib/utils";
 import {
@@ -498,11 +499,7 @@ export function BudgetsView() {
   };
 
   if (financialData.loading) {
-    return (
-      <div className="aw-workspace-page flex items-center justify-center py-32">
-        <Loader2 size={20} className="animate-spin text-[var(--aw-primary)]" />
-      </div>
-    );
+    return <BudgetsSkeleton />;
   }
 
   return (
