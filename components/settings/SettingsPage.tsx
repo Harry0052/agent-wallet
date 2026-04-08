@@ -1002,6 +1002,8 @@ function BillingSection({
 function ReferralsSection({ account }: { account: AuthenticatedAccount | null }) {
   const [copied, setCopied] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
+  // refreshKey triggers re-fetch when incremented (e.g. after a conversion)
+  const [refreshKey, setRefreshKey] = useState(0);
   const [stats, setStats] = useState<{
     referralCode: string;
     referralLink: string;
@@ -1011,8 +1013,21 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
     monthlyEarnings: number;
     totalEarnings: number;
     pendingSignups: number;
+    pendingPayouts: number;
+    approvedPayouts: number;
+    paidPayouts: number;
+    recentConversions: Array<{
+      plan: string;
+      payoutAmount: number;
+      commissionRate: number;
+      createdAt: string;
+      referredEmail: string | null;
+      payoutStatus: string | null;
+    }>;
   } | null>(null);
 
+  // Fetch referral stats from the live API — re-runs when account changes
+  // or refreshKey increments so the progress bar always reflects current data.
   useEffect(() => {
     if (!account) {
       setStatsLoading(false);
@@ -1026,6 +1041,14 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
       })
       .catch(() => {})
       .finally(() => setStatsLoading(false));
+  }, [account, refreshKey]);
+
+  // Auto-refresh stats every 30s when the section is visible so the progress
+  // bar updates shortly after a conversion completes on the backend.
+  useEffect(() => {
+    if (!account) return;
+    const interval = setInterval(() => setRefreshKey((k) => k + 1), 30_000);
+    return () => clearInterval(interval);
   }, [account]);
 
   const referralLink = stats?.referralLink ?? null;
@@ -1051,7 +1074,7 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
         </p>
       </div>
 
-      {/* Progress toward 100% tier */}
+      {/* Progress toward 100% tier — reads from live stats, not stale/mock data */}
       {stats ? (
         <div className="rounded-xl border border-[var(--calico-primary,#FDBA74)]/30 bg-[rgba(253,186,116,0.08)] p-4">
           <div className="flex items-center justify-between">
@@ -1083,7 +1106,7 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
         </div>
       ) : null}
 
-      {/* Earnings summary */}
+      {/* Earnings summary — now includes payout status */}
       {stats ? (
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl bg-[var(--aw-surface-1)] p-3 text-center">
@@ -1096,7 +1119,65 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
           </div>
           <div className="rounded-xl bg-[var(--aw-surface-1)] p-3 text-center">
             <p className="text-lg font-semibold text-[var(--aw-text)]">{stats.pendingSignups}</p>
-            <p className="text-[10px] text-[var(--aw-text-muted)]">Pending</p>
+            <p className="text-[10px] text-[var(--aw-text-muted)]">Pending signups</p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Payout status summary */}
+      {stats && (stats.pendingPayouts > 0 || stats.approvedPayouts > 0 || stats.paidPayouts > 0) ? (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl bg-[var(--aw-surface-1)] p-3 text-center">
+            <p className="text-lg font-semibold text-[var(--aw-text)]">{stats.pendingPayouts}</p>
+            <p className="text-[10px] text-[var(--aw-text-muted)]">Pending review</p>
+          </div>
+          <div className="rounded-xl bg-[var(--aw-surface-1)] p-3 text-center">
+            <p className="text-lg font-semibold text-[var(--aw-text)]">{stats.approvedPayouts}</p>
+            <p className="text-[10px] text-[var(--aw-text-muted)]">Approved</p>
+          </div>
+          <div className="rounded-xl bg-[var(--aw-surface-1)] p-3 text-center">
+            <p className="text-lg font-semibold text-[var(--aw-text)]">{stats.paidPayouts}</p>
+            <p className="text-[10px] text-[var(--aw-text-muted)]">Paid</p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Recent referral activity */}
+      {stats && stats.recentConversions.length > 0 ? (
+        <div className="rounded-xl border border-[var(--aw-border)] p-4">
+          <p className="mb-2 text-sm font-semibold text-[var(--aw-text)]">Recent activity</p>
+          <div className="space-y-2">
+            {stats.recentConversions.map((conv, i) => (
+              <div key={i} className="flex items-center justify-between text-xs">
+                <span className="text-[var(--aw-text-muted)]">
+                  {conv.referredEmail
+                    ? `${conv.referredEmail.split('@')[0]} subscribed to ${conv.plan}`
+                    : `Someone subscribed to ${conv.plan}`}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="font-semibold text-[var(--aw-text)]">{fmt(conv.payoutAmount)}</span>
+                  {conv.payoutStatus ? (
+                    <span
+                      className="rounded-full px-1.5 py-0.5 text-[10px]"
+                      style={{
+                        backgroundColor:
+                          conv.payoutStatus === 'paid' ? 'rgba(22,163,74,0.1)' :
+                          conv.payoutStatus === 'approved' ? 'rgba(59,130,246,0.1)' :
+                          conv.payoutStatus === 'rejected' ? 'rgba(239,68,68,0.1)' :
+                          'rgba(245,158,11,0.1)',
+                        color:
+                          conv.payoutStatus === 'paid' ? 'var(--aw-success)' :
+                          conv.payoutStatus === 'approved' ? '#3B82F6' :
+                          conv.payoutStatus === 'rejected' ? '#EF4444' :
+                          '#F59E0B',
+                      }}
+                    >
+                      {conv.payoutStatus === 'pending_review' ? 'pending' : conv.payoutStatus}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}

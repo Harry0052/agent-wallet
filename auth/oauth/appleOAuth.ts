@@ -14,6 +14,7 @@ export interface AppleOAuthStatePayload {
   nonce: string;
   redirectTo: string;
   expiresAt: number;
+  referralCode?: string;
 }
 
 export interface VerifiedAppleIdentity {
@@ -104,15 +105,19 @@ function normalizeOptionalText(value: unknown): string | null {
 
 export function createAppleAuthorizationRequest(input: {
   redirectTo?: string | null;
+  referralCode?: string | null;
 }): {
   authorizationUrl: string;
   stateToken: string;
 } {
+  const referralCode = input.referralCode?.trim().slice(0, 20) || undefined;
+
   const statePayload: AppleOAuthStatePayload = {
     stateId: randomBytes(24).toString('base64url'),
     nonce: randomBytes(24).toString('base64url'),
     redirectTo: safeRedirectPath(input.redirectTo),
     expiresAt: Date.now() + APPLE_OAUTH_STATE_TTL_MS,
+    ...(referralCode ? { referralCode } : {}),
   };
 
   const payloadEncoded = base64UrlJson(statePayload);

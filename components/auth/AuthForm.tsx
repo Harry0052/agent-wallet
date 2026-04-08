@@ -21,14 +21,23 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const oauthError = searchParams.get('oauth_error');
   const signupSuccess = searchParams.get('signup');
   const nextPath = searchParams.get('next');
-  const refCode = searchParams.get('ref');
+  // Referral code: prefer URL param, fall back to localStorage so the code
+  // survives navigation between screens before signup completes.
+  const urlRefCode = searchParams.get('ref');
+  const [refCode, setRefCode] = useState<string | null>(urlRefCode);
 
-  // Persist referral code to localStorage so it survives OAuth redirects
   useEffect(() => {
-    if (refCode) {
-      try { localStorage.setItem('calico.referral_code', refCode); } catch {}
+    if (urlRefCode) {
+      try { localStorage.setItem('calico.referral_code', urlRefCode); } catch {}
+      setRefCode(urlRefCode);
+    } else if (!refCode) {
+      // No ref in URL — check localStorage for a previously captured code
+      try {
+        const stored = localStorage.getItem('calico.referral_code');
+        if (stored) setRefCode(stored);
+      } catch {}
     }
-  }, [refCode]);
+  }, [urlRefCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const googleOauthHref = useMemo(() => {
     const params = new URLSearchParams();

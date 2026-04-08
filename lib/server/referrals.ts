@@ -51,7 +51,7 @@ export async function attributeReferral(params: {
 
   const referrerUserId = result.rows[0].id;
 
-  // Block self-referrals
+  // Block self-referrals — a user cannot refer themselves
   if (referrerUserId === referredUserId) {
     logServerEvent('info', 'referral.attribution.self_referral_blocked', {
       userId: referredUserId,
@@ -60,7 +60,8 @@ export async function attributeReferral(params: {
     return;
   }
 
-  // Insert attribution (UNIQUE on referred_user_id prevents overwrites)
+  // Insert attribution (UNIQUE on referred_user_id prevents overwrites —
+  // only the first valid referrer gets attribution)
   try {
     await query(
       `INSERT INTO referral_attributions (id, referrer_user_id, referred_user_id, referral_code, created_at)
@@ -88,7 +89,139 @@ export async function attributeReferral(params: {
   }
 }
 
+// ── In-app notification helper ────────────────────────────────────────────
+// Creates a notification in financial_notifications for the referrer when
+// a referred user converts to a paid plan.
+
+async function createReferralConversionNotification(params: {
+  referrerUserId: string;
+  referredUserId: string;
+  plan: string;
+}): Promise<void> {
+  const { referrerUserId, referredUserId, plan } = params;
+
+  // Try to get the referred user's email (as proxy for name) for notification copy.
+  // The app_users table has email but not first name; user_autofill_profiles has full_name.
+  let displayName: string | null = null;
+  try {
+    const nameResult = await query<{ full_name: string | null; email: string }>(
+      `SELECT p.full_name, u.email
+       FROM app_users u
+       LEFT JOIN user_autofill_profiles p ON p.user_id = u.id
+       WHERE u.id = $1
+       LIMIT 1`,
+      [referredUserId],
+    );
+    const row = nameResult.rows[0];
+    if (row?.full_name) {
+      // Use first name only for privacy
+      displayName = row.full_name.split(' ')[0] || null;
+    }
+  } catch {
+    // Non-critical — fall back to generic copy
+  }
+
+  // Notification copy per spec:
+  // "[First Name] used your referral and subscribed. Your payout will be completed in 3–7 business days."
+  const title = 'Referral converted!';
+  const summary = displayName
+    ? `${displayName} used your referral and subscribed to ${plan}. Your payout will be completed in 3–7 business days.`
+    : `Someone used your referral and subscribed to ${plan}. Your payout will be completed in 3–7 business days.`;
+
+  // Resolve the referrer's wallet_user_id since financial_notifications uses wallet user IDs
+  let walletUserId: string | null = null;
+  try {
+    const walletResult = await query<{ wallet_user_id: string }>(
+      `SELECT wallet_user_id FROM app_users WHERE id = $1 LIMIT 1`,
+      [referrerUserId],
+    );
+    walletUserId = walletResult.rows[0]?.wallet_user_id ?? null;
+  } catch {
+    // Non-critical
+  }
+
+  if (!walletUserId) {
+    logServerEvent('warn', 'referral.notification.no_wallet_user', { referrerUserId });
+    return;
+  }
+
+  const dedupKey = `referral_conversion_${referredUserId}`;
+  try {
+    await query(
+      `INSERT INTO financial_notifications (
+        id, user_id, dedup_key, kind, title, summary, priority, status,
+        deep_link, payload, cooldown_until, last_triggered_at, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, 'referral_conversion', $4, $5, 'high', 'unread',
+        '/settings?section=referrals', $6, NOW() + INTERVAL '1 hour', NOW(), NOW(), NOW()
+      ) ON CONFLICT (user_id, dedup_key) DO UPDATE SET
+        title = EXCLUDED.title,
+        summary = EXCLUDED.summary,
+        status = 'unread',
+        last_triggered_at = NOW(),
+        updated_at = NOW()`,
+      [
+        `fn_${randomBytes(12).toString('hex')}`,
+        walletUserId,
+        dedupKey,
+        title,
+        summary,
+        JSON.stringify({ referredUserId, plan }),
+      ],
+    );
+
+    logServerEvent('info', 'referral.notification.created', {
+      referrerUserId,
+      referredUserId,
+      plan,
+    });
+  } catch (error) {
+    // Notification failure must not block the conversion flow
+    logServerEvent('warn', 'referral.notification.failed', {
+      referrerUserId,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+  }
+}
+
+// ── Payout record creation ────────────────────────────────────────────────
+// Creates a referral_payouts row with status pending_review.
+// Admin must approve before any money is sent.
+
+async function createReferralPayout(params: {
+  referrerUserId: string;
+  conversionId: string;
+  payoutAmount: number;
+}): Promise<void> {
+  try {
+    await query(
+      `INSERT INTO referral_payouts (id, referrer_user_id, referral_conversion_id, amount, currency, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'usd', 'pending_review', NOW(), NOW())
+       ON CONFLICT (referral_conversion_id) DO NOTHING`,
+      [
+        `rpay_${randomBytes(12).toString('hex')}`,
+        params.referrerUserId,
+        params.conversionId,
+        params.payoutAmount,
+      ],
+    );
+
+    logServerEvent('info', 'referral.payout.created', {
+      referrerUserId: params.referrerUserId,
+      conversionId: params.conversionId,
+      amount: params.payoutAmount,
+    });
+  } catch (error) {
+    logServerEvent('warn', 'referral.payout.creation_failed', {
+      conversionId: params.conversionId,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+  }
+}
+
 // ── Conversion tracking (called from webhook) ──────────────────────────────
+// Only called after backend-verified subscription success via Stripe webhook.
+// Never trust frontend for conversion status.
 
 export async function recordReferralConversion(params: {
   referredUserId: string;
@@ -107,7 +240,8 @@ export async function recordReferralConversion(params: {
 
   const referrerUserId = attr.rows[0].referrer_user_id;
 
-  // Check if already converted (UNIQUE on referred_user_id and stripe_event_id prevents dupes)
+  // Check if already converted (UNIQUE on referred_user_id prevents dupes —
+  // duplicate referral credit is not awarded multiple times for the same referred user)
   const existing = await query<{ id: string }>(
     `SELECT id FROM referral_conversions WHERE referred_user_id = $1`,
     [referredUserId],
@@ -139,16 +273,19 @@ export async function recordReferralConversion(params: {
   const planPrice = PLAN_PRICES[plan] ?? PLAN_PRICES.starter;
   const payoutAmount = Math.round(planPrice * commissionRate * 100) / 100;
 
+  const conversionId = `rconv_${randomBytes(12).toString('hex')}`;
+
   try {
     await query(
       `INSERT INTO referral_conversions (
         id, referrer_user_id, referred_user_id, referred_plan,
         stripe_event_id, month_key, referral_number_for_month,
-        commission_rate, plan_price, payout_amount, status, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', NOW())
+        commission_rate, plan_price, payout_amount, status,
+        review_flag, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', FALSE, NOW(), NOW())
       ON CONFLICT (referred_user_id) DO NOTHING`,
       [
-        `rconv_${randomBytes(12).toString('hex')}`,
+        conversionId,
         referrerUserId,
         referredUserId,
         plan,
@@ -169,6 +306,20 @@ export async function recordReferralConversion(params: {
       referralNumber,
       commissionRate,
       payoutAmount,
+    });
+
+    // Create payout record with pending_review status (admin must approve)
+    await createReferralPayout({
+      referrerUserId,
+      conversionId,
+      payoutAmount,
+    });
+
+    // Send in-app notification to the referrer
+    await createReferralConversionNotification({
+      referrerUserId,
+      referredUserId,
+      plan,
     });
   } catch (error) {
     logServerEvent('error', 'referral.conversion.failed', {
@@ -191,12 +342,19 @@ export interface ReferralStats {
   monthlyEarnings: number;
   totalEarnings: number;
   pendingSignups: number;
+  // Enhanced: includes referred user info and payout status
   recentConversions: Array<{
     plan: string;
     payoutAmount: number;
     commissionRate: number;
     createdAt: string;
+    referredEmail: string | null;
+    payoutStatus: string | null;
   }>;
+  // Payout summary
+  pendingPayouts: number;
+  approvedPayouts: number;
+  paidPayouts: number;
 }
 
 export async function getReferralStats(userId: string): Promise<ReferralStats> {
@@ -217,19 +375,23 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
     totalEarnings: 0,
     pendingSignups: 0,
     recentConversions: [],
+    pendingPayouts: 0,
+    approvedPayouts: 0,
+    paidPayouts: 0,
   };
 
   // Wrap DB queries in try-catch so missing tables don't crash the endpoint.
-  // The referral tables are created by schema.sql but may not exist on
-  // databases that haven't run the latest migration yet.
   let monthlyConversions = 0;
   let monthlyEarnings = 0;
   let totalEarnings = 0;
   let pendingSignups = 0;
   let recentConversions: ReferralStats['recentConversions'] = [];
+  let pendingPayouts = 0;
+  let approvedPayouts = 0;
+  let paidPayouts = 0;
 
   try {
-    const [monthResult, totalResult, pendingResult, recentResult] = await Promise.all([
+    const [monthResult, totalResult, pendingResult, recentResult, payoutResult] = await Promise.all([
       query<{ count: string; total: string }>(
         `SELECT COUNT(*)::text AS count, COALESCE(SUM(payout_amount), 0)::text AS total
          FROM referral_conversions
@@ -251,19 +413,34 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
            )`,
         [userId],
       ),
+      // Enhanced: join to app_users for referred email, join to referral_payouts for payout status
       query<{
         referred_plan: string;
         payout_amount: string;
         commission_rate: string;
         created_at: string;
+        referred_email: string | null;
+        payout_status: string | null;
       }>(
-        `SELECT referred_plan, payout_amount::text, commission_rate::text, created_at::text
-         FROM referral_conversions
-         WHERE referrer_user_id = $1
-         ORDER BY created_at DESC
+        `SELECT rc.referred_plan, rc.payout_amount::text, rc.commission_rate::text,
+                rc.created_at::text, u.email AS referred_email,
+                rp.status AS payout_status
+         FROM referral_conversions rc
+         LEFT JOIN app_users u ON u.id = rc.referred_user_id
+         LEFT JOIN referral_payouts rp ON rp.referral_conversion_id = rc.id
+         WHERE rc.referrer_user_id = $1
+         ORDER BY rc.created_at DESC
          LIMIT 10`,
         [userId],
       ),
+      // Payout status summary
+      query<{ status: string; count: string }>(
+        `SELECT rp.status, COUNT(*)::text AS count
+         FROM referral_payouts rp
+         WHERE rp.referrer_user_id = $1
+         GROUP BY rp.status`,
+        [userId],
+      ).catch(() => ({ rows: [] as { status: string; count: string }[] })),
     ]);
 
     monthlyConversions = Number(monthResult.rows[0]?.count || '0');
@@ -275,7 +452,17 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
       payoutAmount: Number(r.payout_amount),
       commissionRate: Number(r.commission_rate),
       createdAt: r.created_at,
+      referredEmail: r.referred_email ?? null,
+      payoutStatus: r.payout_status ?? null,
     }));
+
+    // Parse payout summary
+    for (const row of payoutResult.rows) {
+      const count = Number(row.count);
+      if (row.status === 'pending_review') pendingPayouts += count;
+      else if (row.status === 'approved') approvedPayouts += count;
+      else if (row.status === 'paid') paidPayouts += count;
+    }
   } catch (error) {
     // Tables may not exist yet — return zero-state with valid referral link
     logServerEvent('warn', 'referral.stats.query_failed', {
@@ -299,5 +486,231 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
     totalEarnings: Math.round(totalEarnings * 100) / 100,
     pendingSignups,
     recentConversions,
+    pendingPayouts,
+    approvedPayouts,
+    paidPayouts,
   };
+}
+
+// ── Admin: List all referral data ───────────────────────────────────────────
+// Returns a paginated view of referral attributions + conversions + payouts
+// for admin review. Includes who referred who, conversion status, and payout state.
+
+export interface AdminReferralRecord {
+  attributionId: string;
+  referrerUserId: string;
+  referrerEmail: string | null;
+  referredUserId: string;
+  referredEmail: string | null;
+  referralCode: string;
+  signedUpAt: string;
+  // Conversion fields (null if not yet converted)
+  conversionId: string | null;
+  referredPlan: string | null;
+  conversionStatus: string | null;
+  payoutAmount: number | null;
+  commissionRate: number | null;
+  convertedAt: string | null;
+  reviewFlag: boolean;
+  notes: string | null;
+  // Payout fields
+  payoutId: string | null;
+  payoutStatus: string | null;
+  paidAt: string | null;
+}
+
+export async function getAdminReferralRecords(params: {
+  limit?: number;
+  offset?: number;
+  status?: string;
+}): Promise<{ records: AdminReferralRecord[]; total: number }> {
+  const limit = Math.min(params.limit ?? 50, 200);
+  const offset = params.offset ?? 0;
+
+  // Build WHERE clause for optional status filter
+  const conditions: string[] = [];
+  const queryParams: (string | number)[] = [];
+  let paramIndex = 1;
+
+  if (params.status) {
+    conditions.push(`(rc.status = $${paramIndex} OR rp.status = $${paramIndex})`);
+    queryParams.push(params.status);
+    paramIndex++;
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [dataResult, countResult] = await Promise.all([
+    query<{
+      attribution_id: string;
+      referrer_user_id: string;
+      referrer_email: string | null;
+      referred_user_id: string;
+      referred_email: string | null;
+      referral_code: string;
+      signed_up_at: string;
+      conversion_id: string | null;
+      referred_plan: string | null;
+      conversion_status: string | null;
+      payout_amount: string | null;
+      commission_rate: string | null;
+      converted_at: string | null;
+      review_flag: boolean | null;
+      notes: string | null;
+      payout_id: string | null;
+      payout_status: string | null;
+      paid_at: string | null;
+    }>(
+      `SELECT
+        ra.id AS attribution_id,
+        ra.referrer_user_id,
+        referrer.email AS referrer_email,
+        ra.referred_user_id,
+        referred.email AS referred_email,
+        ra.referral_code,
+        ra.created_at::text AS signed_up_at,
+        rc.id AS conversion_id,
+        rc.referred_plan,
+        rc.status AS conversion_status,
+        rc.payout_amount::text,
+        rc.commission_rate::text,
+        rc.created_at::text AS converted_at,
+        COALESCE(rc.review_flag, FALSE) AS review_flag,
+        rc.notes,
+        rp.id AS payout_id,
+        rp.status AS payout_status,
+        rp.paid_at::text
+      FROM referral_attributions ra
+      LEFT JOIN app_users referrer ON referrer.id = ra.referrer_user_id
+      LEFT JOIN app_users referred ON referred.id = ra.referred_user_id
+      LEFT JOIN referral_conversions rc ON rc.referred_user_id = ra.referred_user_id
+      LEFT JOIN referral_payouts rp ON rp.referral_conversion_id = rc.id
+      ${whereClause}
+      ORDER BY ra.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...queryParams, limit, offset],
+    ),
+    query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM referral_attributions ra
+       LEFT JOIN referral_conversions rc ON rc.referred_user_id = ra.referred_user_id
+       LEFT JOIN referral_payouts rp ON rp.referral_conversion_id = rc.id
+       ${whereClause}`,
+      queryParams,
+    ),
+  ]);
+
+  return {
+    records: dataResult.rows.map((r) => ({
+      attributionId: r.attribution_id,
+      referrerUserId: r.referrer_user_id,
+      referrerEmail: r.referrer_email,
+      referredUserId: r.referred_user_id,
+      referredEmail: r.referred_email,
+      referralCode: r.referral_code,
+      signedUpAt: r.signed_up_at,
+      conversionId: r.conversion_id,
+      referredPlan: r.referred_plan,
+      conversionStatus: r.conversion_status,
+      payoutAmount: r.payout_amount ? Number(r.payout_amount) : null,
+      commissionRate: r.commission_rate ? Number(r.commission_rate) : null,
+      convertedAt: r.converted_at,
+      reviewFlag: r.review_flag ?? false,
+      notes: r.notes,
+      payoutId: r.payout_id,
+      payoutStatus: r.payout_status,
+      paidAt: r.paid_at,
+    })),
+    total: Number(countResult.rows[0]?.count || '0'),
+  };
+}
+
+// ── Admin: Update payout status ─────────────────────────────────────────────
+// Moves a payout through: pending_review → approved → paid (or → rejected)
+// Admin must verify legitimacy before approving. No auto-payout.
+
+const VALID_PAYOUT_STATUSES = ['pending_review', 'approved', 'paid', 'rejected'] as const;
+type PayoutStatus = typeof VALID_PAYOUT_STATUSES[number];
+
+export async function updatePayoutStatus(params: {
+  payoutId: string;
+  newStatus: string;
+  notes?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { payoutId, newStatus, notes } = params;
+
+  if (!VALID_PAYOUT_STATUSES.includes(newStatus as PayoutStatus)) {
+    return { ok: false, error: `Invalid status: ${newStatus}. Must be one of: ${VALID_PAYOUT_STATUSES.join(', ')}` };
+  }
+
+  const paidAt = newStatus === 'paid' ? 'NOW()' : 'NULL';
+
+  try {
+    const result = await query(
+      `UPDATE referral_payouts
+       SET status = $1, updated_at = NOW(), paid_at = ${paidAt}
+       WHERE id = $2
+       RETURNING id`,
+      [newStatus, payoutId],
+    );
+
+    if (!result.rows[0]) {
+      return { ok: false, error: 'Payout not found' };
+    }
+
+    // Also update notes on the parent conversion if provided
+    if (notes) {
+      await query(
+        `UPDATE referral_conversions
+         SET notes = $1, updated_at = NOW()
+         WHERE id = (SELECT referral_conversion_id FROM referral_payouts WHERE id = $2)`,
+        [notes, payoutId],
+      );
+    }
+
+    logServerEvent('info', 'referral.payout.status_updated', {
+      payoutId,
+      newStatus,
+    });
+
+    return { ok: true };
+  } catch (error) {
+    logServerEvent('error', 'referral.payout.update_failed', {
+      payoutId,
+      newStatus,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+    return { ok: false, error: 'Database error' };
+  }
+}
+
+// ── Admin: Flag a referral for review ───────────────────────────────────────
+
+export async function flagReferralForReview(params: {
+  conversionId: string;
+  reviewFlag: boolean;
+  notes?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const result = await query(
+      `UPDATE referral_conversions
+       SET review_flag = $1, notes = COALESCE($2, notes), updated_at = NOW()
+       WHERE id = $3
+       RETURNING id`,
+      [params.reviewFlag, params.notes ?? null, params.conversionId],
+    );
+
+    if (!result.rows[0]) {
+      return { ok: false, error: 'Conversion not found' };
+    }
+
+    logServerEvent('info', 'referral.conversion.flagged', {
+      conversionId: params.conversionId,
+      reviewFlag: params.reviewFlag,
+    });
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'unknown' };
+  }
 }

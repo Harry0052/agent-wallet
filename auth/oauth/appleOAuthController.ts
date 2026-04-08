@@ -14,6 +14,7 @@ import {
   verifyAppleStateToken,
 } from '@/auth/oauth/appleOAuth';
 import { signInWithAppleOAuth } from '@/auth/oauth/appleOAuthService';
+import { attributeReferral } from '@/lib/server/referrals';
 import { enforceRateLimit } from '@/security/rateLimiter';
 import {
   enforceSecurityIpBlock,
@@ -85,7 +86,8 @@ export async function handleAppleOAuthLogin(request: NextRequest): Promise<NextR
 
   try {
     const redirectTo = request.nextUrl.searchParams.get('next');
-    const oauth = createAppleAuthorizationRequest({ redirectTo });
+    const referralCode = request.nextUrl.searchParams.get('ref');
+    const oauth = createAppleAuthorizationRequest({ redirectTo, referralCode });
     return NextResponse.redirect(oauth.authorizationUrl);
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'oauth_login_unavailable';
@@ -167,6 +169,18 @@ export async function handleAppleOAuthCallback(request: NextRequest): Promise<Ne
       identity,
       displayName: parseAppleUserDisplayName(form.userField),
     });
+
+    // Attribute referral if a code was passed through the Apple OAuth state
+    if (statePayload.referralCode && user.appUserId) {
+      try {
+        await attributeReferral({
+          referralCode: statePayload.referralCode,
+          referredUserId: user.appUserId,
+        });
+      } catch {
+        // Referral attribution failure must not block login
+      }
+    }
 
     const session = await createSession({
       appUserId: user.appUserId,
