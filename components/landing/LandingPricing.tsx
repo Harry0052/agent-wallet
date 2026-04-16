@@ -9,7 +9,7 @@ import { fadeUp, staggerContainer, viewportOnce } from "./landingMotion";
 const plans = [
   {
     name: "Starter",
-    price: "$8.99",
+    price: "$5",
     period: "/month",
     tagline: "A simple, stress-free view of your money.",
     bestFor: "Best for getting organized",
@@ -26,7 +26,7 @@ const plans = [
   },
   {
     name: "Pro",
-    price: "$29.99",
+    price: "$20",
     period: "/month",
     tagline: "Smarter guidance and clearer next steps.",
     bestFor: "Best for smarter money decisions",
@@ -38,6 +38,7 @@ const plans = [
       "AI insights and smart alerts",
       "Recurring bill detection",
       "Spending trends and forecasts",
+      "Investments — portfolio tracking and guidance",
       "Affordability check",
       "Priority support",
     ],
@@ -47,17 +48,16 @@ const plans = [
   },
   {
     name: "Fully Autonomous",
-    price: "$89.99",
+    price: "$30",
     period: "/month",
     tagline: "Calico reduces effort and handles more for you.",
-    bestFor: "Best for active financial optimization",
+    bestFor: "Best for hands-off money management",
     features: [
       "Everything in Pro",
       "Task center with auto-actions",
       "Action approval workflows",
       "Advanced money intelligence",
       "Financial memory",
-      "Investments page",
     ],
     cta: "Subscribe to Autonomous",
     href: "/signup?plan=autonomous",

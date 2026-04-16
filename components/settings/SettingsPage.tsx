@@ -23,6 +23,7 @@ import {
 import { EditProfileModal } from "@/modals/EditProfileModal";
 import { NotificationSettingsModal } from "@/modals/NotificationSettingsModal";
 import { SecuritySettingsModal } from "@/modals/SecuritySettingsModal";
+import { SettingsModal } from "@/components/settings/SettingsModal";
 import {
   fetchAuthenticatedAccount,
   type AuthenticatedAccount,
@@ -893,9 +894,9 @@ function InstitutionsSection() {
 }
 
 const PLAN_DISPLAY: Record<PlanId, { name: string; price: string; description: string; bestFor: string }> = {
-  starter: { name: "Starter", price: "$8.99/mo", description: "See where you stand", bestFor: "Best for getting organized" },
-  pro: { name: "Pro", price: "$29.99/mo", description: "Understand what to do next", bestFor: "Best for smarter money decisions" },
-  autonomous: { name: "Fully Autonomous", price: "$89.99/mo", description: "Let Calico handle it", bestFor: "Best for active financial optimization" },
+  starter: { name: "Starter", price: "$5/mo", description: "See where you stand", bestFor: "Best for getting organized" },
+  pro: { name: "Pro", price: "$20/mo", description: "Understand what to do next", bestFor: "Best for smarter money decisions" },
+  autonomous: { name: "Fully Autonomous", price: "$30/mo", description: "Let Calico handle it", bestFor: "Best for active financial optimization" },
 };
 
 function BillingSection({
@@ -1001,6 +1002,7 @@ function BillingSection({
 
 function ReferralsSection({ account }: { account: AuthenticatedAccount | null }) {
   const [copied, setCopied] = useState(false);
+  const [referModalOpen, setReferModalOpen] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
   // refreshKey triggers re-fetch when incremented (e.g. after a conversion)
   const [refreshKey, setRefreshKey] = useState(0);
@@ -1186,12 +1188,12 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
       <div className="rounded-xl border border-[var(--aw-border)] p-4">
         <p className="mb-2 text-sm font-semibold text-[var(--aw-text)]">Commission rates</p>
         <div className="space-y-1.5 text-xs text-[var(--aw-text-muted)]">
-          <div className="flex justify-between"><span>Starter (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$4.50</span></div>
-          <div className="flex justify-between"><span>Starter (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$8.99</span></div>
-          <div className="flex justify-between"><span>Pro (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$14.00</span></div>
-          <div className="flex justify-between"><span>Pro (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$27.99</span></div>
-          <div className="flex justify-between"><span>Autonomous (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$45.00</span></div>
-          <div className="flex justify-between"><span>Autonomous (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$89.99</span></div>
+          <div className="flex justify-between"><span>Starter (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$2.50</span></div>
+          <div className="flex justify-between"><span>Starter (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$5.00</span></div>
+          <div className="flex justify-between"><span>Pro (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$10.00</span></div>
+          <div className="flex justify-between"><span>Pro (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$20.00</span></div>
+          <div className="flex justify-between"><span>Autonomous (before 10)</span><span className="font-semibold text-[var(--aw-text)]">$15.00</span></div>
+          <div className="flex justify-between"><span>Autonomous (after 10)</span><span className="font-semibold text-[var(--aw-success)]">$30.00</span></div>
         </div>
       </div>
 
@@ -1232,6 +1234,46 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
           Unable to load referral link. Try refreshing the page.
         </p>
       )}
+
+      {/* Refer action */}
+      <div className="pt-1">
+        <button
+          type="button"
+          onClick={() => setReferModalOpen(true)}
+          className="w-full rounded-xl py-3 text-sm font-semibold transition-opacity hover:opacity-90"
+          style={{
+            background: "var(--calico-primary, #FDBA74)",
+            color: "var(--aw-text, #111)",
+          }}
+        >
+          Refer
+        </button>
+      </div>
+
+      <SettingsModal
+        open={referModalOpen}
+        title="Thank you for the referral"
+        onClose={() => setReferModalOpen(false)}
+        maxWidthClassName="max-w-sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-[var(--aw-text-muted)]">
+            Thank you for the referral. Please use the{" "}
+            <strong className="text-[var(--aw-text)]">Feedback</strong> button in the sidebar to notify us who you referred, and we will send your payment information once they have confirmed a membership.
+          </p>
+          <button
+            type="button"
+            onClick={() => setReferModalOpen(false)}
+            className="inline-flex h-10 w-full items-center justify-center rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
+            style={{
+              background: "var(--calico-primary, #FDBA74)",
+              color: "var(--aw-text, #111)",
+            }}
+          >
+            Got it
+          </button>
+        </div>
+      </SettingsModal>
     </div>
   );
 }

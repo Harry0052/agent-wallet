@@ -22,7 +22,7 @@ const plans: {
   {
     id: "starter",
     name: "Starter",
-    price: "$8.99",
+    price: "$5",
     period: "/month",
     tagline: "Your first money system.",
     bestFor: "Best for building your first financial habits",
@@ -44,7 +44,7 @@ const plans: {
   {
     id: "pro",
     name: "Pro",
-    price: "$29.99",
+    price: "$20",
     period: "/month",
     badge: "Most Popular",
     tagline: "Your adaptive money coach.",
@@ -71,7 +71,7 @@ const plans: {
   {
     id: "autonomous",
     name: "Autonomous",
-    price: "$89.99",
+    price: "$30",
     period: "/month",
     tagline: "Calico handles the work for you.",
     bestFor: "Best for hands-off money management",

@@ -9,9 +9,9 @@ type PlanId = 'starter' | 'pro' | 'autonomous';
 const PLAN_HIERARCHY: PlanId[] = ['starter', 'pro', 'autonomous'];
 
 const PLANS: Record<PlanId, { priceMonthly: number; trialDays: number }> = {
-  starter: { priceMonthly: 8.99, trialDays: 14 },
-  pro: { priceMonthly: 29.99, trialDays: 0 },
-  autonomous: { priceMonthly: 89.99, trialDays: 0 },
+  starter: { priceMonthly: 5, trialDays: 14 },
+  pro: { priceMonthly: 20, trialDays: 0 },
+  autonomous: { priceMonthly: 30, trialDays: 0 },
 };
 
 interface BillingState {
@@ -39,9 +39,9 @@ function getUserPlanAction(billing: BillingState, targetPlan: PlanId): string {
 
 describe('billing plans', () => {
   it('has correct prices', () => {
-    assert.equal(PLANS.starter.priceMonthly, 8.99);
-    assert.equal(PLANS.pro.priceMonthly, 29.99);
-    assert.equal(PLANS.autonomous.priceMonthly, 89.99);
+    assert.equal(PLANS.starter.priceMonthly, 5);
+    assert.equal(PLANS.pro.priceMonthly, 20);
+    assert.equal(PLANS.autonomous.priceMonthly, 30);
   });
 
   it('only starter has a trial', () => {

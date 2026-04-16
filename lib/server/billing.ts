@@ -21,7 +21,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   starter: {
     id: 'starter',
     name: 'Starter',
-    priceMonthly: 8.99,
+    priceMonthly: 5,
     trialDays: 14,
     features: [
       'Connect up to 3 accounts',
@@ -37,7 +37,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    priceMonthly: 29.99,
+    priceMonthly: 20,
     trialDays: 0,
     features: [
       'Everything in Starter',
@@ -56,7 +56,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   autonomous: {
     id: 'autonomous',
     name: 'Autonomous',
-    priceMonthly: 89.99,
+    priceMonthly: 30,
     trialDays: 0,
     features: [
       'Everything in Pro',

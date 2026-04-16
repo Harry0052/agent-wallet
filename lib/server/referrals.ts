@@ -8,9 +8,9 @@ import { logServerEvent } from '@/lib/server/observability';
 // ── Plan prices (must match billing.ts PLANS) ──────────────────────────────
 
 const PLAN_PRICES: Record<PlanId, number> = {
-  starter: 8.99,
-  pro: 29.99,
-  autonomous: 89.99,
+  starter: 5,
+  pro: 20,
+  autonomous: 30,
 };
 
 // ── Referral code generation ────────────────────────────────────────────────
