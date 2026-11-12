@@ -327,11 +327,11 @@ export function ConnectWorkspace() {
         <div className="mt-4 flex items-start gap-3 rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-4 py-3">
           <Shield size={16} className="mt-0.5 shrink-0 text-[var(--aw-text-muted)]" />
           <p className="text-xs leading-relaxed text-[var(--aw-text-muted)]">
-            Calico uses{" "}
+            Agent Wallet uses{" "}
             <a href="https://plaid.com" target="_blank" rel="noopener noreferrer" className="underline">
               Plaid
             </a>{" "}
-            to securely connect your financial accounts. Your bank credentials are never shared with Calico.
+            to securely connect your financial accounts. Your bank credentials are never shared with Agent Wallet.
             By connecting, you agree to share account and transaction data in accordance with our{" "}
             <a
               href="https://www.freeprivacypolicy.com/live/ab2b2a8a-1946-4178-ad49-1cde9a62f587"
@@ -369,7 +369,7 @@ export function ConnectWorkspace() {
               New accounts available
             </p>
             <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
-              Your bank has new accounts you can add to Calico.
+              Your bank has new accounts you can add to Agent Wallet.
             </p>
           </div>
           <button

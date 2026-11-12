@@ -26,7 +26,7 @@ export function composeSmartSurfaceResult(input: {
         ? `You have ${context.recurring.count} recurring merchants totaling about ${fmtMoney(context.recurring.monthlyTotal)}/month.`
         : "No recurring merchants detected yet. Start by syncing account transactions.",
       whyThisResult: context.statements.hasRecentData
-        ? `You asked to lower bills. Calico found ${context.recurring.count} recurring patterns from synced statements.`
+        ? `You asked to lower bills. Agent Wallet found ${context.recurring.count} recurring patterns from synced statements.`
         : `You asked to lower bills. ${dataReason}`,
       canDoNow: "Confirm recurring items, ignore false positives, or mark inactive merchants in Statements.",
       checklist: [
@@ -49,7 +49,7 @@ export function composeSmartSurfaceResult(input: {
         ? `${context.statements.anomalousChargeCount} unusual charge${context.statements.anomalousChargeCount === 1 ? "" : "s"} flagged for review.`
         : "No unusual charges are currently flagged.",
       whyThisResult: context.statements.hasRecentData
-        ? "You asked to review unusual spend. Calico is highlighting anomaly signals from synced statement activity."
+        ? "You asked to review unusual spend. Agent Wallet is highlighting anomaly signals from synced statement activity."
         : `You asked to review unusual spend. ${dataReason}`,
       canDoNow: "Filter to anomalies in Statements and classify or dismiss each flagged merchant.",
       checklist: [
@@ -74,7 +74,7 @@ export function composeSmartSurfaceResult(input: {
         ? `Projected 30-day delta is positive: ${fmtMoney(projectedDelta)}.`
         : `Projected 30-day delta is negative: ${fmtMoney(projectedDelta)}.`,
       whyThisResult: context.recurring.count > 0
-        ? "You asked for a cash plan. Calico used deterministic bill prediction, spending burn-rate, and income cadence signals."
+        ? "You asked for a cash plan. Agent Wallet used deterministic bill prediction, spending burn-rate, and income cadence signals."
         : `You asked for a cash plan. Recurring signals are limited right now. ${dataReason}`,
       canDoNow: "Open funding setup, then review recurring obligations and upcoming bill timeline to improve projection confidence.",
       checklist: [
@@ -96,7 +96,7 @@ export function composeSmartSurfaceResult(input: {
       summary: context.connectionHealth.hasAnyConnectedSource
         ? `${context.connectionHealth.staleAccountCount} account connection${context.connectionHealth.staleAccountCount === 1 ? "" : "s"} need attention.`
         : "No connected sources yet. Add accounts to activate insights.",
-      whyThisResult: "You asked to check source health. Calico is showing reconnect risk and sync readiness.",
+      whyThisResult: "You asked to check source health. Agent Wallet is showing reconnect risk and sync readiness.",
       canDoNow: "Reconnect stale accounts, remove inactive sources, and rerun Home insights after sync.",
       checklist: [
         "Reconnect stale account connections",
@@ -118,7 +118,7 @@ export function composeSmartSurfaceResult(input: {
         ? `Analyzing ${context.statements.transactionCount} transactions; true spend is ${fmtMoney(money.statement.trueSpendAmount)} after exclusions.`
         : "Connect account data to see your spending breakdown.",
       whyThisResult: context.statements.hasRecentData
-        ? "You asked about spending. Calico is using deterministic statement aggregation that excludes transfers, refunds, reversals, card payments, and duplicates."
+        ? "You asked about spending. Agent Wallet is using deterministic statement aggregation that excludes transfers, refunds, reversals, card payments, and duplicates."
         : `You asked about spending. ${dataReason}`,
       canDoNow: "Open Statements to drill into categories, merchants, and time periods.",
       checklist: [
@@ -142,7 +142,7 @@ export function composeSmartSurfaceResult(input: {
         ? `Tracked net worth is ${fmtMoney(money.netWorth.trackedNetWorth)} with a ${money.monthlySurvivalForecast.status} 30-day survival forecast, ${advanced.financialRiskScoring.riskBand} risk band, and ${advanced.financialStressDetection.status} stress status.`
         : "Connect account data to compute your financial health score.",
       whyThisResult: context.statements.hasRecentData
-        ? "You asked about financial health. Calico evaluated net worth trend, bill load, projected spending runway, transparent risk scoring, and rule-based stress detection."
+        ? "You asked about financial health. Agent Wallet evaluated net worth trend, bill load, projected spending runway, transparent risk scoring, and rule-based stress detection."
         : `You asked about financial health. ${dataReason}`,
       canDoNow: "Review recurring costs, fund your wallet, and address stale connections.",
       checklist: [
@@ -168,7 +168,7 @@ export function composeSmartSurfaceResult(input: {
         ? `Safe to spend today is ${fmtMoney(affordability.safeToSpendToday)}, and this week ${fmtMoney(affordability.safeToSpendThisWeek)}.`
         : `Safe to spend today is ${fmtMoney(affordability.safeToSpendToday)} and until next income ${fmtMoney(untilIncome)}.`,
       whyThisResult: context.statements.hasRecentData
-        ? "You asked if you can afford something. Calico used deterministic affordability logic from projected bills and spending burn."
+        ? "You asked if you can afford something. Agent Wallet used deterministic affordability logic from projected bills and spending burn."
         : `You asked about affordability. ${dataReason}`,
       canDoNow: "Review your balance, upcoming bills, and compare purchase amount to safe-to-spend windows.",
       checklist: [
@@ -184,14 +184,14 @@ export function composeSmartSurfaceResult(input: {
   }
 
   return {
-    title: "Calico overview",
+    title: "Agent Wallet overview",
     sourceState: context.statements.hasRecentData ? "Inferred" : "Manual",
     summary: context.statements.hasRecentData
       ? `You currently have ${context.statements.transactionCount} active transactions and ${context.recurring.count} recurring merchants tracked.`
       : "Connect account data to unlock deeper financial recommendations.",
     whyThisResult: context.statements.hasRecentData
-      ? "Calico generated an overview because your request did not map to a single decision workflow."
-      : `Calico generated a setup-first overview. ${dataReason}`,
+      ? "Agent Wallet generated an overview because your request did not map to a single decision workflow."
+      : `Agent Wallet generated a setup-first overview. ${dataReason}`,
     canDoNow: "Choose one workflow: lower bills, review unusual spending, plan 30-day cash, or check connection health.",
     checklist: [
       "Choose a focused financial outcome",

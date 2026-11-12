@@ -9,9 +9,9 @@ export function LandingFooter() {
         <div className="mb-10 grid grid-cols-2 gap-8 md:grid-cols-4">
           <div>
             <div className="mb-3 flex items-center gap-2">
-              <img src="/calico-icon.png" alt="Calico" style={{ width: 22, height: 22, borderRadius: 5, objectFit: "cover" }} />
+              <img src="/agent-wallet-icon.png" alt="Agent Wallet" style={{ width: 22, height: 22, borderRadius: 5, objectFit: "cover" }} />
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.textPrimary, fontFamily: C.fontFamily }}>
-                Calico
+                Agent Wallet
               </p>
             </div>
             <p style={{ margin: 0, fontSize: 13, color: C.textSecondary, lineHeight: 1.65 }}>
@@ -85,7 +85,7 @@ export function LandingFooter() {
           className="flex flex-col gap-2 border-t pt-6 sm:flex-row sm:items-center sm:justify-between"
           style={{ borderColor: C.border }}
         >
-          <p style={{ margin: 0, fontSize: 12, color: C.textMuted }}>&copy; 2025 Calico. All rights reserved.</p>
+          <p style={{ margin: 0, fontSize: 12, color: C.textMuted }}>&copy; 2025 Agent Wallet. All rights reserved.</p>
           <div className="flex gap-4">
             <a
               href="https://www.freeprivacypolicy.com/live/ab2b2a8a-1946-4178-ad49-1cde9a62f587"

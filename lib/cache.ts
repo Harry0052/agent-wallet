@@ -1,5 +1,7 @@
 'use client';
 
+import { migrateLegacyBrowserStorage } from '@/lib/browserStorage';
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface CacheConfig {
@@ -62,7 +64,7 @@ export function getCacheUserId(): string | null {
 // ── Core cache operations ──────────────────────────────────────────────────
 
 function cacheKey(domain: string, key: string): string {
-  return `calico:cache:${currentUserId || 'anon'}:${domain}:${key}`;
+  return `agent-wallet:cache:${currentUserId || 'anon'}:${domain}:${key}`;
 }
 
 function readMemory<T>(fullKey: string, config: CacheConfig): CacheResult<T> {
@@ -76,6 +78,7 @@ function readMemory<T>(fullKey: string, config: CacheConfig): CacheResult<T> {
 }
 
 function readPersistent<T>(fullKey: string, config: CacheConfig): CacheResult<T> {
+  migrateLegacyBrowserStorage();
   if (!config.persist || typeof window === 'undefined') return { status: 'miss' };
   try {
     const raw = localStorage.getItem(fullKey);
@@ -157,6 +160,7 @@ export function writeToCache<T>(domain: string, key: string, data: T, config: Ca
  * Invalidate a specific cache domain+key.
  */
 export function invalidateCache(domain: string, key: string): void {
+  migrateLegacyBrowserStorage();
   const fullKey = cacheKey(domain, key);
   memoryCache.delete(fullKey);
   if (typeof window !== 'undefined') {
@@ -172,7 +176,8 @@ export function invalidateCache(domain: string, key: string): void {
  * Invalidate all entries for a domain.
  */
 export function invalidateDomain(domain: string): void {
-  const prefix = `calico:cache:${currentUserId || 'anon'}:${domain}:`;
+  migrateLegacyBrowserStorage();
+  const prefix = `agent-wallet:cache:${currentUserId || 'anon'}:${domain}:`;
   for (const key of memoryCache.keys()) {
     if (key.startsWith(prefix)) memoryCache.delete(key);
   }
@@ -250,7 +255,8 @@ export function clearAllCaches(): void {
 
   // Clear persistent (only user-scoped keys)
   if (typeof window !== 'undefined') {
-    const prefix = 'calico:cache:';
+    migrateLegacyBrowserStorage();
+    const prefix = 'agent-wallet:cache:';
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i);
       if (key?.startsWith(prefix)) localStorage.removeItem(key);
@@ -264,7 +270,8 @@ export function clearAllCaches(): void {
 
 function evictOldestPersistent(): void {
   if (typeof window === 'undefined') return;
-  const prefix = 'calico:cache:';
+  migrateLegacyBrowserStorage();
+  const prefix = 'agent-wallet:cache:';
   let oldest: { key: string; time: number } | null = null;
 
   for (let i = 0; i < localStorage.length; i++) {

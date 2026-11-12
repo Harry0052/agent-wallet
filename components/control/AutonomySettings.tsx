@@ -20,17 +20,17 @@ const MODE_OPTIONS: { value: AutomationPolicyMode; label: string; description: s
   {
     value: "suggest_only",
     label: "Suggest only",
-    description: "Calico finds opportunities but takes no action.",
+    description: "Agent Wallet finds opportunities but takes no action.",
   },
   {
     value: "user_confirm_required",
     label: "Ask me first",
-    description: "Calico prepares actions and waits for your approval.",
+    description: "Agent Wallet prepares actions and waits for your approval.",
   },
   {
     value: "autopilot_allowed",
     label: "Autopilot",
-    description: "Calico acts automatically on low-risk items.",
+    description: "Agent Wallet acts automatically on low-risk items.",
   },
 ];
 

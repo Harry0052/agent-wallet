@@ -1,28 +1,28 @@
-import { calicoTheme } from "@/styles/theme";
+import { agentWalletTheme } from "@/styles/theme";
 import type { CSSProperties } from "react";
 
 export const C = {
-  cream: calicoTheme.background,
-  warmWhite: calicoTheme.card,
-  apricot: calicoTheme.primary,
+  cream: agentWalletTheme.background,
+  warmWhite: agentWalletTheme.card,
+  apricot: agentWalletTheme.primary,
   apricotSoft: "rgba(253, 186, 116, 0.22)",
-  caramel: calicoTheme.text,
-  blush: calicoTheme.primarySecondary,
+  caramel: agentWalletTheme.text,
+  blush: agentWalletTheme.primarySecondary,
   blushSoft: "rgba(251, 207, 232, 0.26)",
-  charcoal: calicoTheme.text,
-  charcoalSoft: calicoTheme.textSoft,
-  sage: calicoTheme.warning,
+  charcoal: agentWalletTheme.text,
+  charcoalSoft: agentWalletTheme.textSoft,
+  sage: agentWalletTheme.warning,
   sageSoft: "rgba(253, 230, 138, 0.28)",
-  textPrimary: calicoTheme.text,
-  textSecondary: calicoTheme.textSoft,
-  textMuted: calicoTheme.textMuted,
-  border: calicoTheme.border,
-  surface: calicoTheme.card,
-  shadow: calicoTheme.shadowSoft,
-  shadowMd: calicoTheme.shadowMd,
-  shadowLg: calicoTheme.shadowLg,
-  success: calicoTheme.success,
-  fontFamily: calicoTheme.fontFamily,
+  textPrimary: agentWalletTheme.text,
+  textSecondary: agentWalletTheme.textSoft,
+  textMuted: agentWalletTheme.textMuted,
+  border: agentWalletTheme.border,
+  surface: agentWalletTheme.card,
+  shadow: agentWalletTheme.shadowSoft,
+  shadowMd: agentWalletTheme.shadowMd,
+  shadowLg: agentWalletTheme.shadowLg,
+  success: agentWalletTheme.success,
+  fontFamily: agentWalletTheme.fontFamily,
 } as const;
 
 export const cardBase: CSSProperties = {

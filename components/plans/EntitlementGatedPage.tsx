@@ -80,7 +80,7 @@ export function EntitlementGatedPage({
             <button
               type="button"
               onClick={() => { void refresh(); }}
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-2.5 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--aw-primary,#FDBA74)] px-6 py-2.5 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
             >
               Try again
             </button>
@@ -101,7 +101,7 @@ export function EntitlementGatedPage({
     <div className="flex min-h-[60vh] items-center justify-center px-6">
       <div className="w-full max-w-md text-center">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50">
-          <Lock size={28} className="text-[var(--calico-primary,#FDBA74)]" />
+          <Lock size={28} className="text-[var(--aw-primary,#FDBA74)]" />
         </div>
         <h2 className="text-2xl font-semibold text-[var(--aw-text)]">
           {featureLabel}
@@ -114,7 +114,7 @@ export function EntitlementGatedPage({
         </p>
         <Link
           href="/settings?section=billing"
-          className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
+          className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--aw-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
         >
           View Plans & Billing
           <ArrowRight size={16} />

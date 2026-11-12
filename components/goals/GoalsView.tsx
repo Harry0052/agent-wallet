@@ -413,7 +413,7 @@ export function GoalsView() {
       <div className="px-4 py-6">
         <WorkspaceHeader
           title="Money Goals"
-          subtitle="Track what you're saving for or paying down. Calico updates your progress automatically from your transactions."
+          subtitle="Track what you're saving for or paying down. Agent Wallet updates your progress automatically from your transactions."
           actions={(
             <button
               type="button"
@@ -432,7 +432,7 @@ export function GoalsView() {
             onClick={() => setActiveTab("save-up")}
             className={`pb-3 text-sm font-medium transition-colors ${
               activeTab === "save-up"
-                ? "border-b-2 border-[var(--calico-primary, #FDBA74)] text-[var(--aw-text)]"
+                ? "border-b-2 border-[var(--aw-primary, #FDBA74)] text-[var(--aw-text)]"
                 : "text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
             }`}
           >
@@ -443,7 +443,7 @@ export function GoalsView() {
             onClick={() => setActiveTab("pay-down")}
             className={`pb-3 text-sm font-medium transition-colors ${
               activeTab === "pay-down"
-                ? "border-b-2 border-[var(--calico-primary, #FDBA74)] text-[var(--aw-text)]"
+                ? "border-b-2 border-[var(--aw-primary, #FDBA74)] text-[var(--aw-text)]"
                 : "text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
             }`}
           >
@@ -459,9 +459,9 @@ export function GoalsView() {
             <div className="flex items-start gap-3">
               <span className="mt-0.5 text-xl">🐱</span>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-amber-900">Calico suggests: Start an emergency fund</p>
+                <p className="text-sm font-semibold text-amber-900">Agent Wallet suggests: Start an emergency fund</p>
                 <p className="mt-1 text-xs text-amber-700">
-                  An emergency fund is the most important goal you can have. It helps when life gets expensive unexpectedly — car repairs, medical bills, or a surprise expense. Calico recommends building this before fun goals.
+                  An emergency fund is the most important goal you can have. It helps when life gets expensive unexpectedly — car repairs, medical bills, or a surprise expense. Agent Wallet recommends building this before fun goals.
                 </p>
                 <button
                   type="button"
@@ -500,12 +500,12 @@ export function GoalsView() {
             <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
               {activeTab === "save-up"
                 ? "Start with an emergency fund — it's the most important goal to have."
-                : "Add what you owe so Calico can help you pay it off faster."}
+                : "Add what you owe so Agent Wallet can help you pay it off faster."}
             </p>
             <button
               type="button"
               onClick={() => openCreateGoal()}
-              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--aw-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
             >
               <Plus size={16} />
               Add a goal
@@ -578,7 +578,7 @@ export function GoalsView() {
                           </div>
                           <div className="h-1.5 rounded-full bg-[var(--aw-border)]">
                             <div
-                              className="h-full rounded-full bg-[var(--calico-primary, #FDBA74)]"
+                              className="h-full rounded-full bg-[var(--aw-primary, #FDBA74)]"
                               style={{ width: `${goal.progress}%` }}
                             />
                           </div>
@@ -607,14 +607,14 @@ export function GoalsView() {
                 </h3>
                 <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
                   {activeTab === "save-up"
-                    ? "Add more goals as you go. Calico suggests starting with safety, then fun."
-                    : "Add everything you owe so Calico can help you plan the best payoff order."}
+                    ? "Add more goals as you go. Agent Wallet suggests starting with safety, then fun."
+                    : "Add everything you owe so Agent Wallet can help you plan the best payoff order."}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => openCreateGoal()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--aw-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
               >
                 <Plus size={16} />
                 Add another goal
@@ -858,7 +858,7 @@ export function GoalsView() {
                       setModalStep("budget");
                     }
                   }}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--aw-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
                 >
                   Next
                   <ChevronRight size={14} />
@@ -868,7 +868,7 @@ export function GoalsView() {
                 <button
                   type="button"
                   onClick={saveGoal}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--aw-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
                 >
                   {editingGoalId ? "Save changes" : "Create goal"}
                 </button>

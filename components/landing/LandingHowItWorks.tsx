@@ -52,7 +52,7 @@ export function LandingHowItWorks() {
           className="mb-16 text-center"
         >
           <motion.h2 variants={fadeUp} style={sectionHeadingStyle}>
-            How Calico works
+            How Agent Wallet works
           </motion.h2>
           <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-lg" style={subtitleStyle}>
             From connecting your accounts to acting on insights — in four simple steps.

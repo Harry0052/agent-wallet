@@ -138,7 +138,7 @@ export function ControlCenter() {
         <div>
           <h1 style={acpHeading}>Autonomous Control Center</h1>
           <p style={{ ...acpSubheading, marginTop: 4 }}>
-            Review, approve, and monitor Calico's autonomous actions.
+            Review, approve, and monitor Agent Wallet's autonomous actions.
           </p>
         </div>
         <button

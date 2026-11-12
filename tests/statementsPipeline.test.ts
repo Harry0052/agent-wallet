@@ -87,14 +87,6 @@ test("statements/documents route enforces auth and rate limiting", () => {
   assert.match(source, /getStatementDocumentForMonth/);
 });
 
-test("statements/coverage route enforces auth and rate limiting", () => {
-  const source = read("app/api/statements/coverage/route.ts");
-  assert.match(source, /enforceApiAuth\(/);
-  assert.match(source, /enforceRateLimit\(/);
-  assert.match(source, /profile:\s*["']general["']/);
-  assert.match(source, /getHistoricalCoverageMap/);
-});
-
 test("connect/statements/sync route enforces auth and rate limiting", () => {
   const source = read("app/api/connect/statements/sync/route.ts");
   assert.match(source, /enforceApiAuth\(/);

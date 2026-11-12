@@ -203,7 +203,7 @@ export function WalletCard() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-medium text-[var(--aw-text)]">Saved payment methods</p>
-            <p className="text-[11px] text-[var(--aw-text-muted)]">Only Stripe references are stored in Calico.</p>
+            <p className="text-[11px] text-[var(--aw-text-muted)]">Only Stripe references are stored in Agent Wallet.</p>
           </div>
           <button
             onClick={() => void handleSetupPaymentMethod()}

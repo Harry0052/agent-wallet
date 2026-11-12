@@ -36,7 +36,7 @@ async function submitCommand(input: string): Promise<{ ok: boolean; message: str
   if (!res.ok || !data.ok) {
     return { ok: false, message: data.error || "Couldn't process that request." };
   }
-  return { ok: true, message: "Got it. Calico is working on this." };
+  return { ok: true, message: "Got it. Agent Wallet is working on this." };
 }
 
 // ── Policy labels ───────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ async function submitCommand(input: string): Promise<{ ok: boolean; message: str
 function friendlyPolicyLabel(mode: AutomationPolicyMode): string {
   if (mode === "suggest_only") return "Suggest only";
   if (mode === "user_confirm_required") return "Ask me first";
-  return "Let Calico act";
+  return "Let Agent Wallet act";
 }
 
 // ── Main view ───────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ export function TaskCenterView() {
         type: count > 0 ? "success" : "info",
         message: count > 0
           ? `Found ${count} new item${count === 1 ? "" : "s"} to review.`
-          : "Nothing new right now. Calico is watching.",
+          : "Nothing new right now. Agent Wallet is watching.",
       });
       await load();
     } catch (e) {
@@ -180,7 +180,7 @@ export function TaskCenterView() {
       }
       setCredentialRequest(null);
       setCredentialError(null);
-      setNotice({ type: "success", message: "Credential received. Calico is continuing the task." });
+      setNotice({ type: "success", message: "Credential received. Agent Wallet is continuing the task." });
       await load();
     } catch {
       setCredentialError("Something went wrong. Please try again.");
@@ -218,7 +218,7 @@ export function TaskCenterView() {
             </h1>
           </div>
           <p className="mt-2 text-sm text-[var(--aw-text-muted)]">
-            Tell Calico what to do, or review actions it found for you.
+            Tell Agent Wallet what to do, or review actions it found for you.
           </p>
         </div>
         <button
@@ -324,7 +324,7 @@ export function TaskCenterView() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[0.85rem] font-semibold text-[var(--aw-text)]">
-                  When Calico finds something
+                  When Agent Wallet finds something
                 </p>
                 <p className="mt-0.5 text-[0.78rem] text-[var(--aw-text-muted)]">
                   Choose how much control you want.
@@ -360,7 +360,7 @@ export function TaskCenterView() {
                   You're all caught up
                 </p>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--aw-text-muted)]">
-                  Type a request above, or Calico will add items here when it finds
+                  Type a request above, or Agent Wallet will add items here when it finds
                   something worth doing — like subscriptions to cancel, bills to lower,
                   or categories to fix.
                 </p>

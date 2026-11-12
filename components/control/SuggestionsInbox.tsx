@@ -77,7 +77,7 @@ export function SuggestionsInbox({
               maxWidth: 320,
             }}
           >
-            Calico is watching your finances. New suggestions will appear here
+            Agent Wallet is watching your finances. New suggestions will appear here
             when something needs your attention.
           </p>
         </div>

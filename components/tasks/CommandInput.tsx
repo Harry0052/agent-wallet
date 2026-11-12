@@ -39,7 +39,7 @@ export function CommandInput({ onSubmit, loading, placeholder }: CommandInputPro
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder ?? "Tell Calico what to do..."}
+        placeholder={placeholder ?? "Tell Agent Wallet what to do..."}
         disabled={loading}
         className="min-w-0 flex-1 bg-transparent text-[0.9rem] text-[var(--aw-text)] outline-none placeholder:text-[var(--aw-text-muted)]/50"
       />

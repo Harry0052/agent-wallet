@@ -4,9 +4,9 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Calico',
+  title: 'Agent Wallet',
   description:
-    'Calico — the friendly money app that helps you understand your spending, spot recurring bills, and feel more in control.',
+    'Agent Wallet — the friendly money app that helps you understand your spending, spot recurring bills, and feel more in control.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

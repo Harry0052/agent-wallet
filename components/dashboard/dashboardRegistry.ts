@@ -1,6 +1,6 @@
 import type { DashboardPreferences, DashboardWidgetDefinition, DashboardWidgetId } from "@/components/dashboard/dashboardTypes";
 
-export const DASHBOARD_STORAGE_KEY = "calico.custom-dashboard.v1";
+export const DASHBOARD_STORAGE_KEY = "agent-wallet.custom-dashboard.v1";
 
 export const dashboardWidgets: DashboardWidgetDefinition[] = [
   { id: "netWorth", label: "Net Worth", description: "Your total balance across all accounts", span: "wide" },
@@ -9,9 +9,9 @@ export const dashboardWidgets: DashboardWidgetDefinition[] = [
   { id: "recurring", label: "Upcoming Bills", description: "Bills and subscriptions due soon", span: "compact" },
   { id: "budget", label: "Spending Plan", description: "How your spending compares to your plan", span: "compact" },
   { id: "transactions", label: "Recent Activity", description: "Your latest transactions", span: "full" },
-  { id: "gettingStarted", label: "Getting Started", description: "Finish setting up Calico", span: "compact" },
+  { id: "gettingStarted", label: "Getting Started", description: "Finish setting up Agent Wallet", span: "compact" },
   { id: "goals", label: "Money Goals", description: "What you're saving for", span: "compact" },
-  { id: "advice", label: "Tips from Calico", description: "Helpful suggestions based on your activity", span: "wide" },
+  { id: "advice", label: "Tips from Agent Wallet", description: "Helpful suggestions based on your activity", span: "wide" },
   { id: "investments", label: "Investments", description: "Your holdings and performance", span: "compact" },
   { id: "creditScore", label: "Credit Score", description: "Your credit score at a glance", span: "compact" },
 ];

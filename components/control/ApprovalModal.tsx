@@ -93,7 +93,7 @@ export function ApprovalModal({
                   margin: 0,
                 }}
               >
-                Review before Calico proceeds
+                Review before Agent Wallet proceeds
               </p>
             </div>
           </div>

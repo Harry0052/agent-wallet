@@ -14,7 +14,7 @@ import { FRESHNESS } from "@/lib/cache";
 import { useCachedFetch } from "@/lib/useCachedFetch";
 import { fetchSmartHomePayload, type SmartHomePayload } from "@/services/smartWallet";
 import { fetchWallet } from "@/services/wallet";
-import { calicoTheme } from "@/styles/theme";
+import { agentWalletTheme } from "@/styles/theme";
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -117,8 +117,8 @@ export function SmartWalletHome() {
 
   if (dashboardError) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4 py-16" style={{ background: calicoTheme.background }}>
-        <div className="w-full max-w-lg rounded-[16px] px-5 py-4 text-sm shadow-[0_12px_28px_rgba(15,23,42,0.08)]" style={{ background: calicoTheme.card, border: `1px solid ${calicoTheme.border}`, color: calicoTheme.text }}>
+      <div className="flex min-h-screen items-center justify-center px-4 py-16" style={{ background: agentWalletTheme.background }}>
+        <div className="w-full max-w-lg rounded-[16px] px-5 py-4 text-sm shadow-[0_12px_28px_rgba(15,23,42,0.08)]" style={{ background: agentWalletTheme.card, border: `1px solid ${agentWalletTheme.border}`, color: agentWalletTheme.text }}>
           {dashboardError}
         </div>
       </div>
@@ -130,7 +130,7 @@ export function SmartWalletHome() {
   return (
     <>
       {isStale && (
-        <div className="fixed top-2 right-4 z-50 rounded-full px-3 py-1 text-xs" style={{ background: calicoTheme.card, border: `1px solid ${calicoTheme.border}`, color: calicoTheme.text, opacity: 0.65 }}>
+        <div className="fixed top-2 right-4 z-50 rounded-full px-3 py-1 text-xs" style={{ background: agentWalletTheme.card, border: `1px solid ${agentWalletTheme.border}`, color: agentWalletTheme.text, opacity: 0.65 }}>
           Updating...
         </div>
       )}

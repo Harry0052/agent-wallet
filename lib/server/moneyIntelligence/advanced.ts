@@ -476,7 +476,7 @@ function buildCreditUtilizationOptimizer(input: {
     accountTargets: creditAccounts,
     status,
     confidence: round(confidence),
-    explanation: "Utilization targets are deterministic and recommendation-only. Calico never executes credit payments automatically.",
+    explanation: "Utilization targets are deterministic and recommendation-only. Agent Wallet never executes credit payments automatically.",
     factors: [
       `Current utilization: ${round(utilizationRatio * 100)}%.`,
       `Payment to reach <=30% utilization: ${round(paymentToSafeUtilization)}.`,

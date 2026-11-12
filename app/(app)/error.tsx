@@ -12,7 +12,7 @@ export default function AppError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[Calico/App] Error:", error.message, error.digest);
+    console.error("[Agent Wallet/App] Error:", error.message, error.digest);
     Sentry.captureException(error);
   }, [error]);
 
@@ -31,7 +31,7 @@ export default function AppError({
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-[var(--aw-text-muted,#6B5B4B)]">
           {isDbError
-            ? "Calico is experiencing high traffic. Your data is safe — please try again."
+            ? "Agent Wallet is experiencing high traffic. Your data is safe — please try again."
             : isAuthError
               ? "We couldn't verify your session. Please try refreshing or signing in again."
               : "An unexpected error occurred. Please try refreshing the page."}

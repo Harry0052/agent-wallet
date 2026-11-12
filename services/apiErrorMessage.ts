@@ -29,12 +29,12 @@ export function toUserFriendlyError(payload: {
 
   // Known DB/infra error codes
   if (DB_ERROR_CODES.has(code)) {
-    return new Error('Calico is temporarily busy. Please try again in a moment.');
+    return new Error('Agent Wallet is temporarily busy. Please try again in a moment.');
   }
 
   // Fallback: check the message itself for DB pool indicators
   if (DB_ERROR_PATTERNS.some((p) => p.test(msg) || p.test(code))) {
-    return new Error('Calico is temporarily busy. Please try again in a moment.');
+    return new Error('Agent Wallet is temporarily busy. Please try again in a moment.');
   }
 
   // Pass through other errors as-is

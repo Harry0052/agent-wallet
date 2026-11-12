@@ -307,7 +307,7 @@ export class PlaidClient {
       user: {
         client_user_id: input.userId,
       },
-      client_name: input.clientName ?? "Calico",
+      client_name: input.clientName ?? "Agent Wallet",
       language: input.language ?? "en",
       country_codes: input.countryCodes ?? ["US"],
     };

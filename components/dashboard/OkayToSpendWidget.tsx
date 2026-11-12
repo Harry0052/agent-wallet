@@ -24,18 +24,18 @@ export function OkayToSpendWidget(props: DashboardWidgetProps & { dragHandleProp
     >
       {!hasData ? (
         <div style={dashboardDashedStyle} className="flex h-full flex-col items-center justify-center rounded-[20px] p-6 text-center">
-          <p className="text-4xl font-semibold text-[var(--calico-text)]">—</p>
-          <p className="mt-3 text-sm leading-6 text-[var(--calico-text-muted)]">
+          <p className="text-4xl font-semibold text-[var(--aw-text)]">—</p>
+          <p className="mt-3 text-sm leading-6 text-[var(--aw-text-muted)]">
             Connect an account to see how much you have available to spend.
           </p>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-4 py-2">
           <div className="text-center">
-            <p className="text-4xl font-bold tracking-tight text-[var(--calico-text)]">
+            <p className="text-4xl font-bold tracking-tight text-[var(--aw-text)]">
               {toCurrency(safeToSpend)}
             </p>
-            <p className="mt-2 text-sm text-[var(--calico-text-muted)]">
+            <p className="mt-2 text-sm text-[var(--aw-text-muted)]">
               available this month
             </p>
           </div>

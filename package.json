@@ -1,7 +1,7 @@
 {
-  "name": "calico",
+  "name": "agent-wallet",
   "version": "1.0.0",
-  "description": "Calico — the friendly money app that helps you understand your spending, spot recurring bills, and feel more in control.",
+  "description": "Agent Wallet — a personal finance workspace with a ledger-backed wallet, account linking, and approval-aware automation.",
   "private": true,
   "scripts": {
     "dev": "next dev",

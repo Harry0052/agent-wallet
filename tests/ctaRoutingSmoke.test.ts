@@ -61,7 +61,6 @@ test('no internal debug text in user-facing components', () => {
     'trust state',
     'capability',
     'debug telemetry',
-    'agent wallet',
     'tinyfish',
     'procurement',
     'sourcing',

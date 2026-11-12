@@ -28,12 +28,12 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
 
   useEffect(() => {
     if (urlRefCode) {
-      try { localStorage.setItem('calico.referral_code', urlRefCode); } catch {}
+      try { localStorage.setItem('agent-wallet.referral_code', urlRefCode); } catch {}
       setRefCode(urlRefCode);
     } else if (!refCode) {
       // No ref in URL — check localStorage for a previously captured code
       try {
-        const stored = localStorage.getItem('calico.referral_code');
+        const stored = localStorage.getItem('agent-wallet.referral_code');
         if (stored) setRefCode(stored);
       } catch {}
     }
@@ -151,7 +151,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
     >
       {/* Ambient background glow */}
       <div
-        className="calico-ambient-glow pointer-events-none absolute"
+        className="agent-wallet-ambient-glow pointer-events-none absolute"
         style={{
           width: 480,
           height: 480,
@@ -163,7 +163,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
         }}
       />
       <div
-        className="calico-ambient-glow pointer-events-none absolute"
+        className="agent-wallet-ambient-glow pointer-events-none absolute"
         style={{
           width: 360,
           height: 360,
@@ -234,7 +234,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
             transition={{ duration: 0.5, ease: easeOut }}
             className="relative z-10 w-full max-w-md"
           >
-            {/* Calico logo */}
+            {/* Agent Wallet logo */}
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -242,12 +242,12 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
               className="mb-6 flex items-center justify-center gap-2"
             >
               <img
-                src="/calico-icon.png"
-                alt="Calico"
+                src="/agent-wallet-icon.png"
+                alt="Agent Wallet"
                 style={{ width: 32, height: 32, borderRadius: 8 }}
               />
               <span style={{ fontSize: 18, fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif" }}>
-                Calico
+                Agent Wallet
               </span>
             </motion.div>
 
@@ -275,8 +275,8 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                 </h1>
                 <p style={{ marginTop: 8, fontSize: 15, color: "#3A332E", lineHeight: 1.6 }}>
                   {isSignup
-                    ? 'Create your private Calico workspace.'
-                    : 'Sign in to your private Calico workspace.'}
+                    ? 'Create your private Agent Wallet workspace.'
+                    : 'Sign in to your private Agent Wallet workspace.'}
                 </p>
               </motion.div>
 
@@ -407,7 +407,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                 transition={{ delay: 0.4, duration: 0.3 }}
                 className="mt-4 text-xs text-[var(--aw-text-muted)]"
               >
-                {isSignup ? 'Already have an account?' : 'New to Calico?'}{' '}
+                {isSignup ? 'Already have an account?' : 'New to Agent Wallet?'}{' '}
                 <Link
                   href={isSignup ? '/login' : '/signup'}
                   className="font-semibold text-[var(--aw-primary-strong)] hover:underline"

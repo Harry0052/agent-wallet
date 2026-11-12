@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       ? error.issues.map((issue) => issue.message).join("; ")
       : error instanceof Error
         ? error.message
-        : "Failed to fetch Calico telemetry debug events.";
+        : "Failed to fetch Agent Wallet telemetry debug events.";
     const status = error instanceof z.ZodError ? 400 : 500;
     const errorCode = classifyTaskError({
       message,

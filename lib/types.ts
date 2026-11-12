@@ -1,5 +1,5 @@
 // ============================================================
-// Calico – Core Types
+// Agent Wallet – Core Types
 // A calm, premium, consumer-facing AI-native personal financial OS
 // ============================================================
 

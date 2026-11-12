@@ -1,107 +1,123 @@
 # Agent Wallet
 
-Chat-first autonomous procurement wallet with real ledger truth.
+Personal finance workspace with a Postgres ledger wallet. Link accounts, review spending and bills, and move wallet funds through Stripe only when guardrails and an approved recipient allow it.
 
-## Money Truth Rules
+Live app: [https://agent-wallet-one.vercel.app](https://agent-wallet-one.vercel.app)
 
-- Wallet starts at `$0.00`.
-- Balance is computed only from DB ledger rows with `status = succeeded`.
-- Formula: `sum(succeeded credits) - sum(succeeded debits)`.
-- Pending/failed/canceled rows never affect available balance.
-- No localStorage or client state is used as money truth.
-- No seeded/default/demo credits.
+## Screenshots
 
-## Real Funding Flow (Stripe)
+These are the public landing and login pages. The balances, merchants, and “found savings” figures on the marketing page are layout samples in the landing component, not live account data.
 
-1. Client calls `POST /api/funding/create-session`.
-2. User completes Stripe Checkout (`card`, Apple Pay via card wallet, optional Cash App Pay).
-3. `POST /api/stripe/webhook` verifies Stripe signature.
-4. On `checkout.session.completed` top-up, server writes ledger credit.
-5. Wallet UI refreshes from `GET /api/wallet`.
+Signed-in screens (home, wallet, tasks) need an account. TODO: add screenshots of those views from a real signed-in session.
 
-## Real Send Flow (Stripe Connect)
+![Marketing home](docs/screenshots/landing-hero.png)
 
-1. Client calls `POST /api/wallet/send`.
-2. Server runs guardrails (balance, max tx, daily/monthly limit, allow/block lists, approval threshold).
-3. Recipient must be approved and mapped to a Stripe connected account (`acct_...`).
-4. Server executes Stripe transfer.
-5. Only on provider success does server write a succeeded debit.
+![Log in](docs/screenshots/login.png)
 
-## Core API Routes
+## What it does
+
+- Email and password accounts, plus Google and Apple sign-in.
+- Plaid Link for connected institutions. Link tokens request the Plaid `transactions` product, and some flows also request `auth` (account and routing data). This is not a read-only-only integration.
+- Signed-in screens for home, accounts, transactions, budgets, cash flow, recurring bills, subscriptions, statements, insights, goals, investments, reports, advice, tasks, automations, a control center, wallet, and settings.
+- Natural-language command parsing (`POST /api/ai/command`) through Anthropic when `ANTHROPIC_API_KEY` is set. If that key is missing, parsing falls back to a local overview instead of calling a model.
+- Receipt parsing can call Gemini when `GEMINI_API_KEY` or `GOOGLE_API_KEY` is set.
+- A separate wallet ledger for top-ups and sends. That balance is not the same number as linked-bank balances.
+
+Some account, transaction, budget, and goal screens can also store manual records in the browser. Those records are not the wallet ledger.
+
+## Wallet balance
+
+Available wallet balance is computed on the server from `ledger_entries`:
+
+`sum(succeeded credits) - sum(succeeded debits)`
+
+- A user with no succeeded rows is at `$0.00`. Nothing in the schema seeds demo credits.
+- Rows with status `pending`, `failed`, or `canceled` do not change the balance.
+- `GET /api/wallet` is what the wallet UI loads. The balance is not stored in `localStorage`.
+
+Default per-user settings, stored on `wallet_users` and editable with `PATCH /api/wallet/settings`:
+
+| Setting | Default |
+| --- | --- |
+| Max transaction | $50 |
+| Daily limit | $100 |
+| Monthly budget | $500 |
+| Approval threshold | $10 |
+
+## Funding
+
+1. An authenticated client calls `POST /api/funding/create-session` with an amount of at least `$0.50`.
+2. The server creates a Stripe Checkout Session only when that user’s Stripe tool is connected and enabled. Checkout methods are `card`, plus `cashapp` when `STRIPE_ENABLE_CASHAPP_PAY=true`.
+3. `POST /api/stripe/webhook` checks the `stripe-signature` header with `STRIPE_WEBHOOK_SECRET`. `POST /api/stripe/webhooks` runs the same handler.
+4. On `checkout.session.completed` or `payment_intent.succeeded` for a top-up, the server writes one succeeded ledger credit. A repeated payment intent does not credit twice. If Stripe reports an Apple Pay card wallet or Cash App Pay, the credit description says so.
+5. The wallet UI reads the new balance from `GET /api/wallet`.
+
+`POST /api/webhooks/stripe` is a different handler (payment-intent and refund events). It is not an alias of the top-up webhook.
+
+## Sends
+
+1. An authenticated client calls `POST /api/wallet/send`.
+2. The server checks the amount, balance, max transaction, daily limit, monthly budget, merchant allow and block lists, and the approval threshold.
+3. The recipient must already be approved. Stripe sends require a Stripe connected account id on that recipient. The server then calls `stripe.transfers.create`.
+4. A succeeded debit is written only after that transfer call returns. A failed transfer attempt is stored as a `failed` debit, which does not reduce available balance.
+5. Cash App and bank recipients can be saved. Sending to them returns HTTP 501 because those executions are not implemented.
+
+Optional idempotency: `x-idempotency-key` or `idempotencyKey` in the body.
+
+## Automation
+
+The task flow can plan actions such as subscription cancel, subscription negotiate, trial review, savings transfer, bill pay, and debt optimization.
+
+Execution goes through the Tiny Fish adapter only when both `TINY_FISH_API_URL` and `TINY_FISH_API_KEY` are set, and only for action types marked live. Other types stop at a plan and tell the user automatic execution is not wired. There is no `POST /api/tinyfish` route and no `POST /api/reason` route.
+
+## Stack
+
+Next.js 16, React 18, TypeScript, Tailwind CSS, Postgres (`pg`), Stripe, Plaid, Zod, and the Anthropic SDK. Sentry is optional.
+
+Startup validation in `security/secretsManager.ts` requires `DATABASE_URL`, `AUTH_SESSION_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PLAID_CLIENT_ID`, `PLAID_SECRET`, one of `DATA_ENCRYPTION_KEYRING` or `DATA_ENCRYPTION_MASTER_KEY`, and at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `CLAUDE_API_KEY`.
+
+That last check only tests that one of the three variables is non-empty. This repository does not call the OpenAI API, and command parsing reads `ANTHROPIC_API_KEY` specifically. `CLAUDE_MODEL` can override the Anthropic model list in `lib/server/claude.ts`. The code default list starts with `claude-opus-4-5-20251101`.
+
+## Routes
+
+Wallet and money movement:
 
 - `GET /api/wallet`
 - `PATCH /api/wallet/settings`
-- `GET|POST|PATCH /api/wallet/recipients`
+- `GET`, `POST`, and `PATCH /api/wallet/recipients`
 - `POST /api/wallet/send`
 - `POST /api/funding/create-session`
-- `POST /api/stripe/webhook`
-- `POST /api/reason`
-- `POST /api/tinyfish`
+- `POST /api/stripe/webhook` and `POST /api/stripe/webhooks`
+
+Other areas with route handlers under `app/api/` include auth, Plaid connect, statements, insights, tasks, billing, referrals, and `POST /api/ai/command`. The full list is the files in that directory.
 
 ## Database
 
-Postgres (`DATABASE_URL`) is the source of truth.
+Postgres (`DATABASE_URL`) stores users, sessions, the wallet ledger, Plaid-linked data, tasks, and referrals.
 
-Tables:
+Wallet-related tables in `db/schema.sql` include `wallet_users`, `wallet_recipients`, `ledger_entries`, `stripe_webhook_events`, `agent_tasks`, `web_action_logs`, and `approval_decisions`. Those are not the only tables. Later changes live in `db/migrations/`.
 
-- `wallet_users`
-- `wallet_recipients`
-- `ledger_entries`
-- `stripe_webhook_events`
-- `agent_tasks`
-- `web_action_logs`
-- `approval_decisions`
-
-Schema file: `db/schema.sql`
-
-## Required Environment
-
-```bash
-DATABASE_URL=postgres://...
-DATABASE_POOL_MAX=1 # recommended for Supabase session-mode pooler/serverless
-DATABASE_POOL_IDLE_TIMEOUT_MS=5000 # optional
-DATABASE_POOL_CONNECTION_TIMEOUT_MS=10000 # optional
-WALLET_USER_ID=default-user # optional
-
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4.1-mini
-
-STRIPE_SECRET_KEY=
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_ENABLE_CASHAPP_PAY=false
-
-TINYFISH_API_KEY=
-TINYFISH_API_BASE_URL=https://api.tinyfish.ai/v1
-TINYFISH_VENDOR_RESEARCH_PATH=/vendor-research
-TINYFISH_PURCHASE_PREPARE_PATH=/purchase/prepare
-TINYFISH_PURCHASE_CONFIRM_PATH=/purchase/confirm
-TINYFISH_SUBSCRIPTION_OPERATION_PATH=/subscription/operation
-```
-
-If any required integration key is missing, APIs fail with explicit errors. No mock/demo fallback is used.
-
-## Run
+## Local setup
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-Local env setup:
+`.env.example` has placeholders only. Do not commit `.env.local`.
+
+Forward Stripe webhooks to the local app:
 
 ```bash
-cp .env.example .env.local
+stripe listen --forward-to localhost:3000/api/stripe/webhook
 ```
 
-Stripe webhook forwarding:
+Checks:
 
 ```bash
-stripe listen --forward-to startcalico.com/api/stripe/webhook
+npm test
+npm run lint
 ```
 
-Compatibility endpoint also supported:
-
-```bash
-/api/stripe/webhooks
-```
+`npm run lint` is `tsc --noEmit`.

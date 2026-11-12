@@ -22,19 +22,19 @@ export function GoalsWidget(props: DashboardWidgetProps & { dragHandleProps?: HT
       >
         <div style={dashboardDashedStyle} className="flex h-full flex-col justify-between rounded-[20px] p-4">
           <div>
-            <div className="inline-flex h-11 w-11 items-center justify-center rounded-[20px] bg-[rgba(251,207,232,0.28)] text-[var(--calico-primary)]">
+            <div className="inline-flex h-11 w-11 items-center justify-center rounded-[20px] bg-[rgba(251,207,232,0.28)] text-[var(--aw-primary)]">
               <Target size={20} />
             </div>
-            <p className="mt-4 text-lg font-semibold text-[var(--calico-text)]">What are you saving for?</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
-              Set a money goal and Calico will help you track your progress. Start with an emergency fund or something fun.
+            <p className="mt-4 text-lg font-semibold text-[var(--aw-text)]">What are you saving for?</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--aw-text-muted)]">
+              Set a money goal and Agent Wallet will help you track your progress. Start with an emergency fund or something fun.
             </p>
           </div>
           <div className="mt-6">
             <Link
               href="/goals"
               style={dashboardPrimaryButtonStyle}
-              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-primary-hover)]"
+              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--aw-primary-strong)]"
             >
               Set a goal
             </Link>
@@ -52,7 +52,7 @@ export function GoalsWidget(props: DashboardWidgetProps & { dragHandleProps?: HT
       action={
         <Link
           href="/goals"
-          className="inline-flex h-8 items-center gap-1 rounded-[12px] border border-[var(--calico-border)] px-3 text-xs font-semibold text-[var(--calico-text-muted)] transition hover:bg-[var(--calico-hover)] hover:text-[var(--calico-text)]"
+          className="inline-flex h-8 items-center gap-1 rounded-[12px] border border-[var(--aw-border)] px-3 text-xs font-semibold text-[var(--aw-text-muted)] transition hover:bg-[var(--aw-surface-subtle)] hover:text-[var(--aw-text)]"
         >
           <Plus size={14} />
           Add
@@ -66,19 +66,19 @@ export function GoalsWidget(props: DashboardWidgetProps & { dragHandleProps?: HT
             key={goal.id}
             href="/goals"
             style={dashboardInsetStyle}
-            className="block rounded-[16px] px-4 py-3 transition-all hover:bg-[var(--calico-card)] hover:shadow-sm"
+            className="block rounded-[16px] px-4 py-3 transition-all hover:bg-[var(--aw-surface-1)] hover:shadow-sm"
           >
             <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-medium text-[var(--calico-text)]">{goal.name}</p>
-              <span className="shrink-0 text-xs font-semibold text-[var(--calico-text)]">{goal.progress}%</span>
+              <p className="truncate text-sm font-medium text-[var(--aw-text)]">{goal.name}</p>
+              <span className="shrink-0 text-xs font-semibold text-[var(--aw-text)]">{goal.progress}%</span>
             </div>
-            <div className="mt-2 h-1.5 rounded-full bg-[var(--calico-border)]">
+            <div className="mt-2 h-1.5 rounded-full bg-[var(--aw-border)]">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[var(--calico-primary)] to-[var(--calico-success)] transition-all duration-500"
+                className="h-full rounded-full bg-gradient-to-r from-[var(--aw-primary)] to-[var(--aw-success)] transition-all duration-500"
                 style={{ width: `${goal.progress}%` }}
               />
             </div>
-            <p className="mt-1.5 text-xs text-[var(--calico-text-muted)]">
+            <p className="mt-1.5 text-xs text-[var(--aw-text-muted)]">
               {toCurrency(goal.totalSaved)} of {toCurrency(goal.targetAmount)}
             </p>
           </Link>
@@ -86,7 +86,7 @@ export function GoalsWidget(props: DashboardWidgetProps & { dragHandleProps?: HT
         {goals.length > 3 && (
           <Link
             href="/goals"
-            className="block text-center text-xs font-semibold text-[var(--calico-primary)] transition hover:underline"
+            className="block text-center text-xs font-semibold text-[var(--aw-primary)] transition hover:underline"
           >
             View all {goals.length} goals
           </Link>

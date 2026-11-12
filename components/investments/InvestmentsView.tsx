@@ -299,7 +299,7 @@ export function InvestmentsView() {
         {holdings.length === 0 ? (
           <WorkspaceEmpty
             title="See your full financial picture"
-            description="Add stocks, funds, crypto, or other investments. Calico tracks them alongside your cash and debt so you can see your complete net worth."
+            description="Add stocks, funds, crypto, or other investments. Agent Wallet tracks them alongside your cash and debt so you can see your complete net worth."
             action={(
               <div className="flex flex-wrap items-center gap-2">
                 <Link href="/connect" className="aw-button-secondary inline-flex h-11 items-center rounded-xl px-5 text-sm">

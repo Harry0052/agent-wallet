@@ -36,15 +36,15 @@ export function LandingNav() {
       <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4 md:px-10">
         <div className="flex items-center gap-2">
           <img
-            src="/calico-icon.png"
-            alt="Calico"
+            src="/agent-wallet-icon.png"
+            alt="Agent Wallet"
             style={{ width: 28, height: 28, borderRadius: 7, objectFit: "cover" }}
           />
           <span
             className="text-base"
             style={{ color: C.charcoal, fontFamily: C.fontFamily, fontWeight: 700 }}
           >
-            Calico
+            Agent Wallet
           </span>
         </div>
 

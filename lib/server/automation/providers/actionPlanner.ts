@@ -146,7 +146,7 @@ function buildWarnings(actionType: AutomationActionType, targetService: string):
 
   const def = getSupportedAction(actionType);
   if (def && !def.live) {
-    warnings.push('This action type is not yet fully wired. Calico will create the plan but cannot execute automatically.');
+    warnings.push('This action type is not yet fully wired. Agent Wallet will create the plan but cannot execute automatically.');
   }
 
   if (actionType === 'subscription_cancel') {
@@ -154,7 +154,7 @@ function buildWarnings(actionType: AutomationActionType, targetService: string):
   }
 
   if (actionType === 'subscription_negotiate') {
-    warnings.push('Negotiation outcomes depend on the service provider. Calico will attempt but cannot guarantee a lower rate.');
+    warnings.push('Negotiation outcomes depend on the service provider. Agent Wallet will attempt but cannot guarantee a lower rate.');
   }
 
   if (actionType === 'bill_pay') {
@@ -169,11 +169,11 @@ function buildOutcome(actionType: AutomationActionType, targetService: string): 
     case 'subscription_cancel':
       return `Your ${targetService} subscription will be canceled. You may retain access until the end of your billing period.`;
     case 'subscription_negotiate':
-      return `Calico will attempt to secure a lower rate for ${targetService}. You'll see the offer before any changes are made.`;
+      return `Agent Wallet will attempt to secure a lower rate for ${targetService}. You'll see the offer before any changes are made.`;
     case 'recurring_review':
       return 'You\'ll receive a summary of all recurring charges with recommendations on what to keep, cancel, or investigate.';
     case 'expense_categorization':
-      return 'The transaction will be moved to the correct category and Calico will learn from this correction.';
+      return 'The transaction will be moved to the correct category and Agent Wallet will learn from this correction.';
     case 'trial_conversion_review':
       return 'You\'ll see which trials are about to convert, with the option to cancel before being charged.';
     case 'savings_transfer':

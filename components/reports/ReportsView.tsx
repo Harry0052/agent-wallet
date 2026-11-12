@@ -214,7 +214,7 @@ export function ReportsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title="Reports"
-        subtitle="How your money moved this period, what changed, and what Calico recommends next."
+        subtitle="How your money moved this period, what changed, and what Agent Wallet recommends next."
         actions={(
           <div className="aw-segmented">
             <button type="button" data-active={range === "month"} onClick={() => setRange("month")}>Month</button>

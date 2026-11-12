@@ -282,7 +282,7 @@ export function LandingFeatures() {
           className="mb-20 text-center"
         >
           <motion.h2 variants={fadeUp} style={sectionHeadingStyle}>
-            See what Calico actually does.
+            See what Agent Wallet actually does.
           </motion.h2>
           <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-lg" style={subtitleStyle}>
             Real features. Real interface. No vague promises.
@@ -306,7 +306,7 @@ export function LandingFeatures() {
           <FeatureBlock
             overline="SPENDING CLARITY"
             title="Understand every dollar."
-            description="Calico automatically categorizes your transactions and highlights what changed. No manual tagging."
+            description="Agent Wallet automatically categorizes your transactions and highlights what changed. No manual tagging."
             bullets={[
               "Smart categorization across all accounts",
               "Month-over-month trend detection",
@@ -319,8 +319,8 @@ export function LandingFeatures() {
 
           <FeatureBlock
             overline="PROACTIVE INSIGHTS"
-            title="Calico notices what you miss."
-            description="From unused subscriptions to upcoming bills, Calico surfaces actionable insights so nothing catches you off guard."
+            title="Agent Wallet notices what you miss."
+            description="From unused subscriptions to upcoming bills, Agent Wallet surfaces actionable insights so nothing catches you off guard."
             bullets={[
               "Subscription detection and savings alerts",
               "Bill forecasting and reminders",

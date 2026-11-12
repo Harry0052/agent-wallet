@@ -1,4 +1,4 @@
--- Calico billing: stores each user's Stripe subscription state.
+-- Agent Wallet billing: stores each user's Stripe subscription state.
 -- One row per user. Updated by webhook events.
 
 CREATE TABLE IF NOT EXISTS user_subscriptions (

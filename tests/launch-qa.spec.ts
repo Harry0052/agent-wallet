@@ -28,7 +28,7 @@ test.describe('Unauthenticated routes', () => {
     // Wait for React hydration — useEffect saves ref to localStorage after mount
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
-    const refValue = await page.evaluate(() => localStorage.getItem('calico.referral_code'));
+    const refValue = await page.evaluate(() => localStorage.getItem('agent-wallet.referral_code'));
     expect(refValue).toBe('TESTCODE123');
   });
 
@@ -182,7 +182,7 @@ test.describe('Landing page content', () => {
 
   test('Hero section renders', async ({ page }) => {
     await page.goto(BASE);
-    await expect(page.locator('body')).toContainText(/calico|money|manage/i);
+    await expect(page.locator('body')).toContainText(/agent-wallet|money|manage/i);
   });
 
   test('No server errors on landing page', async ({ page }) => {

@@ -171,7 +171,7 @@ function keywordRoute(input: string): ParsedCommand | null {
 // ---------------------------------------------------------------------------
 
 const LLM_SYSTEM_PROMPT = [
-  'You are a financial command parser for Calico, a personal finance app.',
+  'You are a financial command parser for Agent Wallet, a personal finance app.',
   'Parse the user message into a structured command. Respond ONLY with valid JSON matching this schema:',
   '{',
   '  "intent": one of "query_spending","query_subscription","query_cashflow","query_health","affordability_check","action_cancel_subscription","action_move_money","action_set_budget","general_overview",',

@@ -1,6 +1,7 @@
 "use client";
 
 import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import { migrateLegacyBrowserStorage } from "@/lib/browserStorage";
 
 export function useLocalStorageState<T>(
   key: string,
@@ -20,6 +21,7 @@ export function useLocalStorageState<T>(
   }, [initialValue, key]);
 
   useEffect(() => {
+    migrateLegacyBrowserStorage();
     try {
       const raw = window.localStorage.getItem(key);
       if (raw != null) {
@@ -54,7 +56,7 @@ export function useLocalStorageState<T>(
       if (options?.broadcast !== false) {
         window.setTimeout(() => {
           window.dispatchEvent(
-            new CustomEvent("calico:storage-change", {
+            new CustomEvent("agent-wallet:storage-change", {
               detail: { key, value: serialized },
             }),
           );
@@ -77,7 +79,7 @@ export function useLocalStorageState<T>(
   }, []);
 
   // Persist to localStorage in a useEffect so writes happen after render,
-  // avoiding cascading re-renders when calico:storage-change listeners fire.
+  // avoiding cascading re-renders when agent-wallet:storage-change listeners fire.
   useEffect(() => {
     if (hydrated) {
       persist(value);
@@ -115,10 +117,10 @@ export function useLocalStorageState<T>(
       }
     };
 
-    window.addEventListener("calico:storage-change", onLocalChange);
+    window.addEventListener("agent-wallet:storage-change", onLocalChange);
     window.addEventListener("storage", onStorage);
     return () => {
-      window.removeEventListener("calico:storage-change", onLocalChange);
+      window.removeEventListener("agent-wallet:storage-change", onLocalChange);
       window.removeEventListener("storage", onStorage);
     };
   }, [key]);

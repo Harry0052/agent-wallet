@@ -27,7 +27,7 @@ export function LandingTrust() {
             Your data stays yours.
           </motion.h2>
           <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-lg" style={subtitleStyle}>
-            We built Calico with security and privacy at the core.
+            We built Agent Wallet with security and privacy at the core.
           </motion.p>
         </motion.div>
 

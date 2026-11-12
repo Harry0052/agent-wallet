@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Send, X } from "lucide-react";
 import { InlineSpinner } from "@/components/skeleton";
 
-type CalicoTier = "starter" | "pro" | "autonomous" | null;
+type AgentWalletTier = "starter" | "pro" | "autonomous" | null;
 
 const BASE_PROMPTS = [
   "What should I save for first?",
@@ -24,13 +24,13 @@ const AUTONOMOUS_PROMPTS = [
   "What can you handle for me?",
 ];
 
-function getPromptsForTier(tier: CalicoTier): string[] {
+function getPromptsForTier(tier: AgentWalletTier): string[] {
   if (tier === "autonomous") return [...BASE_PROMPTS.slice(0, 2), ...AUTONOMOUS_PROMPTS.slice(0, 3)];
   if (tier === "pro") return [...BASE_PROMPTS, ...PRO_PROMPTS.slice(0, 2)];
   return BASE_PROMPTS;
 }
 
-async function fetchCalicoResponse(prompt: string): Promise<string> {
+async function fetchAgentWalletResponse(prompt: string): Promise<string> {
   try {
     const res = await fetch("/api/ai/general-chat", {
       method: "POST",
@@ -39,7 +39,7 @@ async function fetchCalicoResponse(prompt: string): Promise<string> {
     });
     const data = await res.json();
     if (data.ok && data.answer) {
-      return rewriteForCalico(data.answer);
+      return rewriteForAgentWallet(data.answer);
     }
     return fallbackResponse(prompt);
   } catch {
@@ -47,7 +47,7 @@ async function fetchCalicoResponse(prompt: string): Promise<string> {
   }
 }
 
-function rewriteForCalico(answer: string): string {
+function rewriteForAgentWallet(answer: string): string {
   return answer
     .replace(/open Wallet/gi, "check your Accounts page")
     .replace(/open Statements/gi, "look at your Money Moves")
@@ -55,8 +55,8 @@ function rewriteForCalico(answer: string): string {
     .replace(/open Settings/gi, "go to Settings")
     .replace(/open Execution/gi, "check your To-Do list")
     .replace(/Use the Tasks panel/gi, "Head over to your To-Do list")
-    .replace(/Use the Research panel/gi, "Try Ask Calico")
     .replace(/Wallet/g, "Accounts")
+    .replace(/Use the Research panel/gi, "Try Ask Agent Wallet")
     .replace(/Statements/g, "Money Moves")
     .replace(/transaction/gi, "money move")
     .replace(/budget/gi, "spending plan")
@@ -67,10 +67,10 @@ function fallbackResponse(input: string): string {
   return getLocalResponse(input, null) ?? "Great question! I'm looking into that. Check your dashboard for the latest on your money.";
 }
 
-export function CalicoAssistant() {
+export function AgentWalletAssistant() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
-  const [tier, setTier] = useState<CalicoTier>(null);
+  const [tier, setTier] = useState<AgentWalletTier>(null);
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<
     Array<{ role: "user" | "assistant"; content: string }>
@@ -80,7 +80,7 @@ export function CalicoAssistant() {
     fetch("/api/billing/status", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        if (data.ok && data.plan) setTier(data.plan as CalicoTier);
+        if (data.ok && data.plan) setTier(data.plan as AgentWalletTier);
         else setTier("starter");
       })
       .catch(() => setTier("starter"));
@@ -96,7 +96,7 @@ export function CalicoAssistant() {
 
     let answer: string;
     if (localAnswer === null) {
-      answer = await fetchCalicoResponse(text);
+      answer = await fetchAgentWalletResponse(text);
     } else {
       answer = localAnswer;
     }
@@ -126,7 +126,7 @@ export function CalicoAssistant() {
             <div className="flex items-center gap-2">
               <span className="text-lg">🐱</span>
               <div>
-                <h4 className="text-sm font-semibold text-[var(--aw-text,#111)]">Calico</h4>
+                <h4 className="text-sm font-semibold text-[var(--aw-text,#111)]">Agent Wallet</h4>
                 <p className="text-[10px] text-[var(--aw-text-muted,#888)]">
                   Your money helper{tier && tier !== "starter" ? ` · ${tierLabel}` : ""}
                 </p>
@@ -145,10 +145,10 @@ export function CalicoAssistant() {
               <div className="space-y-3">
                 <p className="text-sm text-[var(--aw-text,#111)]">
                   {tier === "autonomous"
-                    ? "Hey! I'm Calico. I can explain things, answer questions, and take action for you."
+                    ? "Hey! I'm Agent Wallet. I can explain things, answer questions, and take action for you."
                     : tier === "pro"
-                      ? "Hey! I'm Calico. I can explain things and help you make smarter money decisions."
-                      : "Hey! I'm Calico, your friendly money helper. Ask me anything about your money."}
+                      ? "Hey! I'm Agent Wallet. I can explain things and help you make smarter money decisions."
+                      : "Hey! I'm Agent Wallet, your friendly money helper. Ask me anything about your money."}
                 </p>
                 <div className="space-y-2">
                   {prompts.map((prompt) => (
@@ -173,7 +173,7 @@ export function CalicoAssistant() {
                     <div
                       className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                         msg.role === "user"
-                          ? "bg-[var(--calico-primary,#FDBA74)] text-[var(--aw-text,#111)]"
+                          ? "bg-[var(--aw-primary,#FDBA74)] text-[var(--aw-text,#111)]"
                           : "bg-[var(--aw-surface-subtle,#f5f5f5)] text-[var(--aw-text,#111)]"
                       }`}
                     >
@@ -196,7 +196,7 @@ export function CalicoAssistant() {
 
           <div className="border-t border-[var(--aw-border,#e5e7eb)] p-3">
             <p className="mb-2 text-[10px] text-[var(--aw-text-muted,#888)]">
-              Calico is helpful but not a financial advisor.
+              Agent Wallet is helpful but not a financial advisor.
             </p>
             <div className="flex gap-2">
               <input
@@ -208,12 +208,12 @@ export function CalicoAssistant() {
                 }}
                 placeholder="Ask me anything..."
                 disabled={loading}
-                className="flex-1 rounded-xl border border-[var(--aw-border,#e5e7eb)] bg-[var(--aw-surface-2,#fff)] px-3 py-2 text-sm placeholder-[var(--aw-text-muted,#888)] focus:outline-none focus:ring-2 focus:ring-[var(--calico-primary,#FDBA74)] disabled:opacity-50"
+                className="flex-1 rounded-xl border border-[var(--aw-border,#e5e7eb)] bg-[var(--aw-surface-2,#fff)] px-3 py-2 text-sm placeholder-[var(--aw-text-muted,#888)] focus:outline-none focus:ring-2 focus:ring-[var(--aw-primary,#FDBA74)] disabled:opacity-50"
               />
               <button
                 onClick={handleSend}
                 disabled={loading}
-                className="flex items-center justify-center rounded-xl bg-[var(--calico-primary,#FDBA74)] p-2 transition hover:opacity-90 disabled:opacity-50"
+                className="flex items-center justify-center rounded-xl bg-[var(--aw-primary,#FDBA74)] p-2 transition hover:opacity-90 disabled:opacity-50"
               >
                 <Send size={14} className="text-[var(--aw-text,#111)]" />
               </button>
@@ -224,8 +224,8 @@ export function CalicoAssistant() {
 
       <button
         onClick={() => setOpen(!open)}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--calico-primary,#FDBA74)] shadow-lg transition-all hover:shadow-xl hover:scale-105"
-        aria-label="Talk to Calico"
+        className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--aw-primary,#FDBA74)] shadow-lg transition-all hover:shadow-xl hover:scale-105"
+        aria-label="Talk to Agent Wallet"
       >
         <span className="text-2xl">{open ? "✕" : "🐱"}</span>
       </button>
@@ -234,7 +234,7 @@ export function CalicoAssistant() {
 }
 
 /** Returns a local response for known patterns, or null if the backend should handle it. */
-function getLocalResponse(input: string, tier: CalicoTier): string | null {
+function getLocalResponse(input: string, tier: AgentWalletTier): string | null {
   const lower = input.toLowerCase();
 
   // Autonomous-only actions

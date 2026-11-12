@@ -40,7 +40,7 @@ const INPUT_CONFIG: Record<string, {
 };
 
 const TRUST_COPY: Record<string, string> = {
-  password: "Your password is encrypted immediately and deleted after use. Calico never stores passwords.",
+  password: "Your password is encrypted immediately and deleted after use. Agent Wallet never stores passwords.",
   otp: "This code will be used once and immediately discarded.",
   "2fa_code": "This code will be used once and immediately discarded.",
   pin: "Your PIN is encrypted and deleted immediately after use.",

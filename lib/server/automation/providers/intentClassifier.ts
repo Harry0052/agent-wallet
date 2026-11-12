@@ -231,6 +231,6 @@ export function classifyIntent(prompt: string): IntentClassificationResult {
   return {
     classified: false,
     intent: null,
-    unsupportedReason: 'Calico couldn\'t match this to a supported action. Try something like "Cancel my Netflix" or "Lower my phone bill."',
+    unsupportedReason: 'Agent Wallet couldn\'t match this to a supported action. Try something like "Cancel my Netflix" or "Lower my phone bill."',
   };
 }

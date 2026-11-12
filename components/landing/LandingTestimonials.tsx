@@ -9,12 +9,12 @@ import { StudentSocialProofCarousel } from "./StudentSocialProofCarousel";
 
 const testimonials = [
   {
-    quote: "Calico found $340/year I was losing to forgotten subscriptions. It took five minutes to set up.",
+    quote: "Agent Wallet found $340/year I was losing to forgotten subscriptions. It took five minutes to set up.",
     name: "Sarah M.",
     role: "Product Manager",
   },
   {
-    quote: "I finally understand my finances without spreadsheets. Calico just shows me what matters.",
+    quote: "I finally understand my finances without spreadsheets. Agent Wallet just shows me what matters.",
     name: "James T.",
     role: "Freelancer",
   },
@@ -24,7 +24,7 @@ const testimonials = [
     role: "Small Business Owner",
   },
   {
-    quote: "I used to dread looking at my bank account. Now I actually enjoy checking in with Calico every morning.",
+    quote: "I used to dread looking at my bank account. Now I actually enjoy checking in with Agent Wallet every morning.",
     name: "Daniel P.",
     role: "Teacher",
   },
@@ -39,17 +39,17 @@ const testimonials = [
     role: "Software Engineer",
   },
   {
-    quote: "My partner and I finally stopped arguing about money. Calico makes everything transparent and calm.",
+    quote: "My partner and I finally stopped arguing about money. Agent Wallet makes everything transparent and calm.",
     name: "Priya S.",
     role: "Architect",
   },
   {
-    quote: "I've tried every budgeting app out there. Calico is the only one that stuck. It just works.",
+    quote: "I've tried every budgeting app out there. Agent Wallet is the only one that stuck. It just works.",
     name: "Tomas R.",
     role: "Photographer",
   },
   {
-    quote: "The cash flow forecast helped me plan my first real vacation in three years. Thank you, Calico.",
+    quote: "The cash flow forecast helped me plan my first real vacation in three years. Thank you, Agent Wallet.",
     name: "Aisha B.",
     role: "Nurse",
   },
@@ -66,7 +66,7 @@ const row1 = testimonials.slice(0, 5);
 function TestimonialCard({ t }: { t: (typeof testimonials)[number] }) {
   return (
     <div
-      className="calico-marquee-card"
+      className="agent-wallet-marquee-card"
       style={{
         flexShrink: 0,
         width: 340,
@@ -209,7 +209,7 @@ function MarqueeRow({
 
   return (
     <div
-      className="calico-marquee-row"
+      className="agent-wallet-marquee-row"
       style={{ overflow: "hidden", width: "100%" }}
     >
       <div
@@ -240,7 +240,7 @@ export function LandingTestimonials() {
           className="mb-14 text-center"
         >
           <motion.h2 variants={fadeUp} style={sectionHeadingStyle}>
-            People love Calico.
+            People love Agent Wallet.
           </motion.h2>
         </motion.div>
       </div>

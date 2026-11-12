@@ -52,23 +52,6 @@
   --aw-chart-positive-fill: #BBF7D0;
   --aw-chart-negative-fill: #FECDD3;
 
-  /* Calico aliases — point to aw-* vars so dashboard widgets work without inline style overrides */
-  --calico-background: var(--aw-bg);
-  --calico-card: var(--aw-surface-1);
-  --calico-secondary-surface: var(--aw-surface-subtle);
-  --calico-text: var(--aw-text);
-  --calico-text-soft: var(--aw-text-soft);
-  --calico-text-muted: var(--aw-text-muted);
-  --calico-primary: var(--aw-primary);
-  --calico-primary-hover: var(--aw-primary-strong);
-  --calico-primary-soft: var(--aw-primary-soft);
-  --calico-primary-secondary: var(--aw-primary-secondary);
-  --calico-primary-secondary-soft: var(--aw-primary-secondary-soft);
-  --calico-success: var(--aw-success);
-  --calico-warning: var(--aw-warning);
-  --calico-negative: var(--aw-danger);
-  --calico-border: var(--aw-border);
-  --calico-hover: var(--aw-surface-subtle);
 }
 
 * {
@@ -84,7 +67,7 @@ body {
 }
 
 body {
-  font-family: var(--font-calico), "DM Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-agent-wallet), "DM Sans", "Segoe UI", sans-serif;
   color: var(--aw-text);
   letter-spacing: 0;
   line-height: 1.45;
@@ -816,7 +799,7 @@ button {
   }
 }
 
-@keyframes calico-reveal {
+@keyframes agent-wallet-reveal {
   from {
     opacity: 0;
     transform: translateY(16px) scale(0.98);
@@ -829,26 +812,26 @@ button {
   }
 }
 
-.calico-page-reveal {
-  animation: calico-reveal 500ms cubic-bezier(0.16, 0.7, 0.2, 1) both;
+.agent-wallet-page-reveal {
+  animation: agent-wallet-reveal 500ms cubic-bezier(0.16, 0.7, 0.2, 1) both;
 }
 
-.calico-page-reveal-delayed {
-  animation: calico-reveal 500ms cubic-bezier(0.16, 0.7, 0.2, 1) 150ms both;
+.agent-wallet-page-reveal-delayed {
+  animation: agent-wallet-reveal 500ms cubic-bezier(0.16, 0.7, 0.2, 1) 150ms both;
 }
 
 .animate-sheet-rise {
   animation: sheet-rise 220ms ease both;
 }
 
-@keyframes calico-ambient-drift {
+@keyframes agent-wallet-ambient-drift {
   0%, 100% { transform: translate(0, 0) scale(1); }
   33% { transform: translate(8px, -6px) scale(1.02); }
   66% { transform: translate(-4px, 4px) scale(0.99); }
 }
 
-.calico-ambient-glow {
-  animation: calico-ambient-drift 12s ease-in-out infinite;
+.agent-wallet-ambient-glow {
+  animation: agent-wallet-ambient-drift 12s ease-in-out infinite;
 }
 
 @keyframes aw-skeleton-shimmer {

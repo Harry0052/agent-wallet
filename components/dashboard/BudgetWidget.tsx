@@ -27,14 +27,14 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
           {budgetCategories.map((category) => (
             <div key={category.category} className="space-y-2">
               <div className="flex items-center justify-between gap-4 text-sm">
-                <span className="font-medium capitalize text-[var(--calico-text)]">{category.category}</span>
-                <span className="text-[var(--calico-text-muted)]">
+                <span className="font-medium capitalize text-[var(--aw-text)]">{category.category}</span>
+                <span className="text-[var(--aw-text-muted)]">
                   {toCurrency(category.spent)} of {toCurrency(category.total)}
                 </span>
               </div>
-              <div className="h-2 rounded-full bg-[var(--calico-border)]">
+              <div className="h-2 rounded-full bg-[var(--aw-border)]">
                 <div
-                  className="h-full rounded-full bg-[var(--calico-primary)]"
+                  className="h-full rounded-full bg-[var(--aw-primary)]"
                   style={{ width: `${category.progress}%` }}
                 />
               </div>
@@ -42,7 +42,7 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
           ))}
           <Link
             href="/budgets"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--aw-primary)] transition hover:text-[var(--aw-primary-strong)]"
           >
             See full spending plan
             <ArrowRight size={15} />
@@ -51,9 +51,9 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
       ) : (
         <div style={dashboardDashedStyle} className="flex h-full flex-col justify-between rounded-[20px] p-4">
           <div>
-            <p className="text-lg font-semibold text-[var(--calico-text)]">Know where your money goes</p>
-            <p className="mt-2 max-w-[18rem] text-sm leading-6 text-[var(--calico-text-muted)]">
-              Set monthly limits for categories like groceries, dining, and transport. Calico tracks your actual spending and shows when you're close to your limit.
+            <p className="text-lg font-semibold text-[var(--aw-text)]">Know where your money goes</p>
+            <p className="mt-2 max-w-[18rem] text-sm leading-6 text-[var(--aw-text-muted)]">
+              Set monthly limits for categories like groceries, dining, and transport. Agent Wallet tracks your actual spending and shows when you're close to your limit.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -61,7 +61,7 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
               <Link
                 href="/connect"
                 style={dashboardSecondaryButtonStyle}
-                className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-card)]"
+                className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--aw-surface-1)]"
               >
                 Connect an account
               </Link>
@@ -69,7 +69,7 @@ export function BudgetWidget(props: DashboardWidgetProps & { dragHandleProps?: H
             <Link
               href="/budgets"
               style={dashboardPrimaryButtonStyle}
-              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-primary-hover)]"
+              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--aw-primary-strong)]"
             >
               Create spending plan
             </Link>

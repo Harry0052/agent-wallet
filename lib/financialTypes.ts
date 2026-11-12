@@ -8,7 +8,7 @@ import { normalizeTransactionType } from "@/lib/manualTransactions";
 
 // ── Shared types used across multiple financial pages ────────────────────────
 
-/** Manual cashflow entry stored in localStorage (calico.manual.cashflow) */
+/** Manual cashflow entry stored in localStorage (agent-wallet.manual.cashflow) */
 export interface ManualCashflowEntry {
   id: string;
   label: string;
@@ -19,7 +19,7 @@ export interface ManualCashflowEntry {
   sourceType?: "manual";
 }
 
-/** Manual report entry stored in localStorage (calico.manual.reports) */
+/** Manual report entry stored in localStorage (agent-wallet.manual.reports) */
 export interface ManualReportEntry {
   id: string;
   label: string;

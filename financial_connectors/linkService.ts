@@ -105,7 +105,7 @@ export async function createUserLinkToken(userId: string): Promise<{
   try {
     const created = await plaid.createLinkToken({
       userId,
-      clientName: "Calico",
+      clientName: "Agent Wallet",
       products: ["auth", "transactions"],
       additionalConsentedProducts: ["statements", "investments", "liabilities"],
       webhook: webhookUrl,
@@ -137,7 +137,7 @@ export async function createUserLinkToken(userId: string): Promise<{
     // no additional_consented_products, no webhook
     const fallback = await plaid.createLinkToken({
       userId,
-      clientName: "Calico",
+      clientName: "Agent Wallet",
       products: ["transactions"],
     });
 
@@ -272,7 +272,7 @@ export async function createRelinkToken(input: {
 
   const created = await plaid.createLinkToken({
     userId: input.userId,
-    clientName: "Calico",
+    clientName: "Agent Wallet",
     accessToken: item.plaid_access_token,
     webhook: webhookUrl,
     redirectUri,
@@ -344,7 +344,7 @@ export async function upgradeExistingItemForStatements(
 
   const created = await plaid.createLinkToken({
     userId,
-    clientName: "Calico",
+    clientName: "Agent Wallet",
     accessToken: item.plaid_access_token,
     additionalConsentedProducts: ["statements"],
     webhook: webhookUrl,
@@ -387,7 +387,7 @@ export async function createNewAccountsToken(input: {
 
   const created = await plaid.createLinkToken({
     userId: input.userId,
-    clientName: "Calico",
+    clientName: "Agent Wallet",
     accessToken: item.plaid_access_token,
     accountSelectionEnabled: true,
     webhook: webhookUrl,

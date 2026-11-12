@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       ? error.issues.map((issue) => issue.message).join("; ")
       : error instanceof Error
         ? error.message
-        : "Failed to record Calico telemetry.";
+        : "Failed to record Agent Wallet telemetry.";
     const status = error instanceof z.ZodError ? 400 : 500;
     const errorCode = classifyTaskError({
       message,

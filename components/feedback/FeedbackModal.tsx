@@ -90,7 +90,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
             onClick={handleClose}
             className="mt-6 inline-flex h-10 items-center justify-center rounded-xl px-6 text-sm font-semibold transition-colors"
             style={{
-              background: "var(--calico-primary, #FDBA74)",
+              background: "var(--aw-primary, #FDBA74)",
               color: "var(--aw-text, #111)",
             }}
           >
@@ -114,7 +114,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
                 className="rounded-full border px-3.5 py-1.5 text-[0.78rem] font-medium transition-all"
                 style={{
                   borderColor: category === cat.value
-                    ? "var(--calico-primary, #FDBA74)"
+                    ? "var(--aw-primary, #FDBA74)"
                     : "var(--aw-border)",
                   background: category === cat.value
                     ? "rgba(253, 186, 116, 0.1)"
@@ -171,7 +171,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
               disabled={!message.trim() || submitting}
               className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{
-                background: "var(--calico-primary, #FDBA74)",
+                background: "var(--aw-primary, #FDBA74)",
                 color: "var(--aw-text, #111)",
               }}
             >

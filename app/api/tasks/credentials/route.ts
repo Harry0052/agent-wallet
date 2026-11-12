@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     // It stays server-side for the execution engine to use.
     return NextResponse.json({
       ok: true,
-      message: 'Credential received securely. Calico will continue the task.',
+      message: 'Credential received securely. Agent Wallet will continue the task.',
     });
   }
 

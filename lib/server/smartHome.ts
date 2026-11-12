@@ -277,7 +277,7 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
   const lowData = lowDataMode !== 'none';
   const lowDataReason =
     lowDataMode === 'no_connected_accounts'
-      ? 'No connected accounts yet. Calico can show setup guidance only.'
+      ? 'No connected accounts yet. Agent Wallet can show setup guidance only.'
       : lowDataMode === 'awaiting_sync'
         ? 'Accounts are connected, but posted transactions have not synced yet.'
         : lowDataMode === 'thin_history'
@@ -437,7 +437,7 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
           : connectedAccounts.length > 0 || connectedApps.length > 0
             ? 'Connected sources look healthy.'
             : 'No connected sources yet. Add accounts to activate sync health signals.',
-      whyThisCard: "Connection health controls whether Calico insights are current and trustworthy.",
+      whyThisCard: "Connection health controls whether Agent Wallet insights are current and trustworthy.",
       canDoNow: "Reconnect stale sources or remove inactive ones from active logic.",
       sourceState: connectionHealthState,
       lastUpdatedAt: latestSync || nowIso,
@@ -544,19 +544,19 @@ export async function buildSmartHomePayload(userId: string): Promise<SmartHomePa
       { label: 'Category view', href: '/statements?panel=categories' },
     ],
     trust: {
-      knows: `Calico knows ${connectedAccounts.length} connected accounts, ${connectedApps.length} connected apps, ${activeTransactions.length} synced transactions, and ${paymentMethods.length} saved funding methods.`,
+      knows: `Agent Wallet knows ${connectedAccounts.length} connected accounts, ${connectedApps.length} connected apps, ${activeTransactions.length} synced transactions, and ${paymentMethods.length} saved funding methods.`,
       infers: hasInferenceInputs
-        ? 'Calico infers recurring bills, unusual spend, and budget risk from synced transaction data.'
-        : 'Calico has limited inference until connected account data is available.',
+        ? 'Agent Wallet infers recurring bills, unusual spend, and budget risk from synced transaction data.'
+        : 'Agent Wallet has limited inference until connected account data is available.',
       recommends: lowData
-        ? 'Calico recommends a fixed sequence: connect, sync, then review recurring and unusual spending.'
-        : 'Calico recommends prioritized actions based on impact and confidence.',
+        ? 'Agent Wallet recommends a fixed sequence: connect, sync, then review recurring and unusual spending.'
+        : 'Agent Wallet recommends prioritized actions based on impact and confidence.',
       canDo: lowData
-        ? 'Calico can route you through setup and first analysis actions immediately, then expand recommendations once sync coverage improves.'
-        : 'Calico can route you to statement drill-ins, recurring lifecycle actions, funding setup, and source reconnect immediately.',
+        ? 'Agent Wallet can route you through setup and first analysis actions immediately, then expand recommendations once sync coverage improves.'
+        : 'Agent Wallet can route you to statement drill-ins, recurring lifecycle actions, funding setup, and source reconnect immediately.',
       studentFocus: lowData
-        ? 'Calico prioritizes student-friendly budgeting and subscription awareness to build strong financial habits early.'
-        : 'Calico adapts insights for student spending patterns including recurring subscriptions, meal plans, and textbook expenses.',
+        ? 'Agent Wallet prioritizes student-friendly budgeting and subscription awareness to build strong financial habits early.'
+        : 'Agent Wallet adapts insights for student spending patterns including recurring subscriptions, meal plans, and textbook expenses.',
     },
   };
 }

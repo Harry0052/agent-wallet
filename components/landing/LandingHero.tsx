@@ -68,9 +68,9 @@ function ProductFlowMockup() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <img src="/calico-icon.png" alt="" style={{ width: 20, height: 20, borderRadius: 5 }} />
+            <img src="/agent-wallet-icon.png" alt="" style={{ width: 20, height: 20, borderRadius: 5 }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary, fontFamily: C.fontFamily }}>
-              Calico
+              Agent Wallet
             </span>
           </div>
           <div
@@ -269,7 +269,7 @@ export function LandingHero() {
           {/* Left column */}
           <motion.div initial="initial" animate="animate" variants={{ animate: { transition: { staggerChildren: 0.1 } } }}>
             <motion.div variants={fadeUp} className="mb-7 inline-flex items-center gap-2 rounded-full px-4 py-2" style={{ background: C.apricotSoft, border: `1px solid ${C.apricot}` }}>
-              <img src="/calico-icon.png" alt="" style={{ width: 16, height: 16, borderRadius: 4 }} />
+              <img src="/agent-wallet-icon.png" alt="" style={{ width: 16, height: 16, borderRadius: 4 }} />
               <span className="text-xs font-semibold tracking-wide" style={{ color: C.caramel }}>Your friendly money companion</span>
             </motion.div>
 
