@@ -740,7 +740,7 @@ export function AccountsView() {
         open={addAccountChoiceOpen}
         onClose={() => setAddAccountChoiceOpen(false)}
         title="Add account"
-        description="Choose how you want to add an account to Calico."
+        description="Choose how you want to add an account to Agent Wallet."
       >
         <div className="space-y-3">
           <button

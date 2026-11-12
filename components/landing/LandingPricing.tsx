@@ -50,7 +50,7 @@ const plans = [
     name: "Fully Autonomous",
     price: "$30",
     period: "/month",
-    tagline: "Calico reduces effort and handles more for you.",
+    tagline: "Agent Wallet reduces effort and handles more for you.",
     bestFor: "Best for hands-off money management",
     features: [
       "Everything in Pro",

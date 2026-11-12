@@ -432,7 +432,7 @@ async function runInternalAutomationExecutor(action: AutomationActionRecord): Pr
     return {
       supported: true,
       status: 'completed',
-      message: 'Recurring subscription lifecycle marked inactive in Calico.',
+      message: 'Recurring subscription lifecycle marked inactive in Agent Wallet.',
       metadata: { subscriptionId },
     };
   }

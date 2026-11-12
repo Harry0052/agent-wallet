@@ -1581,7 +1581,7 @@ export async function ensureSchema(): Promise<void> {
       END $$;
     `);
 
-    // ── Calico billing: user_subscriptions table ────────────────────
+    // ── Agent Wallet billing: user_subscriptions table ────────────────────
     await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS user_subscriptions (
         user_id TEXT PRIMARY KEY,
@@ -1611,7 +1611,7 @@ export async function ensureSchema(): Promise<void> {
       WHERE stripe_subscription_id IS NOT NULL;
     `);
 
-    // ── Calico persona: AI-built financial profile ──────────────────
+    // ── Agent Wallet persona: AI-built financial profile ──────────────────
     await safePoolQuery(`
       CREATE TABLE IF NOT EXISTS user_personas (
         user_id TEXT PRIMARY KEY,

@@ -70,7 +70,7 @@ function ProductFlowMockup() {
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <img src="/calico-icon.png" alt="" style={{ width: 20, height: 20, borderRadius: 5 }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: C.textPrimary, fontFamily: C.fontFamily }}>
-              Calico
+              Agent Wallet
             </span>
           </div>
           <div

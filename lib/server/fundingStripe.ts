@@ -129,7 +129,7 @@ export async function createTopupCheckoutSession(params: {
           currency: 'usd',
           unit_amount: cents,
           product_data: {
-            name: 'Calico top-up',
+            name: 'Agent Wallet top-up',
           },
         },
       },

@@ -1353,7 +1353,7 @@ function buildStudentFocus(input: {
     manualTrackingRecommended: !refundCandidate,
     confidence: round(refundConfidence),
     explanation: refundCandidate
-      ? 'Calico found a refund-like lump-sum deposit and spread it into a conservative semester runway plan.'
+      ? 'Agent Wallet found a refund-like lump-sum deposit and spread it into a conservative semester runway plan.'
       : 'No refund-like lump-sum deposit was confidently detected, so runway planning stays manual-first.',
     factors: [
       refundCandidate

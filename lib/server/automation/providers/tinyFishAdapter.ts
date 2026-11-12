@@ -154,25 +154,25 @@ function normalizeFailureMessage(result: ExecutionTaskResult): string {
 
   switch (reason) {
     case 'login_failed':
-      return 'Calico couldn\'t log in to the service. Please check your credentials and try again.';
+      return 'Agent Wallet couldn\'t log in to the service. Please check your credentials and try again.';
     case 'otp_expired':
-      return 'The verification code expired before Calico could use it. Try again and enter the code promptly.';
+      return 'The verification code expired before Agent Wallet could use it. Try again and enter the code promptly.';
     case 'otp_required':
-      return 'The service requires a verification code. Calico will ask for it when needed.';
+      return 'The service requires a verification code. Agent Wallet will ask for it when needed.';
     case 'captcha_required':
-      return 'The service presented a CAPTCHA that Calico couldn\'t solve. You may need to complete this step manually.';
+      return 'The service presented a CAPTCHA that Agent Wallet couldn\'t solve. You may need to complete this step manually.';
     case 'site_changed':
-      return 'The service\'s website has changed and Calico couldn\'t complete the action. We\'ll update our integration.';
+      return 'The service\'s website has changed and Agent Wallet couldn\'t complete the action. We\'ll update our integration.';
     case 'action_blocked':
       return 'The service blocked the action. This may require contacting their support directly.';
     case 'partial_success':
-      return 'Calico partially completed the action but couldn\'t finish. Check the details below.';
+      return 'Agent Wallet partially completed the action but couldn\'t finish. Check the details below.';
     case 'timeout':
       return 'The action took too long and timed out. You can try again.';
     case 'rate_limited':
       return 'The service is rate-limiting requests. Try again in a few minutes.';
     case 'credentials_missing':
-      return 'Calico needs your login credentials for this service. Please add them and try again.';
+      return 'Agent Wallet needs your login credentials for this service. Please add them and try again.';
     case 'unsupported_service':
       return 'This specific service isn\'t supported for automated actions yet. We\'re expanding coverage.';
     default:
@@ -199,13 +199,13 @@ function buildHumanOutcome(result: ExecutionTaskResult): string {
 // ── Integration Hook ────────────────────────────────────────────────────────
 
 /**
- * Tiny Fish integration hook for the Calico automation system.
+ * Tiny Fish integration hook for the Agent Wallet automation system.
  *
  * This adapter:
  * 1. Checks if the action type is supported by Tiny Fish
  * 2. Builds a provider-agnostic payload
  * 3. Sends it to Tiny Fish with retry logic
- * 4. Normalizes the response for the Calico state machine
+ * 4. Normalizes the response for the Agent Wallet state machine
  *
  * If Tiny Fish is not configured (no env vars), all actions gracefully
  * return as unsupported with a clear message.
@@ -328,7 +328,7 @@ class TinyFishIntegrationHook implements AutomationIntegrationHook {
       return {
         supported: true,
         status: 'failed',
-        message: 'Calico couldn\'t reach the execution service. This is usually temporary — try again in a moment.',
+        message: 'Agent Wallet couldn\'t reach the execution service. This is usually temporary — try again in a moment.',
         metadata: {
           provider: 'tinyfish',
           reason: 'provider_error',

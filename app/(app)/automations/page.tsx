@@ -8,7 +8,7 @@ export default function AutomationsPage() {
     <EntitlementGatedPage
       requiredFeature="ai_automation"
       featureLabel="Automations"
-      featureDescription="Let Calico handle routine money tasks with approval-aware automation."
+      featureDescription="Let Agent Wallet handle routine money tasks with approval-aware automation."
       requiredPlan="autonomous"
     >
       <AutomationsView />

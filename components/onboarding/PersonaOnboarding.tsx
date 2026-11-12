@@ -16,7 +16,7 @@ const CALICO_QUESTIONS: { key: string; message: string }[] = [
   {
     key: "intro",
     message:
-      "Hi! Welcome to Calico \ud83d\udc31\n\nI'm your money system \u2014 here to help you understand your money, build good habits, and make smarter decisions.\n\nLet me learn a little about you so I can give better guidance.\n\nWhat's your name?",
+      "Hi! Welcome to Agent Wallet \ud83d\udc31\n\nI'm your money system \u2014 here to help you understand your money, build good habits, and make smarter decisions.\n\nLet me learn a little about you so I can give better guidance.\n\nWhat's your name?",
   },
   {
     key: "about",
@@ -228,7 +228,7 @@ export function PersonaOnboarding() {
       const finalAnswers = { ...answers, [currentQ?.key || ""]: text };
       const fullConv = messages
         .concat([{ role: "user", text }])
-        .map((m) => `${m.role === "calico" ? "Calico" : "User"}: ${m.text}`)
+        .map((m) => `${m.role === "calico" ? "Agent Wallet" : "User"}: ${m.text}`)
         .join("\n\n");
 
       const persona = parsePersonaFromConversation(finalAnswers, fullConv);
@@ -239,7 +239,7 @@ export function PersonaOnboarding() {
         setIsTyping(false);
         setIsComplete(true);
         setConnectPhase("connect");
-        const completionMsg = `Awesome \u2014 I've created your Calico profile${userName.current ? `, ${userName.current}` : ""}! \ud83c\udf89\n\nOne more thing \u2014 if you connect a bank account, I can show you your real balances, transactions, and spending patterns right away.\n\nYour data stays private and read-only. Calico never moves your money.`;
+        const completionMsg = `Awesome \u2014 I've created your Agent Wallet profile${userName.current ? `, ${userName.current}` : ""}! \ud83c\udf89\n\nOne more thing \u2014 if you connect a bank account, I can show you your real balances, transactions, and spending patterns right away.\n\nYour data stays private and read-only. Agent Wallet never moves your money.`;
         setMessages((prev) => [...prev, { role: "calico", text: completionMsg }]);
         scrollToBottom();
       } catch (err) {
@@ -323,7 +323,7 @@ export function PersonaOnboarding() {
       >
         <img
           src="/calico-icon.png"
-          alt="Calico"
+          alt="Agent Wallet"
           style={{ width: 32, height: 32, borderRadius: 8 }}
         />
         <span
@@ -334,7 +334,7 @@ export function PersonaOnboarding() {
             fontFamily: "'DM Sans', sans-serif",
           }}
         >
-          Calico
+          Agent Wallet
         </span>
       </motion.div>
 

@@ -163,10 +163,10 @@ export function AdviceView() {
             </button>
             <div className="text-center">
               <h2 className="text-2xl font-bold text-[var(--aw-text)] mb-2">
-                Let Calico get to know you
+                Let Agent Wallet get to know you
               </h2>
               <p className="text-[var(--aw-text-muted)] mb-8">
-                Answer a few quick questions so Calico can give you better tips
+                Answer a few quick questions so Agent Wallet can give you better tips
               </p>
               <button
                 onClick={() => setShowModal(false)}
@@ -181,7 +181,7 @@ export function AdviceView() {
 
       <div className="flex h-full min-h-screen flex-col gap-8 bg-[var(--aw-surface-subtle)] p-6">
         {/* Header */}
-        <WorkspaceHeader title="Ask Calico" subtitle="Tips & guidance just for you" />
+        <WorkspaceHeader title="Ask Agent Wallet" subtitle="Tips & guidance just for you" />
 
         <div className="flex flex-1 gap-6">
           {/* Main Content */}
@@ -196,7 +196,7 @@ export function AdviceView() {
                   <div className="group relative cursor-help">
                     <Info size={18} className="text-[var(--aw-text-muted)]" />
                     <div className="absolute bottom-full left-0 mb-2 hidden w-48 rounded-lg bg-gray-900 p-2 text-xs text-white group-hover:block z-10">
-                      Calico picked these based on what matters most for your money right now.
+                      Agent Wallet picked these based on what matters most for your money right now.
                     </div>
                   </div>
                 </div>
@@ -335,7 +335,7 @@ export function AdviceView() {
             <div className="flex items-center justify-between border-b border-[var(--aw-border)] p-4">
               <div className="flex items-center gap-2">
                 <span className="text-lg">🐱</span>
-                <h4 className="font-semibold text-[var(--aw-text)]">Ask Calico</h4>
+                <h4 className="font-semibold text-[var(--aw-text)]">Ask Agent Wallet</h4>
               </div>
               <button
                 onClick={() => setChatOpen(false)}
@@ -350,7 +350,7 @@ export function AdviceView() {
               {chatMessages.length === 0 ? (
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-[var(--aw-text-muted)] mb-4">
-                    Hey! I'm Calico. Ask me anything about your money.
+                    Hey! I'm Agent Wallet. Ask me anything about your money.
                   </p>
                   {SUGGESTED_PROMPTS.map((prompt, idx) => (
                     <button
@@ -397,7 +397,7 @@ export function AdviceView() {
             {/* Disclaimer */}
             <div className="border-t border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] p-3">
               <p className="text-xs text-[var(--aw-text-muted)]">
-                Calico is helpful but not a financial advisor. Double-check important decisions.
+                Agent Wallet is helpful but not a financial advisor. Double-check important decisions.
               </p>
             </div>
 

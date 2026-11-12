@@ -43,11 +43,11 @@ function AppEntryReveal({ children }: { children: React.ReactNode }) {
             >
               <img
                 src="/calico-icon.png"
-                alt="Calico"
+                alt="Agent Wallet"
                 style={{ width: 36, height: 36, borderRadius: 10 }}
               />
               <span style={{ fontSize: 20, fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif" }}>
-                Calico
+                Agent Wallet
               </span>
             </motion.div>
           </motion.div>

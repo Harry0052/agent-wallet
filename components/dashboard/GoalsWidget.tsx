@@ -27,7 +27,7 @@ export function GoalsWidget(props: DashboardWidgetProps & { dragHandleProps?: HT
             </div>
             <p className="mt-4 text-lg font-semibold text-[var(--calico-text)]">What are you saving for?</p>
             <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
-              Set a money goal and Calico will help you track your progress. Start with an emergency fund or something fun.
+              Set a money goal and Agent Wallet will help you track your progress. Start with an emergency fund or something fun.
             </p>
           </div>
           <div className="mt-6">

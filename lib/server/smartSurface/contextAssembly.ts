@@ -66,7 +66,7 @@ export async function assembleSmartSurfaceContext(userId: string): Promise<Smart
     ? null
     : hasAnyConnectedSource
       ? "Sources are connected but there is not enough recent posted transaction history yet."
-      : "No connected sources yet. Sync accounts first to unlock full Calico intelligence.";
+      : "No connected sources yet. Sync accounts first to unlock full Agent Wallet intelligence.";
   const contextSourceState: SmartSurfaceContext["dataState"]["sourceState"] = hasRecentData
     ? "Synced"
     : hasAnyConnectedSource
@@ -147,14 +147,14 @@ export async function assembleSmartSurfaceContext(userId: string): Promise<Smart
       advancedIntelligence: moneyIntelligence.advancedIntelligence,
     },
     trust: {
-      knows: `Calico knows ${connectedAccounts.length} connected accounts, ${connectedApps.length} connected apps, ${activeTransactions.length} synced transactions, and ${fundingMethods.length} funding methods.`,
+      knows: `Agent Wallet knows ${connectedAccounts.length} connected accounts, ${connectedApps.length} connected apps, ${activeTransactions.length} synced transactions, and ${fundingMethods.length} funding methods.`,
       infers: hasRecentData
-        ? "Calico infers recurring bills, anomalies, and optimization opportunities from synced transactions."
-        : "Calico has limited inference until enough posted synced data is available.",
+        ? "Agent Wallet infers recurring bills, anomalies, and optimization opportunities from synced transactions."
+        : "Agent Wallet has limited inference until enough posted synced data is available.",
       recommends: hasRecentData
-        ? "Calico recommends ranked actions with clear drill-ins."
-        : "Calico recommends setup and sync actions first.",
-      canDo: "Calico can open statement filters, recurring lifecycle actions, funding setup, and connection-health remediation now.",
+        ? "Agent Wallet recommends ranked actions with clear drill-ins."
+        : "Agent Wallet recommends setup and sync actions first.",
+      canDo: "Agent Wallet can open statement filters, recurring lifecycle actions, funding setup, and connection-health remediation now.",
     },
   };
 }

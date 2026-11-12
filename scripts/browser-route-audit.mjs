@@ -23,7 +23,7 @@ const scenarios = {
   pro: [
     { path: "/home", expect: "Money Overview" },
     { path: "/goals", expect: "Money Goals", reject: "See Plans" },
-    { path: "/insights", expect: "What Calico Noticed", reject: "See Plans" },
+    { path: "/insights", expect: "What Agent Wallet Noticed", reject: "See Plans" },
     { path: "/investments", expect: "Part of the Fully Autonomous plan." },
     { path: "/tasks", expect: "Part of the Fully Autonomous plan." },
     { path: "/automations", expect: "Part of the Fully Autonomous plan." },

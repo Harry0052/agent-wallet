@@ -73,7 +73,7 @@ const plans: {
     name: "Autonomous",
     price: "$30",
     period: "/month",
-    tagline: "Calico handles the work for you.",
+    tagline: "Agent Wallet handles the work for you.",
     bestFor: "Best for hands-off money management",
     icon: Crown,
     iconColor: "#FDBA74",
@@ -138,9 +138,9 @@ export function PlanSelection() {
         transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
         className="mb-4 flex items-center gap-2"
       >
-        <img src="/calico-icon.png" alt="Calico" style={{ width: 32, height: 32, borderRadius: 8 }} />
+        <img src="/calico-icon.png" alt="Agent Wallet" style={{ width: 32, height: 32, borderRadius: 8 }} />
         <span style={{ fontSize: 18, fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif" }}>
-          Calico
+          Agent Wallet
         </span>
       </motion.div>
 
@@ -151,7 +151,7 @@ export function PlanSelection() {
         className="mb-3 text-center"
         style={{ fontSize: "clamp(1.6rem, 4vw, 2.2rem)", fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.15 }}
       >
-        Pick how Calico helps you
+        Pick how Agent Wallet helps you
       </motion.h1>
       <motion.p
         initial={{ opacity: 0 }}

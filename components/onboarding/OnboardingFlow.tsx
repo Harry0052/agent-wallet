@@ -194,7 +194,7 @@ export function OnboardingFlow() {
 
       {step === "welcome" ? (
         <div className="w-full text-center">
-          <h1 className="text-2xl font-semibold text-[var(--aw-text)]">Welcome to Calico</h1>
+          <h1 className="text-2xl font-semibold text-[var(--aw-text)]">Welcome to Agent Wallet</h1>
           <p className="mt-3 text-sm leading-relaxed text-[var(--aw-text-muted)]">
             Your finances, simplified. Track spending, spot savings, and stay on top of every subscription, all in one place.
           </p>

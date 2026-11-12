@@ -55,8 +55,8 @@ function rewriteForCalico(answer: string): string {
     .replace(/open Settings/gi, "go to Settings")
     .replace(/open Execution/gi, "check your To-Do list")
     .replace(/Use the Tasks panel/gi, "Head over to your To-Do list")
-    .replace(/Use the Research panel/gi, "Try Ask Calico")
     .replace(/Wallet/g, "Accounts")
+    .replace(/Use the Research panel/gi, "Try Ask Agent Wallet")
     .replace(/Statements/g, "Money Moves")
     .replace(/transaction/gi, "money move")
     .replace(/budget/gi, "spending plan")
@@ -126,7 +126,7 @@ export function CalicoAssistant() {
             <div className="flex items-center gap-2">
               <span className="text-lg">🐱</span>
               <div>
-                <h4 className="text-sm font-semibold text-[var(--aw-text,#111)]">Calico</h4>
+                <h4 className="text-sm font-semibold text-[var(--aw-text,#111)]">Agent Wallet</h4>
                 <p className="text-[10px] text-[var(--aw-text-muted,#888)]">
                   Your money helper{tier && tier !== "starter" ? ` · ${tierLabel}` : ""}
                 </p>
@@ -145,10 +145,10 @@ export function CalicoAssistant() {
               <div className="space-y-3">
                 <p className="text-sm text-[var(--aw-text,#111)]">
                   {tier === "autonomous"
-                    ? "Hey! I'm Calico. I can explain things, answer questions, and take action for you."
+                    ? "Hey! I'm Agent Wallet. I can explain things, answer questions, and take action for you."
                     : tier === "pro"
-                      ? "Hey! I'm Calico. I can explain things and help you make smarter money decisions."
-                      : "Hey! I'm Calico, your friendly money helper. Ask me anything about your money."}
+                      ? "Hey! I'm Agent Wallet. I can explain things and help you make smarter money decisions."
+                      : "Hey! I'm Agent Wallet, your friendly money helper. Ask me anything about your money."}
                 </p>
                 <div className="space-y-2">
                   {prompts.map((prompt) => (
@@ -196,7 +196,7 @@ export function CalicoAssistant() {
 
           <div className="border-t border-[var(--aw-border,#e5e7eb)] p-3">
             <p className="mb-2 text-[10px] text-[var(--aw-text-muted,#888)]">
-              Calico is helpful but not a financial advisor.
+              Agent Wallet is helpful but not a financial advisor.
             </p>
             <div className="flex gap-2">
               <input
@@ -225,7 +225,7 @@ export function CalicoAssistant() {
       <button
         onClick={() => setOpen(!open)}
         className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--calico-primary,#FDBA74)] shadow-lg transition-all hover:shadow-xl hover:scale-105"
-        aria-label="Talk to Calico"
+        aria-label="Talk to Agent Wallet"
       >
         <span className="text-2xl">{open ? "✕" : "🐱"}</span>
       </button>

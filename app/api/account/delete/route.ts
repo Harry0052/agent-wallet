@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     logServerEvent('info', 'account.deletion.started', { userId });
 
-    // Delete all Calico-owned user data in dependency order.
+    // Delete all Agent Wallet-owned user data in dependency order.
     // External Stripe records remain (legal/accounting) but local references are cleared.
 
     // Financial memory

@@ -7,7 +7,7 @@ export default function InsightsPage() {
   return (
     <EntitlementGatedPage
       requiredFeature="advanced_insights"
-      featureLabel="What Calico Noticed"
+      featureLabel="What Agent Wallet Noticed"
       featureDescription="Get smarter tips and deeper explanations about your spending patterns and money habits."
       requiredPlan="pro"
     >

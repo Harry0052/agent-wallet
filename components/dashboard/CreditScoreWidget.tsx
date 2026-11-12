@@ -19,7 +19,7 @@ export function CreditScoreWidget(props: DashboardWidgetProps & { dragHandleProp
             Credit score tracking
           </p>
           <p className="mt-3 text-sm leading-6 text-[var(--calico-text-muted)]">
-            Calico is working on adding credit score tracking to your dashboard. You'll be able to see your score and get alerts when it changes.
+            Agent Wallet is working on adding credit score tracking to your dashboard. You'll be able to see your score and get alerts when it changes.
           </p>
         </div>
         <div className="mt-6 inline-flex h-11 items-center justify-center rounded-[16px] border border-[var(--calico-border)] bg-[var(--calico-hover)] px-4 text-sm font-semibold text-[var(--calico-text-muted)]">

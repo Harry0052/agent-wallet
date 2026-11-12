@@ -217,7 +217,7 @@ function SyncingCard({ index }: { index: number }) {
           <Clock size={13} style={{ color: "var(--calico-primary)" }} />
         </div>
         <span className="text-[0.8rem] font-medium text-[var(--calico-text-muted)]">
-          This insight appears once Calico has enough data
+          This insight appears once Agent Wallet has enough data
         </span>
       </div>
     </motion.div>

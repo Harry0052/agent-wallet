@@ -28,7 +28,7 @@ const AUTOMATIONS: AutomationCard[] = [
   {
     id: "auto-emergency-fund",
     title: "Auto-fund emergency savings",
-    description: "Calico moves a set amount to your emergency fund every payday.",
+    description: "Agent Wallet moves a set amount to your emergency fund every payday.",
     icon: <Shield size={20} />,
     status: "available",
     category: "savings",
@@ -36,7 +36,7 @@ const AUTOMATIONS: AutomationCard[] = [
   {
     id: "auto-goal-funding",
     title: "Auto-fund your goals",
-    description: "Calico splits extra money across your goals based on priority.",
+    description: "Agent Wallet splits extra money across your goals based on priority.",
     icon: <PiggyBank size={20} />,
     status: "available",
     category: "savings",
@@ -44,7 +44,7 @@ const AUTOMATIONS: AutomationCard[] = [
   {
     id: "bill-monitor",
     title: "Bill increase alerts",
-    description: "Calico watches for bills that go up and lets you know right away.",
+    description: "Agent Wallet watches for bills that go up and lets you know right away.",
     icon: <DollarSign size={20} />,
     status: "active",
     category: "bills",
@@ -52,7 +52,7 @@ const AUTOMATIONS: AutomationCard[] = [
   {
     id: "bill-negotiate",
     title: "Bill negotiation help",
-    description: "Calico helps you negotiate lower rates on your biggest bills.",
+    description: "Agent Wallet helps you negotiate lower rates on your biggest bills.",
     icon: <Zap size={20} />,
     status: "available",
     category: "bills",
@@ -60,7 +60,7 @@ const AUTOMATIONS: AutomationCard[] = [
   {
     id: "sub-review",
     title: "Subscription review",
-    description: "Calico finds subscriptions you might not need and helps you cancel them.",
+    description: "Agent Wallet finds subscriptions you might not need and helps you cancel them.",
     icon: <RefreshCw size={20} />,
     status: "available",
     category: "subscriptions",
@@ -68,7 +68,7 @@ const AUTOMATIONS: AutomationCard[] = [
   {
     id: "debt-optimizer",
     title: "Smart debt payoff",
-    description: "Calico figures out the best order to pay off what you owe to save the most on interest.",
+    description: "Agent Wallet figures out the best order to pay off what you owe to save the most on interest.",
     icon: <Bot size={20} />,
     status: "available",
     category: "debt",
@@ -98,7 +98,7 @@ export function AutomationsView() {
     <div className="flex h-full min-h-screen flex-col gap-8 bg-[var(--aw-surface-subtle)] p-6">
       <WorkspaceHeader
         title="Automations"
-        subtitle={isAutonomous ? "Set up automated workflows. Review active items in the Action Center." : "Let Calico handle the money busywork for you."}
+        subtitle={isAutonomous ? "Set up automated workflows. Review active items in the Action Center." : "Let Agent Wallet handle the money busywork for you."}
         actions={isAutonomous ? (
           <Link
             href="/tasks"
@@ -119,7 +119,7 @@ export function AutomationsView() {
             Unlock Automations
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-[var(--aw-text-muted)]">
-            Automation review lives in Task Center on the Fully Autonomous plan. This preview shows the kinds of workflows Calico can support safely.
+            Automation review lives in Task Center on the Fully Autonomous plan. This preview shows the kinds of workflows Agent Wallet can support safely.
           </p>
           <Link
             href="/settings?section=billing"
@@ -155,7 +155,7 @@ export function AutomationsView() {
           <div className="rounded-2xl border border-[var(--aw-border)] bg-white p-6">
             <p className="text-sm font-semibold text-[var(--aw-text)]">Review-first automations</p>
             <p className="mt-2 max-w-2xl text-sm text-[var(--aw-text-muted)]">
-              In this build, Calico stages automation-capable workflows for review instead of silently running them. Use Task Center to inspect any live actions before you approve them.
+              In this build, Agent Wallet stages automation-capable workflows for review instead of silently running them. Use Task Center to inspect any live actions before you approve them.
             </p>
           </div>
 
@@ -228,21 +228,21 @@ export function AutomationsView() {
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">1</div>
                 <div>
                   <p className="text-sm font-medium text-[var(--aw-text)]">Choose an action</p>
-                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Pick what you want Calico to handle.</p>
+                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Pick what you want Agent Wallet to handle.</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">2</div>
                 <div>
                   <p className="text-sm font-medium text-[var(--aw-text)]">Set your rules</p>
-                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Tell Calico how much, how often, and your limits.</p>
+                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Tell Agent Wallet how much, how often, and your limits.</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">3</div>
                 <div>
-                  <p className="text-sm font-medium text-[var(--aw-text)]">Calico stages the action</p>
-                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Calico prepares the workflow and checks in with you when approval is required.</p>
+                  <p className="text-sm font-medium text-[var(--aw-text)]">Agent Wallet stages the action</p>
+                  <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Agent Wallet prepares the workflow and checks in with you when approval is required.</p>
                 </div>
               </div>
             </div>

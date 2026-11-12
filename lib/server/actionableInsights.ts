@@ -169,7 +169,7 @@ function fallbackInsight(
     return {
       type: 'opportunity',
       title: 'Connect an account to unlock insights',
-      description: 'Calico analyzes your spending to surface savings opportunities and warnings.',
+      description: 'Agent Wallet analyzes your spending to surface savings opportunities and warnings.',
       impactLabel: 'Personalized insights await',
       cta: 'Get started',
     };
@@ -191,7 +191,7 @@ function fallbackInsight(
     return {
       type: 'opportunity',
       title: 'Building your financial picture',
-      description: 'Calico is learning your spending patterns. More insights will appear as your transaction history grows.',
+      description: 'Agent Wallet is learning your spending patterns. More insights will appear as your transaction history grows.',
       impactLabel: 'Analyzing your data',
       cta: 'View cash flow',
     };
@@ -201,7 +201,7 @@ function fallbackInsight(
   return {
     type: 'opportunity',
     title: 'Your finances look steady',
-    description: 'No unusual spending or savings opportunities detected right now. Calico will notify you when something comes up.',
+    description: 'No unusual spending or savings opportunities detected right now. Agent Wallet will notify you when something comes up.',
     impactLabel: 'All clear',
     cta: null,
   };

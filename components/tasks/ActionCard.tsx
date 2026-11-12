@@ -192,7 +192,7 @@ export function ActionCard({
               Confirm this action?
             </p>
             <p className="mt-1 text-[0.78rem] text-[var(--aw-text-muted)]">
-              Calico will {ACTION_TYPE_LABELS[action.actionType].toLowerCase()} on your behalf.
+              Agent Wallet will {ACTION_TYPE_LABELS[action.actionType].toLowerCase()} on your behalf.
               {action.amount !== null && ` Estimated impact: ${fmt(action.amount)}.`}
             </p>
             <div className="mt-3 flex gap-2">

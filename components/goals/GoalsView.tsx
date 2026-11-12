@@ -413,7 +413,7 @@ export function GoalsView() {
       <div className="px-4 py-6">
         <WorkspaceHeader
           title="Money Goals"
-          subtitle="Track what you're saving for or paying down. Calico updates your progress automatically from your transactions."
+          subtitle="Track what you're saving for or paying down. Agent Wallet updates your progress automatically from your transactions."
           actions={(
             <button
               type="button"
@@ -459,9 +459,9 @@ export function GoalsView() {
             <div className="flex items-start gap-3">
               <span className="mt-0.5 text-xl">🐱</span>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-amber-900">Calico suggests: Start an emergency fund</p>
+                <p className="text-sm font-semibold text-amber-900">Agent Wallet suggests: Start an emergency fund</p>
                 <p className="mt-1 text-xs text-amber-700">
-                  An emergency fund is the most important goal you can have. It helps when life gets expensive unexpectedly — car repairs, medical bills, or a surprise expense. Calico recommends building this before fun goals.
+                  An emergency fund is the most important goal you can have. It helps when life gets expensive unexpectedly — car repairs, medical bills, or a surprise expense. Agent Wallet recommends building this before fun goals.
                 </p>
                 <button
                   type="button"
@@ -500,7 +500,7 @@ export function GoalsView() {
             <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
               {activeTab === "save-up"
                 ? "Start with an emergency fund — it's the most important goal to have."
-                : "Add what you owe so Calico can help you pay it off faster."}
+                : "Add what you owe so Agent Wallet can help you pay it off faster."}
             </p>
             <button
               type="button"
@@ -607,8 +607,8 @@ export function GoalsView() {
                 </h3>
                 <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
                   {activeTab === "save-up"
-                    ? "Add more goals as you go. Calico suggests starting with safety, then fun."
-                    : "Add everything you owe so Calico can help you plan the best payoff order."}
+                    ? "Add more goals as you go. Agent Wallet suggests starting with safety, then fun."
+                    : "Add everything you owe so Agent Wallet can help you plan the best payoff order."}
                 </p>
               </div>
               <button

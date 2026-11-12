@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     if (isInternalActionsRuntimeEnabled()) {
       // Reserved service boundary for future internal action execution.
-      // Intentionally not exposed in primary Calico flows.
+      // Intentionally not exposed in primary Agent Wallet flows.
     }
 
     return NextResponse.json({
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       ? error.issues.map((issue) => issue.message).join('; ')
       : error instanceof Error
         ? error.message
-        : 'Failed to process Calico request';
+        : 'Failed to process Agent Wallet request';
     const errorCode = classifyTaskError({
       message,
       validation: error instanceof z.ZodError,

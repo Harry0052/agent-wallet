@@ -279,7 +279,7 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="How should Calico call you?"
+              placeholder="How should Agent Wallet call you?"
               className="aw-input flex-1 h-9 text-sm"
             />
             <button
@@ -447,7 +447,7 @@ function NotificationsSection() {
           Notifications
         </h3>
         <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-          Choose what Calico tells you about and how
+          Choose what Agent Wallet tells you about and how
         </p>
       </div>
 
@@ -481,7 +481,7 @@ function NotificationsSection() {
         <label className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-4">
           <div>
             <p className="text-sm font-medium text-[var(--aw-text)]">In-app notifications</p>
-            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">Show alerts inside Calico when something needs attention</p>
+            <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">Show alerts inside Agent Wallet when something needs attention</p>
           </div>
           <input
             type="checkbox"
@@ -639,7 +639,7 @@ function GeneralSection() {
           <div>
             <p className="text-sm font-medium text-[var(--aw-text)]">Product tutorial</p>
             <p className="mt-0.5 text-xs text-[var(--aw-text-muted)]">
-              Replay the guided tour of Calico and your plan features
+              Replay the guided tour of Agent Wallet and your plan features
             </p>
           </div>
           <button
@@ -896,7 +896,7 @@ function InstitutionsSection() {
 const PLAN_DISPLAY: Record<PlanId, { name: string; price: string; description: string; bestFor: string }> = {
   starter: { name: "Starter", price: "$5/mo", description: "See where you stand", bestFor: "Best for getting organized" },
   pro: { name: "Pro", price: "$20/mo", description: "Understand what to do next", bestFor: "Best for smarter money decisions" },
-  autonomous: { name: "Fully Autonomous", price: "$30/mo", description: "Let Calico handle it", bestFor: "Best for active financial optimization" },
+  autonomous: { name: "Fully Autonomous", price: "$30/mo", description: "Let Agent Wallet handle it", bestFor: "Best for active financial optimization" },
 };
 
 function BillingSection({
@@ -1325,7 +1325,7 @@ function DeleteAccountButton() {
           Are you sure?
         </p>
         <p className="text-xs leading-5 text-[var(--aw-text-muted)]">
-          This will permanently delete your Calico account, all connected accounts, transactions,
+          This will permanently delete your Agent Wallet account, all connected accounts, transactions,
           budgets, goals, and settings. This action cannot be undone.
         </p>
         <div className="flex gap-2">
@@ -1523,7 +1523,7 @@ export function SettingsPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-[var(--aw-text)]">Privacy & Legal</h3>
                   <p className="mt-1 text-sm text-[var(--aw-text-muted)]">
-                    How Calico handles your data and your rights.
+                    How Agent Wallet handles your data and your rights.
                   </p>
                 </div>
 
@@ -1548,7 +1548,7 @@ export function SettingsPage() {
 
                 <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-4 py-3">
                   <p className="text-xs text-[var(--aw-text-muted)]">
-                    Calico uses bank-level encryption to protect your financial data. Your credentials are never stored on our servers — all connections are handled securely through Plaid.
+                    Agent Wallet uses bank-level encryption to protect your financial data. Your credentials are never stored on our servers — all connections are handled securely through Plaid.
                   </p>
                 </div>
               </div>

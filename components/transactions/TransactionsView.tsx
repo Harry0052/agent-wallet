@@ -296,7 +296,7 @@ export function TransactionsView() {
       setCorrectionNotice(
         result.ruleStatus === "active"
           ? "Category learning updated. This merchant now has an active learned rule."
-          : "Correction saved. Calico will activate learning after repeated consistent corrections.",
+          : "Correction saved. Agent Wallet will activate learning after repeated consistent corrections.",
       );
       setCategoryCorrectionTx(null);
       onCategoryCorrected();
@@ -720,7 +720,7 @@ export function TransactionsView() {
           }
         }}
         title="Correct category"
-        description="Teach Calico by confirming a better category for this merchant."
+        description="Teach Agent Wallet by confirming a better category for this merchant."
       >
         <div className="space-y-3">
           <div className="rounded-xl border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-2 text-xs text-[var(--aw-text-soft)]">

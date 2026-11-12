@@ -41,7 +41,7 @@ export function WelcomeModal({ open, onStart }: WelcomeModalProps) {
         >
           <img
             src="/calico-icon.png"
-            alt="Calico"
+            alt="Agent Wallet"
             style={{ width: 32, height: 32, borderRadius: 8 }}
           />
         </motion.div>
@@ -59,7 +59,7 @@ export function WelcomeModal({ open, onStart }: WelcomeModalProps) {
             lineHeight: 1.2,
           }}
         >
-          Welcome to Calico
+          Welcome to Agent Wallet
         </motion.h2>
 
         <motion.p

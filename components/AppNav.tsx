@@ -98,10 +98,10 @@ export function AppNav() {
       <nav className="sw-sidebar hidden md:flex">
         <div className="sw-sidebar-logo">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--aw-primary-soft)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-            <img src="/calico-icon.png" alt="Calico" className="h-6 w-6 rounded-lg object-cover" />
+            <img src="/calico-icon.png" alt="Agent Wallet" className="h-6 w-6 rounded-lg object-cover" />
           </div>
           <div>
-            <p className="text-[0.94rem] font-semibold tracking-[-0.02em] text-[var(--aw-text)]">Calico</p>
+            <p className="text-[0.94rem] font-semibold tracking-[-0.02em] text-[var(--aw-text)]">Agent Wallet</p>
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--aw-text-muted)]">Your Money Helper</p>
           </div>
         </div>

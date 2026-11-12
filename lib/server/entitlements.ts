@@ -59,7 +59,7 @@ export const FEATURES: FeatureDefinition[] = [
   { key: 'basic_transactions', label: 'Transaction Feed', description: 'See spending and income as it happens', minimumPlan: 'starter' },
   { key: 'spending_categories', label: 'Auto-Categories', description: 'Transactions sorted into categories automatically', minimumPlan: 'starter' },
   { key: 'monthly_cashflow', label: 'Cash Flow', description: 'Monthly money in vs. money out', minimumPlan: 'starter' },
-  { key: 'basic_budgets', label: 'First Budget Draft', description: 'Calico builds your first spending plan from your history', minimumPlan: 'starter' },
+  { key: 'basic_budgets', label: 'First Budget Draft', description: 'Agent Wallet builds your first spending plan from your history', minimumPlan: 'starter' },
   { key: 'monthly_summaries', label: 'Weekly Safe to Spend', description: 'Know how much you can comfortably spend each week', minimumPlan: 'starter' },
   { key: 'manual_entry', label: 'Manual Entry', description: 'Add accounts and transactions by hand', minimumPlan: 'starter' },
 
@@ -74,24 +74,24 @@ export const FEATURES: FeatureDefinition[] = [
   { key: 'basic_alerts', label: 'Smart Alerts', description: 'Get notified about unusual spending or important changes', minimumPlan: 'pro' },
   { key: 'basic_insights', label: 'Coaching Insights', description: 'Personalized guidance based on your life stage and habits', minimumPlan: 'pro' },
   { key: 'advanced_insights', label: 'Deep Analysis', description: 'Pattern explanations and spending comparisons over time', minimumPlan: 'pro' },
-  { key: 'smart_savings', label: 'Savings Coaching', description: 'Calico finds realistic ways you could save more', minimumPlan: 'pro' },
+  { key: 'smart_savings', label: 'Savings Coaching', description: 'Agent Wallet finds realistic ways you could save more', minimumPlan: 'pro' },
   { key: 'custom_categories', label: 'Custom Categories', description: 'Organize transactions into your own groups', minimumPlan: 'pro' },
-  { key: 'ai_research', label: 'Purchase Planner', description: 'Ask Calico if you can afford something and when to buy it', minimumPlan: 'pro' },
+  { key: 'ai_research', label: 'Purchase Planner', description: 'Ask Agent Wallet if you can afford something and when to buy it', minimumPlan: 'pro' },
   { key: 'cashflow_forecast', label: '30-Day Forecast', description: 'See where your money will be in 30 days', minimumPlan: 'pro' },
-  { key: 'premium_intelligence', label: 'Advanced Intelligence', description: 'Full depth of Calico analysis, scenarios, and optimization', minimumPlan: 'pro' },
+  { key: 'premium_intelligence', label: 'Advanced Intelligence', description: 'Full depth of Agent Wallet analysis, scenarios, and optimization', minimumPlan: 'pro' },
   { key: 'advanced_forecasting', label: 'Extended Outlook', description: 'Longer-range financial projections and what-if scenarios', minimumPlan: 'pro' },
-  { key: 'financial_memory', label: 'Financial Memory', description: 'Calico remembers your patterns and gets smarter over time', minimumPlan: 'pro' },
+  { key: 'financial_memory', label: 'Financial Memory', description: 'Agent Wallet remembers your patterns and gets smarter over time', minimumPlan: 'pro' },
   { key: 'investments', label: 'Investments', description: 'Track holdings and portfolio value inside your broader money picture', minimumPlan: 'pro' },
   { key: 'priority_support', label: 'Priority Support', description: 'Faster help when you need it', minimumPlan: 'pro' },
 
   // ── Fully Autonomous — "Help me handle it" ──
-  // Action execution only: Calico takes action on your behalf
-  { key: 'ai_automation', label: 'Action Center', description: 'Calico detects issues, drafts fixes, and asks for your approval', minimumPlan: 'autonomous' },
-  { key: 'autonomous_actions', label: 'Learned Rules', description: 'Calico remembers corrections and applies them automatically', minimumPlan: 'autonomous' },
-  { key: 'action_execution', label: 'Action Execution', description: 'Calico completes supported actions on your behalf', minimumPlan: 'autonomous' },
+  // Action execution only: Agent Wallet takes action on your behalf
+  { key: 'ai_automation', label: 'Action Center', description: 'Agent Wallet detects issues, drafts fixes, and asks for your approval', minimumPlan: 'autonomous' },
+  { key: 'autonomous_actions', label: 'Learned Rules', description: 'Agent Wallet remembers corrections and applies them automatically', minimumPlan: 'autonomous' },
+  { key: 'action_execution', label: 'Action Execution', description: 'Agent Wallet completes supported actions on your behalf', minimumPlan: 'autonomous' },
   { key: 'task_history', label: 'Task History & Approvals', description: 'Review past actions, approvals, and execution logs', minimumPlan: 'autonomous' },
-  { key: 'bill_negotiation', label: 'Bill Optimization', description: 'Calico identifies and acts on opportunities to reduce recurring costs', minimumPlan: 'autonomous' },
-  { key: 'custom_integrations', label: 'Custom Integrations', description: 'Connect external services to Calico (coming soon)', minimumPlan: 'autonomous' },
+  { key: 'bill_negotiation', label: 'Bill Optimization', description: 'Agent Wallet identifies and acts on opportunities to reduce recurring costs', minimumPlan: 'autonomous' },
+  { key: 'custom_integrations', label: 'Custom Integrations', description: 'Connect external services to Agent Wallet (coming soon)', minimumPlan: 'autonomous' },
   { key: 'api_access', label: 'API Access', description: 'Programmatic access to your financial data (coming soon)', minimumPlan: 'autonomous' },
 ];
 
@@ -140,28 +140,28 @@ export const PLAN_TUTORIALS: Record<PlanId, { heading: string; steps: TutorialSt
     heading: "Your first money system",
     steps: [
       { title: "See everything in one place", body: "Your accounts, balances, and net worth — all together. This is your financial home base.", icon: "LayoutDashboard" },
-      { title: "Link your accounts", body: "Connect up to 3 bank accounts or cards. Calico only looks — never touches your money.", icon: "Link" },
-      { title: "Know what's safe to spend", body: "Each week, Calico tells you how much is safe to spend after bills and essentials.", icon: "Sparkles" },
-      { title: "Your first budget and goal", body: "Calico drafts a simple spending plan and suggests your first savings goal. Just review and adjust.", icon: "PiggyBank" },
+      { title: "Link your accounts", body: "Connect up to 3 bank accounts or cards. Agent Wallet only looks — never touches your money.", icon: "Link" },
+      { title: "Know what's safe to spend", body: "Each week, Agent Wallet tells you how much is safe to spend after bills and essentials.", icon: "Sparkles" },
+      { title: "Your first budget and goal", body: "Agent Wallet drafts a simple spending plan and suggests your first savings goal. Just review and adjust.", icon: "PiggyBank" },
     ],
   },
   pro: {
     heading: "Your adaptive money coach",
     steps: [
       { title: "Guidance built for your life", body: "Pro adapts to your age, income, goals, and habits. The advice gets more relevant over time.", icon: "Sparkles" },
-      { title: "Smart spending plan", body: "Calico builds your budget from your real spending and adjusts it as things change.", icon: "PiggyBank" },
-      { title: "Goals with real timelines", body: "Set savings targets and Calico suggests how much to save each month and when you'll reach them.", icon: "Target" },
-      { title: "Purchase planner", body: "Before a big spend, ask Calico if you can afford it — and when the best time to buy would be.", icon: "CalendarCheck" },
-      { title: "Credit and investing guidance", body: "Calico helps you build credit and tells you when you're ready to start investing — no jargon.", icon: "TrendingUp" },
-      { title: "Insights and cleanup", body: "Calico spots patterns, recommends actions, and helps you keep your transaction data clean.", icon: "Receipt" },
+      { title: "Smart spending plan", body: "Agent Wallet builds your budget from your real spending and adjusts it as things change.", icon: "PiggyBank" },
+      { title: "Goals with real timelines", body: "Set savings targets and Agent Wallet suggests how much to save each month and when you'll reach them.", icon: "Target" },
+      { title: "Purchase planner", body: "Before a big spend, ask Agent Wallet if you can afford it — and when the best time to buy would be.", icon: "CalendarCheck" },
+      { title: "Credit and investing guidance", body: "Agent Wallet helps you build credit and tells you when you're ready to start investing — no jargon.", icon: "TrendingUp" },
+      { title: "Insights and cleanup", body: "Agent Wallet spots patterns, recommends actions, and helps you keep your transaction data clean.", icon: "Receipt" },
     ],
   },
   autonomous: {
-    heading: "Calico handles the work",
+    heading: "Agent Wallet handles the work",
     steps: [
-      { title: "Less manual work", body: "Everything in Pro, plus Calico detects routine money tasks and prepares them for your approval.", icon: "Crown" },
+      { title: "Less manual work", body: "Everything in Pro, plus Agent Wallet detects routine money tasks and prepares them for your approval.", icon: "Crown" },
       { title: "Action Center", body: "Transfer cleanup, recurring confirmations, budget drafts, category fixes — all in one place. Approve or dismiss with one tap.", icon: "Zap" },
-      { title: "Calico learns from you", body: "Every correction you make teaches Calico. Over time, it handles more automatically and gets smarter.", icon: "Brain" },
+      { title: "Agent Wallet learns from you", body: "Every correction you make teaches Agent Wallet. Over time, it handles more automatically and gets smarter.", icon: "Brain" },
     ],
   },
 };

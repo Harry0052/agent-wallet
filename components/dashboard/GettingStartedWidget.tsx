@@ -35,7 +35,7 @@ export function GettingStartedWidget(props: GettingStartedWidgetProps) {
   return (
     <WidgetContainer
       title="Getting Started"
-      subtitle="A few quick steps to get Calico working for you."
+      subtitle="A few quick steps to get Agent Wallet working for you."
       dragHandleProps={props.dragHandleProps}
     >
       <div className="space-y-5">

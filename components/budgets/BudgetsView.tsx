@@ -506,7 +506,7 @@ export function BudgetsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title={formatMonthTitle(activeMonth)}
-        subtitle="Set limits for each category and Calico shows how you're tracking. Adjust anytime."
+        subtitle="Set limits for each category and Agent Wallet shows how you're tracking. Adjust anytime."
         actions={(
           <>
             <ToolbarButton icon={<ChevronLeft size={14} />} onClick={() => setActiveMonth((prev) => shiftMonth(prev, -1))} />

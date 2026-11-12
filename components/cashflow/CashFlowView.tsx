@@ -421,7 +421,7 @@ export function CashFlowView() {
           <WorkspaceEmpty
             title="See where your money goes"
             description={connectedAccountCount === 0
-              ? "Connect a bank account and Calico will map your income to your spending categories automatically."
+              ? "Connect a bank account and Agent Wallet will map your income to your spending categories automatically."
               : "Once transactions come in for this period, you'll see how your income flows into spending."}
             action={(
               <div className="flex flex-wrap items-center justify-center gap-2">
@@ -493,8 +493,8 @@ export function CashFlowView() {
             <WorkspaceEmpty
               title="Nothing scheduled yet"
               description={connectedAccountCount === 0
-                ? "Connect an account and Calico will detect your recurring bills and paychecks automatically."
-                : "As Calico detects patterns in your spending, recurring items will appear here."}
+                ? "Connect an account and Agent Wallet will detect your recurring bills and paychecks automatically."
+                : "As Agent Wallet detects patterns in your spending, recurring items will appear here."}
               action={(
                 <div className="flex flex-wrap items-center gap-2">
                   {connectedAccountCount === 0 ? (

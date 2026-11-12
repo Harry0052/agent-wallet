@@ -422,7 +422,7 @@ export function StatementsWorkspace() {
     if (lowDataMode === "awaiting_sync") {
       return {
         title: "Accounts are connected. Finish first sync to unlock analysis.",
-        detail: "Once posted transactions arrive, Calico can generate recurring and unusual-spend signals.",
+        detail: "Once posted transactions arrive, Agent Wallet can generate recurring and unusual-spend signals.",
         actions: [
           { label: "Step 1: Check account health", href: "/connect#health" },
           { label: "Step 2: Retry sync", href: "/connect#accounts" },
@@ -1100,7 +1100,7 @@ export function StatementsWorkspace() {
 
             {lowDataMode !== "none" ? (
               <div className="mt-3 rounded-xl border border-[var(--aw-warning)]/35 bg-[var(--aw-warning)]/10 px-3 py-2 text-xs text-[var(--aw-text-soft)]">
-                Low-data mode: Calico can show synced statements, but merchant/category/anomaly intelligence is limited until account coverage and posted history improve.
+                Low-data mode: Agent Wallet can show synced statements, but merchant/category/anomaly intelligence is limited until account coverage and posted history improve.
               </div>
             ) : null}
 
@@ -1306,19 +1306,19 @@ export function StatementsWorkspace() {
         </div>
         <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
           <p className="text-xs text-[var(--aw-text-soft)]">
-            <span className="font-semibold text-[var(--aw-text)]">What Calico knows:</span>{" "}
+            <span className="font-semibold text-[var(--aw-text)]">What Agent Wallet knows:</span>{" "}
             Synced transactions, merchant names, categories, posted/pending status, and recurring items you manually confirm.
           </p>
           <p className="text-xs text-[var(--aw-text-soft)]">
-            <span className="font-semibold text-[var(--aw-text)]">What Calico infers:</span>{" "}
+            <span className="font-semibold text-[var(--aw-text)]">What Agent Wallet infers:</span>{" "}
             Recurring patterns, unusual spend signals, and potential cancellation opportunities from available transaction history.
           </p>
           <p className="text-xs text-[var(--aw-text-soft)]">
-            <span className="font-semibold text-[var(--aw-text)]">What Calico recommends:</span>{" "}
+            <span className="font-semibold text-[var(--aw-text)]">What Agent Wallet recommends:</span>{" "}
             Confirm recurring merchants, review anomalies, and prioritize high-impact monthly savings candidates.
           </p>
           <p className="text-xs text-[var(--aw-text-soft)]">
-            <span className="font-semibold text-[var(--aw-text)]">What Calico can do now:</span>{" "}
+            <span className="font-semibold text-[var(--aw-text)]">What Agent Wallet can do now:</span>{" "}
             Apply statement filters, update recurring lifecycle states, and add manual recurring items for forecasting.
           </p>
         </div>

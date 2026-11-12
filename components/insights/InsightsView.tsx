@@ -140,13 +140,13 @@ function generateLocalInsights(
     insights.push({
       id: "local-getting-started",
       title: "Start tracking to get insights",
-      summary: "Add an account, transaction, or goal and Calico will start spotting patterns in your money.",
+      summary: "Add an account, transaction, or goal and Agent Wallet will start spotting patterns in your money.",
       severity: "info",
     });
   } else if (transactions.length < 3 && accounts.length > 0) {
     insights.push({
       id: "local-more-data-needed",
-      title: "Calico needs more data",
+      title: "Agent Wallet needs more data",
       summary: "Add a few more transactions — manual or connected — and insights will get more specific and useful.",
       severity: "info",
     });
@@ -249,7 +249,7 @@ export function InsightsView() {
     <div className="aw-workspace-page">
       <WorkspaceHeader
         title="Insights"
-        subtitle="Patterns Calico noticed in your spending, and what you can do about them."
+        subtitle="Patterns Agent Wallet noticed in your spending, and what you can do about them."
       />
 
       {loading ? (
@@ -258,7 +258,7 @@ export function InsightsView() {
         <WorkspaceEmpty
           icon={<Lightbulb size={24} />}
           title="Nothing to report yet"
-          description="Calico generates insights from your accounts, transactions, and goals. Add more data and check back."
+          description="Agent Wallet generates insights from your accounts, transactions, and goals. Add more data and check back."
           action={(
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Link

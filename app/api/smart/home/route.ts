@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, home: payload });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to load Calico home';
+    const message = error instanceof Error ? error.message : 'Failed to load Agent Wallet home';
     const stack = error instanceof Error ? error.stack?.slice(0, 500) : undefined;
     const errorCode = classifyTaskError({ message });
     logServerEvent('error', 'smart.home.failed', { errorCode, message, stack });

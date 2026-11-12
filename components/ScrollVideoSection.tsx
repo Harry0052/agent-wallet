@@ -68,7 +68,7 @@ const SCENES: Scene[] = [
     toFrame: 30,
     kicker: 'Recurring spend',
     headline: 'Every subscription, surfaced automatically',
-    body: 'Calico scans your transaction history and flags recurring charges — with renewal dates, risk signals, and one-click actions.',
+    body: 'Agent Wallet scans your transaction history and flags recurring charges — with renewal dates, risk signals, and one-click actions.',
     accent: '#FDBA74',
   },
   {
@@ -84,7 +84,7 @@ const SCENES: Scene[] = [
     toFrame: 90,
     kicker: 'Connection health',
     headline: 'Your financial data, always in sync',
-    body: 'Live sync across every connected account. When a link drops, Calico surfaces it instantly — and walks you through the fix.',
+    body: 'Live sync across every connected account. When a link drops, Agent Wallet surfaces it instantly — and walks you through the fix.',
     accent: '#FDE68A',
   },
 ];

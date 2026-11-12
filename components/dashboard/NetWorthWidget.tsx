@@ -49,7 +49,7 @@ export function NetWorthWidget(props: DashboardWidgetProps & { dragHandleProps?:
             </div>
             <p className="mt-4 text-sm font-semibold text-[var(--calico-text)]">See the full picture</p>
             <p className="mt-1.5 max-w-[16rem] text-xs leading-5 text-[var(--calico-text-muted)]">
-              Link your accounts and Calico will show your net worth and how it changes over time.
+              Link your accounts and Agent Wallet will show your net worth and how it changes over time.
             </p>
             <Link
               href="/accounts"

@@ -55,7 +55,7 @@ export function SpendingWidget(props: DashboardWidgetProps & { dragHandleProps?:
             </div>
             <p className="mt-4 text-sm font-semibold text-[var(--calico-text)]">Track your spending pace</p>
             <p className="mt-1.5 max-w-[16rem] text-xs leading-5 text-[var(--calico-text-muted)]">
-              Once you connect an account, Calico will compare this month's spending with last month so you can see if you're on track.
+              Once you connect an account, Agent Wallet will compare this month's spending with last month so you can see if you're on track.
             </p>
             <Link
               href="/transactions"

@@ -1,7 +1,7 @@
 import type { AutomationActionType } from '@/lib/types';
 
 // ── Provider-Agnostic Execution Types ───────────────────────────────────────
-// These types decouple Calico's automation system from any specific
+// These types decouple Agent Wallet's automation system from any specific
 // execution provider (Tiny Fish, browser automation, RPA, etc.).
 
 export type ExecutionRiskLevel = 'low' | 'medium' | 'high' | 'critical';

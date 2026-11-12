@@ -82,11 +82,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const { error: sendError } = await resend.emails.send({
-      from: 'Calico Feedback <onboarding@resend.dev>',
+      from: 'Agent Wallet Feedback <onboarding@resend.dev>',
       to: [feedbackToEmail],
-      subject: `Calico Feedback — ${categoryLabel}`,
+      subject: `Agent Wallet Feedback — ${categoryLabel}`,
       text: [
-        `New feedback from Calico`,
+        `New feedback from Agent Wallet`,
         ``,
         `Category:  ${categoryLabel}`,
         `User ID:   ${userId}`,

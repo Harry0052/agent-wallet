@@ -10,7 +10,7 @@ export function AdviceWidget(props: DashboardWidgetProps & { dragHandleProps?: H
 
   return (
     <WidgetContainer
-      title="Tips from Calico"
+      title="Tips from Agent Wallet"
       subtitle="Helpful suggestions based on your recent activity."
       dragHandleProps={props.dragHandleProps}
     >
@@ -20,9 +20,9 @@ export function AdviceWidget(props: DashboardWidgetProps & { dragHandleProps?: H
             <div className="inline-flex h-11 w-11 items-center justify-center rounded-[20px] bg-[rgba(253,186,116,0.2)] text-[var(--calico-primary)]">
               <Sparkles size={20} />
             </div>
-            <p className="mt-4 text-lg font-semibold text-[var(--calico-text)]">Calico has tips for you</p>
+            <p className="mt-4 text-lg font-semibold text-[var(--calico-text)]">Agent Wallet has tips for you</p>
             <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
-              Once you connect an account, Calico will start noticing patterns and share helpful ideas about your money.
+              Once you connect an account, Agent Wallet will start noticing patterns and share helpful ideas about your money.
             </p>
           </div>
           <Link

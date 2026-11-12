@@ -19,7 +19,7 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
   return (
     <WidgetContainer
       title="Upcoming Bills"
-      subtitle="Recurring charges Calico detected from your transactions."
+      subtitle="Recurring charges Agent Wallet detected from your transactions."
       dragHandleProps={props.dragHandleProps}
     >
       {recurring.length === 0 ? (
@@ -27,7 +27,7 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
           <div>
             <p className="text-lg font-semibold text-[var(--calico-text)]">No upcoming bills yet</p>
             <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
-              Connect an account and Calico will find your bills and subscriptions automatically.
+              Connect an account and Agent Wallet will find your bills and subscriptions automatically.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2">

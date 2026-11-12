@@ -125,7 +125,7 @@ export async function enforceApiAuth(
     let userMessage: string;
     let errorCode: string;
     if (isPoolError) {
-      userMessage = 'Calico is temporarily busy. Please try again in a few seconds.';
+      userMessage = 'Agent Wallet is temporarily busy. Please try again in a few seconds.';
       errorCode = 'DB_POOL_EXHAUSTED';
     } else if (isNetworkError) {
       userMessage = 'Unable to reach the database. Please try again.';

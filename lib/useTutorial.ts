@@ -36,10 +36,10 @@ const BASE_TUTORIAL_KEY = "calico.tutorial.base-dismissed";
 
 /**
  * General base tutorial shown to ALL new users regardless of plan.
- * Introduces the core Calico experience.
+ * Introduces the core Agent Wallet experience.
  */
 const BASE_TUTORIAL: { heading: string; steps: TutorialStep[] } = {
-  heading: "Welcome to Calico!",
+  heading: "Welcome to Agent Wallet!",
   steps: [
     {
       title: "This is your money home base",
@@ -48,22 +48,22 @@ const BASE_TUTORIAL: { heading: string; steps: TutorialStep[] } = {
     },
     {
       title: "Link your bank accounts",
-      body: "Connect your bank or cards so Calico can see your money. We only look — we never touch your accounts.",
+      body: "Connect your bank or cards so Agent Wallet can see your money. We only look — we never touch your accounts.",
       icon: "Link",
     },
     {
-      title: "Calico organizes everything",
+      title: "Agent Wallet organizes everything",
       body: "Transactions are categorized automatically. You'll see where your money goes without any manual work.",
       icon: "Receipt",
     },
     {
       title: "Your first plan and goal",
-      body: "Calico drafts a simple spending plan and suggests your first savings goal based on your situation.",
+      body: "Agent Wallet drafts a simple spending plan and suggests your first savings goal based on your situation.",
       icon: "PiggyBank",
     },
     {
       title: "Guidance that fits your life",
-      body: "Calico adapts to your age, income, and goals. The more it learns, the more useful it gets.",
+      body: "Agent Wallet adapts to your age, income, and goals. The more it learns, the more useful it gets.",
       icon: "Sparkles",
     },
   ],

@@ -11,7 +11,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[Calico] Unhandled error:", error.message, error.digest);
+    console.error("[Agent Wallet] Unhandled error:", error.message, error.digest);
     Sentry.captureException(error);
   }, [error]);
 
@@ -21,7 +21,7 @@ export default function GlobalError({
     <div className="flex min-h-[60vh] items-center justify-center px-6">
       <div className="w-full max-w-md text-center">
         <h2 className="text-xl font-semibold text-[var(--aw-text,#111)]">
-          {isDbError ? "Calico is temporarily busy" : "Something went wrong"}
+          {isDbError ? "Agent Wallet is temporarily busy" : "Something went wrong"}
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-[var(--aw-text-muted,#6B5B4B)]">
           {isDbError
