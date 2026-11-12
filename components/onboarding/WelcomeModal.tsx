@@ -40,7 +40,7 @@ export function WelcomeModal({ open, onStart }: WelcomeModalProps) {
           style={{ borderRadius: 16, background: "rgba(253, 186, 116, 0.22)" }}
         >
           <img
-            src="/calico-icon.png"
+            src="/agent-wallet-icon.png"
             alt="Agent Wallet"
             style={{ width: 32, height: 32, borderRadius: 8 }}
           />

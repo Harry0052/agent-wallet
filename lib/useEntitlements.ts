@@ -22,7 +22,7 @@ export interface UseEntitlementsResult {
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1200;
-const CACHE_KEY = "calico.entitlements.v1";
+const CACHE_KEY = "agent-wallet.entitlements.v1";
 const CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
 /** Read last-known-good entitlements from localStorage */

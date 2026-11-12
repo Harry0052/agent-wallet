@@ -66,7 +66,7 @@ const row1 = testimonials.slice(0, 5);
 function TestimonialCard({ t }: { t: (typeof testimonials)[number] }) {
   return (
     <div
-      className="calico-marquee-card"
+      className="agent-wallet-marquee-card"
       style={{
         flexShrink: 0,
         width: 340,
@@ -209,7 +209,7 @@ function MarqueeRow({
 
   return (
     <div
-      className="calico-marquee-row"
+      className="agent-wallet-marquee-row"
       style={{ overflow: "hidden", width: "100%" }}
     >
       <div

@@ -1,4 +1,4 @@
-import { calicoTheme } from "@/styles/theme";
+import { agentWalletTheme } from "@/styles/theme";
 import { SimpleTrendChart } from "@/components/dashboard/SimpleTrendChart";
 
 interface PlaceholderChartProps {
@@ -13,8 +13,8 @@ export function PlaceholderChart({ data, dataKey }: PlaceholderChartProps) {
       xKey={typeof data[0]?.label === "string" ? "label" : typeof data[0]?.day === "number" ? "day" : dataKey}
       series={[{
         key: dataKey,
-        stroke: calicoTheme.primary,
-        fill: calicoTheme.primary,
+        stroke: agentWalletTheme.primary,
+        fill: agentWalletTheme.primary,
         strokeWidth: 2.2,
       }]}
       heightClassName="h-44"

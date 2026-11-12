@@ -1,4 +1,4 @@
-import { calicoTheme } from "@/styles/theme";
+import { agentWalletTheme } from "@/styles/theme";
 
 interface SeriesConfig {
   key: string;
@@ -128,7 +128,7 @@ export function SimpleTrendChart<T extends object>({
     return { ...item, points, linePath, areaPath };
   });
 
-  const gradientId = (key: string) => `calico-gradient-${key}`;
+  const gradientId = (key: string) => `agent-wallet-gradient-${key}`;
 
   return (
     <div className={heightClassName}>
@@ -162,7 +162,7 @@ export function SimpleTrendChart<T extends object>({
               x2={chartWidth - paddingRight}
               y1={y}
               y2={y}
-              stroke={calicoTheme.border}
+              stroke={agentWalletTheme.border}
               strokeWidth="0.5"
               strokeDasharray="4 4"
               opacity="0.35"

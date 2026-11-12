@@ -3,6 +3,7 @@ import 'server-only';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { getOptionalSecret, getRequiredSecret, getSecretFromAny } from '@/security/secretsManager';
+import { getPublicAppOrigin } from '@/lib/publicOrigin';
 
 export const GOOGLE_OAUTH_STATE_COOKIE = 'aw_google_oauth_state';
 const GOOGLE_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -23,7 +24,7 @@ export interface VerifiedGoogleIdentity {
 }
 
 function appOrigin(): string {
-  return process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || 'https://startcalico.com';
+  return process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || getPublicAppOrigin();
 }
 
 function googleOauthRedirectUri(): string {

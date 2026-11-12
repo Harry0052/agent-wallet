@@ -41,16 +41,16 @@ export function GettingStartedWidget(props: GettingStartedWidgetProps) {
       <div className="space-y-5">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--calico-text-muted)]">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--aw-text-muted)]">
               Setup Progress
             </p>
-            <span className="text-sm font-semibold text-[var(--calico-text)]">
+            <span className="text-sm font-semibold text-[var(--aw-text)]">
               {completed}/{steps.length}
             </span>
           </div>
-          <div className="h-3 rounded-full bg-[var(--calico-border)]">
+          <div className="h-3 rounded-full bg-[var(--aw-border)]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[var(--calico-primary)] to-[var(--calico-success)] transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-[var(--aw-primary)] to-[var(--aw-success)] transition-all duration-500"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -64,16 +64,16 @@ export function GettingStartedWidget(props: GettingStartedWidgetProps) {
                 key={step.label}
                 href={step.href}
                 style={dashboardInsetStyle}
-                className="group flex items-center gap-3 rounded-[16px] px-4 py-3 text-sm transition-all hover:bg-[var(--calico-card)] hover:shadow-sm"
+                className="group flex items-center gap-3 rounded-[16px] px-4 py-3 text-sm transition-all hover:bg-[var(--aw-surface-1)] hover:shadow-sm"
               >
                 <Icon
                   size={20}
                   className={step.complete
-                    ? "shrink-0 text-[var(--calico-success)]"
-                    : "shrink-0 text-[var(--calico-text-muted)] group-hover:text-[var(--calico-primary)]"
+                    ? "shrink-0 text-[var(--aw-success)]"
+                    : "shrink-0 text-[var(--aw-text-muted)] group-hover:text-[var(--aw-primary)]"
                   }
                 />
-                <span className={step.complete ? "text-[var(--calico-text-muted)] line-through" : "text-[var(--calico-text)]"}>
+                <span className={step.complete ? "text-[var(--aw-text-muted)] line-through" : "text-[var(--aw-text)]"}>
                   {step.label}
                 </span>
               </Link>
@@ -82,11 +82,11 @@ export function GettingStartedWidget(props: GettingStartedWidgetProps) {
         </div>
 
         {props.onHide && (
-          <div className="border-t border-[var(--calico-border)] pt-3">
+          <div className="border-t border-[var(--aw-border)] pt-3">
             <button
               type="button"
               onClick={props.onHide}
-              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--calico-text-muted)] transition hover:text-[var(--calico-primary)]"
+              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--aw-text-muted)] transition hover:text-[var(--aw-primary)]"
             >
               <X size={14} />
               Hide this widget

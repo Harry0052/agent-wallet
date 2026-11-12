@@ -25,8 +25,8 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
       {recurring.length === 0 ? (
         <div style={dashboardDashedStyle} className="flex h-full flex-col justify-between rounded-[20px] p-4">
           <div>
-            <p className="text-lg font-semibold text-[var(--calico-text)]">No upcoming bills yet</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">
+            <p className="text-lg font-semibold text-[var(--aw-text)]">No upcoming bills yet</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--aw-text-muted)]">
               Connect an account and Agent Wallet will find your bills and subscriptions automatically.
             </p>
           </div>
@@ -34,14 +34,14 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
             <Link
               href="/connect"
               style={dashboardSecondaryButtonStyle}
-              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-card)]"
+              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--aw-surface-1)]"
             >
               Connect an account
             </Link>
             <Link
               href="/transactions"
               style={dashboardPrimaryButtonStyle}
-              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--calico-primary-hover)]"
+              className="inline-flex h-11 items-center justify-center rounded-[20px] px-4 text-sm font-semibold transition hover:bg-[var(--aw-primary-strong)]"
             >
               Add a payment
             </Link>
@@ -56,14 +56,14 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
               <div key={item.id} style={dashboardInsetStyle} className="rounded-[16px] px-4 py-3">
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-[var(--calico-text)]">{item.merchant}</p>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-[var(--calico-text-muted)]">
+                    <p className="truncate text-sm font-semibold text-[var(--aw-text)]">{item.merchant}</p>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-[var(--aw-text-muted)]">
                       <span className="capitalize">{item.recurrence_interval}</span>
-                      <span className="text-[var(--calico-border)]">·</span>
+                      <span className="text-[var(--aw-border)]">·</span>
                       <span>{confidenceLabel} confidence</span>
                     </div>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--calico-text)]">
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--aw-text)]">
                     {toCurrency(item.estimated_monthly_cost)}/mo
                   </span>
                 </div>
@@ -71,10 +71,10 @@ export function RecurringWidget(props: DashboardWidgetProps & { dragHandleProps?
             );
           })}
           <div className="flex items-center justify-between pt-1">
-            <p className="text-xs text-[var(--calico-text-muted)]">
+            <p className="text-xs text-[var(--aw-text-muted)]">
               {toCurrency(recurring.reduce((s, i) => s + (i.estimated_monthly_cost ?? 0), 0))}/mo total
             </p>
-            <Link href="/recurring" className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--calico-primary)] transition hover:text-[var(--calico-primary-hover)]">
+            <Link href="/recurring" className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--aw-primary)] transition hover:text-[var(--aw-primary-strong)]">
               See all
               <ArrowRight size={13} />
             </Link>

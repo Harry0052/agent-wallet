@@ -31,8 +31,8 @@ export interface TutorialState {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = "calico.tutorial.dismissed";
-const BASE_TUTORIAL_KEY = "calico.tutorial.base-dismissed";
+const STORAGE_KEY = "agent-wallet.tutorial.dismissed";
+const BASE_TUTORIAL_KEY = "agent-wallet.tutorial.base-dismissed";
 
 /**
  * General base tutorial shown to ALL new users regardless of plan.

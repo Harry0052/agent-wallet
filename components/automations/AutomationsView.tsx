@@ -76,7 +76,7 @@ const AUTOMATIONS: AutomationCard[] = [
 ];
 
 const STATUS_CONFIG = {
-  available: { label: "Set up", color: "text-[var(--calico-primary,#FDBA74)]", bg: "bg-orange-50" },
+  available: { label: "Set up", color: "text-[var(--aw-primary,#FDBA74)]", bg: "bg-orange-50" },
   active: { label: "Running", color: "text-green-600", bg: "bg-green-50" },
   completed: { label: "Done", color: "text-blue-600", bg: "bg-blue-50" },
 };
@@ -102,7 +102,7 @@ export function AutomationsView() {
         actions={isAutonomous ? (
           <Link
             href="/tasks"
-            className="inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-4 py-2 text-sm font-semibold text-[var(--aw-text)] shadow-sm transition hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-full bg-[var(--aw-primary,#FDBA74)] px-4 py-2 text-sm font-semibold text-[var(--aw-text)] shadow-sm transition hover:opacity-90"
           >
             Open Action Center
             <ArrowRight size={16} />
@@ -113,7 +113,7 @@ export function AutomationsView() {
       {!isAutonomous && (
         <div className="rounded-2xl border border-[var(--aw-border)] bg-white p-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50">
-            <Lock size={24} className="text-[var(--calico-primary,#FDBA74)]" />
+            <Lock size={24} className="text-[var(--aw-primary,#FDBA74)]" />
           </div>
           <h2 className="text-xl font-semibold text-[var(--aw-text)]">
             Unlock Automations
@@ -123,7 +123,7 @@ export function AutomationsView() {
           </p>
           <Link
             href="/settings?section=billing"
-            className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--calico-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-[var(--aw-primary,#FDBA74)] px-6 py-3 text-sm font-semibold text-[var(--aw-text)] shadow-md hover:opacity-90 transition"
           >
             View Plans & Billing
             <ArrowRight size={16} />
@@ -135,7 +135,7 @@ export function AutomationsView() {
               {AUTOMATIONS.slice(0, 4).map((auto) => (
                 <div key={auto.id} className="rounded-xl border border-[var(--aw-border)] bg-white p-4 text-left">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 text-[var(--calico-primary,#FDBA74)]">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 text-[var(--aw-primary,#FDBA74)]">
                       {auto.icon}
                     </div>
                     <div>
@@ -204,7 +204,7 @@ export function AutomationsView() {
               {AUTOMATIONS.filter((a) => a.status === "available").map((auto) => (
                 <div key={auto.id} className="rounded-xl border border-[var(--aw-border)] bg-white p-5 hover:shadow-md transition-shadow">
                   <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-[var(--calico-primary,#FDBA74)]">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-[var(--aw-primary,#FDBA74)]">
                       {auto.icon}
                     </div>
                     <div className="flex-1">
@@ -225,21 +225,21 @@ export function AutomationsView() {
             <h3 className="text-lg font-semibold text-[var(--aw-text)]">How automations work</h3>
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="flex gap-3">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">1</div>
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--aw-primary,#FDBA74)]">1</div>
                 <div>
                   <p className="text-sm font-medium text-[var(--aw-text)]">Choose an action</p>
                   <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Pick what you want Agent Wallet to handle.</p>
                 </div>
               </div>
               <div className="flex gap-3">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">2</div>
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--aw-primary,#FDBA74)]">2</div>
                 <div>
                   <p className="text-sm font-medium text-[var(--aw-text)]">Set your rules</p>
                   <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Tell Agent Wallet how much, how often, and your limits.</p>
                 </div>
               </div>
               <div className="flex gap-3">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--calico-primary,#FDBA74)]">3</div>
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-orange-50 text-sm font-bold text-[var(--aw-primary,#FDBA74)]">3</div>
                 <div>
                   <p className="text-sm font-medium text-[var(--aw-text)]">Agent Wallet stages the action</p>
                   <p className="mt-1 text-xs text-[var(--aw-text-muted)]">Agent Wallet prepares the workflow and checks in with you when approval is required.</p>

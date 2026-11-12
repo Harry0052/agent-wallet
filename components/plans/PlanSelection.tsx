@@ -138,7 +138,7 @@ export function PlanSelection() {
         transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
         className="mb-4 flex items-center gap-2"
       >
-        <img src="/calico-icon.png" alt="Agent Wallet" style={{ width: 32, height: 32, borderRadius: 8 }} />
+        <img src="/agent-wallet-icon.png" alt="Agent Wallet" style={{ width: 32, height: 32, borderRadius: 8 }} />
         <span style={{ fontSize: 18, fontWeight: 700, color: "#111", fontFamily: "'DM Sans', sans-serif" }}>
           Agent Wallet
         </span>

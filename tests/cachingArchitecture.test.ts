@@ -41,22 +41,22 @@ test('cache.ts user-scopes keys with userId prefix pattern', () => {
   );
   // Verify a key-building function or template literal includes userId
   assert.ok(
-    /calico:cache:/.test(src) || /`[^`]*\$\{[^}]*(userId|currentUserId)[^}]*\}/.test(src),
+    /agent-wallet:cache:/.test(src) || /`[^`]*\$\{[^}]*(userId|currentUserId)[^}]*\}/.test(src),
     'cache.ts must include userId in the cache key namespace',
   );
 });
 
-// ── 3. cache.ts clearAllCaches removes calico:cache: prefix entries ─────────
+// ── 3. cache.ts clearAllCaches removes agent-wallet:cache: prefix entries ─────────
 
-test('cache.ts clearAllCaches removes calico:cache: prefix entries', () => {
+test('cache.ts clearAllCaches removes agent-wallet:cache: prefix entries', () => {
   const src = read('lib/cache.ts');
   assert.ok(
     /clearAllCaches/.test(src),
     'cache.ts must define clearAllCaches',
   );
   assert.ok(
-    /calico:cache:/.test(src),
-    'cache.ts must use "calico:cache:" prefix for localStorage keys',
+    /agent-wallet:cache:/.test(src),
+    'cache.ts must use "agent-wallet:cache:" prefix for localStorage keys',
   );
   // clearAllCaches should iterate localStorage and remove matching keys
   assert.ok(

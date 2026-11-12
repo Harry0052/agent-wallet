@@ -147,20 +147,20 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
 
   return (
     <>
-      <div className="relative min-h-screen overflow-hidden bg-[var(--calico-background)] text-[var(--calico-text)]">
+      <div className="relative min-h-screen overflow-hidden bg-[var(--aw-bg)] text-[var(--aw-text)]">
         <div className="relative mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-6 md:px-8 md:py-8 xl:px-10">
           <motion.section
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="relative flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-[var(--calico-border)] bg-[var(--calico-card)] px-5 py-4 shadow-[0_4px_12px_rgba(17,17,17,0.05)] md:px-6"
+            className="relative flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-[var(--aw-border)] bg-[var(--aw-surface-1)] px-5 py-4 shadow-[0_4px_12px_rgba(17,17,17,0.05)] md:px-6"
           >
             <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--calico-text)] md:text-3xl">{greeting}</h1>
-              <div className="rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--calico-text-muted)]">
+              <h1 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--aw-text)] md:text-3xl">{greeting}</h1>
+              <div className="rounded-full border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--aw-text-muted)]">
                 {liveMode ? "Live" : "Setup"}
               </div>
-              <div className="hidden rounded-full border border-[var(--calico-border)] bg-[var(--calico-hover)] px-3 py-1 text-xs text-[var(--calico-text-muted)] sm:inline-flex">
+              <div className="hidden rounded-full border border-[var(--aw-border)] bg-[var(--aw-surface-subtle)] px-3 py-1 text-xs text-[var(--aw-text-muted)] sm:inline-flex">
                 {trackedSourceCount} source{trackedSourceCount === 1 ? "" : "s"}
               </div>
             </div>
@@ -168,7 +168,7 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
               {primaryActionHref ? (
                 <Link
                   href={primaryActionHref}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--calico-primary)] px-5 text-sm font-semibold text-[var(--calico-text)] shadow-[0_4px_18px_rgba(253,186,116,0.42)] transition hover:bg-[var(--calico-primary-hover)]"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--aw-primary)] px-5 text-sm font-semibold text-[var(--aw-text)] shadow-[0_4px_18px_rgba(253,186,116,0.42)] transition hover:bg-[var(--aw-primary-strong)]"
                 >
                   Connect an account
                 </Link>
@@ -176,7 +176,7 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
                 <button
                   type="button"
                   onClick={() => setIsCustomizeOpen(true)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--calico-primary)] px-5 text-sm font-semibold text-[var(--calico-text)] shadow-[0_4px_18px_rgba(253,186,116,0.42)] transition hover:bg-[var(--calico-primary-hover)]"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--aw-primary)] px-5 text-sm font-semibold text-[var(--aw-text)] shadow-[0_4px_18px_rgba(253,186,116,0.42)] transition hover:bg-[var(--aw-primary-strong)]"
                 >
                   <LayoutGrid size={16} />
                   Customize
@@ -206,26 +206,26 @@ export function CustomizableDashboard({ greeting, ...widgetProps }: Customizable
             </SortableContext>
             <DragOverlay>
               {activeWidget ? (
-                <div className="w-[320px] rounded-[20px] border border-[var(--calico-border)] bg-[var(--calico-card)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.1)]">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-[var(--calico-text-muted)]">Moving widget</p>
-                  <p className="mt-3 text-base font-semibold text-[var(--calico-text)]">{activeWidget.label}</p>
-                  <p className="mt-2 text-sm text-[var(--calico-text-muted)]">{activeWidget.description}</p>
+                <div className="w-[320px] rounded-[20px] border border-[var(--aw-border)] bg-[var(--aw-surface-1)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.1)]">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-[var(--aw-text-muted)]">Moving widget</p>
+                  <p className="mt-3 text-base font-semibold text-[var(--aw-text)]">{activeWidget.label}</p>
+                  <p className="mt-2 text-sm text-[var(--aw-text-muted)]">{activeWidget.description}</p>
                 </div>
               ) : null}
             </DragOverlay>
           </DndContext>
 
           {orderedWidgetIds.length === 0 ? (
-            <div className="rounded-[20px] border border-dashed border-[var(--calico-border)] bg-[var(--calico-card)] px-6 py-16 text-center shadow-[0_4px_12px_rgba(17,17,17,0.05)]">
-              <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-[20px] bg-[rgba(253,186,116,0.2)] text-[var(--calico-primary)]">
+            <div className="rounded-[20px] border border-dashed border-[var(--aw-border)] bg-[var(--aw-surface-1)] px-6 py-16 text-center shadow-[0_4px_12px_rgba(17,17,17,0.05)]">
+              <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-[20px] bg-[rgba(253,186,116,0.2)] text-[var(--aw-primary)]">
                 <Sparkles size={22} />
               </div>
-              <p className="mt-5 text-xl font-semibold text-[var(--calico-text)]">All widgets are hidden</p>
-              <p className="mt-2 text-sm leading-6 text-[var(--calico-text-muted)]">Open Customize to turn widgets back on or reset the dashboard layout.</p>
+              <p className="mt-5 text-xl font-semibold text-[var(--aw-text)]">All widgets are hidden</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--aw-text-muted)]">Open Customize to turn widgets back on or reset the dashboard layout.</p>
               <button
                 type="button"
                 onClick={() => setIsCustomizeOpen(true)}
-                className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[var(--calico-primary)] px-5 text-sm font-semibold text-[var(--calico-text)] transition hover:bg-[var(--calico-primary-hover)]"
+                className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[var(--aw-primary)] px-5 text-sm font-semibold text-[var(--aw-text)] transition hover:bg-[var(--aw-primary-strong)]"
               >
                 Customize dashboard
               </button>

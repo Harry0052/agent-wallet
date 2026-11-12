@@ -305,11 +305,11 @@ export function useFinancialData(): FinancialData {
         readManualData();
       }
     };
-    window.addEventListener("calico:storage-change", onLocalChange);
+    window.addEventListener("agent-wallet:storage-change", onLocalChange);
 
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("calico:storage-change", onLocalChange);
+      window.removeEventListener("agent-wallet:storage-change", onLocalChange);
     };
   }, [readManualData]);
 

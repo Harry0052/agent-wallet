@@ -192,7 +192,7 @@ async function mockApis(
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
-        user: { email: 'test@calico.app' },
+        user: { email: 'test@agent-wallet.app' },
         walletUserId: 'user-test-001',
       }),
     }),

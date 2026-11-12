@@ -1,3 +1,5 @@
+import { migrateLegacyBrowserStorage } from "@/lib/browserStorage";
+
 export type RecordSourceType = "connected" | "manual";
 
 export type ManualAccountType =
@@ -51,19 +53,20 @@ export interface ManualInvestmentHolding {
 }
 
 export const MANUAL_STORAGE_KEYS = {
-  accounts: "calico.manual.accounts",
-  netWorthHistory: "calico.manual.networth-history",
-  transactions: "calico.manual.transactions",
-  recurring: "calico.manual.recurring",
-  budgets: "calico.manual.budgets",
-  goals: "calico.manual.goals",
-  cashflow: "calico.manual.cashflow",
-  reports: "calico.manual.reports",
-  investments: "calico.manual.investments",
-  netWorth: "calico.manual.networth",
+  accounts: "agent-wallet.manual.accounts",
+  netWorthHistory: "agent-wallet.manual.networth-history",
+  transactions: "agent-wallet.manual.transactions",
+  recurring: "agent-wallet.manual.recurring",
+  budgets: "agent-wallet.manual.budgets",
+  goals: "agent-wallet.manual.goals",
+  cashflow: "agent-wallet.manual.cashflow",
+  reports: "agent-wallet.manual.reports",
+  investments: "agent-wallet.manual.investments",
+  netWorth: "agent-wallet.manual.networth",
 } as const;
 
 export function readLocalStorageJson<T>(key: string, fallback: T): T {
+  migrateLegacyBrowserStorage();
   if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(key);

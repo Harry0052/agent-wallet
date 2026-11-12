@@ -6,17 +6,13 @@ Live app: [https://agent-wallet-one.vercel.app](https://agent-wallet-one.vercel.
 
 ## Screenshots
 
-These are the public pages on the deployed app. The balances, merchants, and “found savings” figures on the marketing page are layout samples in the landing component, not live account data.
+These are the public landing and login pages. The balances, merchants, and “found savings” figures on the marketing page are layout samples in the landing component, not live account data.
 
 Signed-in screens (home, wallet, tasks) need an account. TODO: add screenshots of those views from a real signed-in session.
 
 ![Marketing home](docs/screenshots/landing-hero.png)
 
-![How it works](docs/screenshots/how-it-works.png)
-
 ![Log in](docs/screenshots/login.png)
-
-The deployed build in these images still shows the previous interface name. Interface copy in this repository says Agent Wallet.
 
 ## What it does
 

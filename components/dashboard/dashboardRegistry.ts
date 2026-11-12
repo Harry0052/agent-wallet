@@ -1,6 +1,6 @@
 import type { DashboardPreferences, DashboardWidgetDefinition, DashboardWidgetId } from "@/components/dashboard/dashboardTypes";
 
-export const DASHBOARD_STORAGE_KEY = "calico.custom-dashboard.v1";
+export const DASHBOARD_STORAGE_KEY = "agent-wallet.custom-dashboard.v1";
 
 export const dashboardWidgets: DashboardWidgetDefinition[] = [
   { id: "netWorth", label: "Net Worth", description: "Your total balance across all accounts", span: "wide" },

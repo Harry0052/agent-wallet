@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { query } from '@/lib/server/db';
 import type { PlanId } from '@/lib/server/billing';
 import { logServerEvent } from '@/lib/server/observability';
+import { getPublicAppOrigin } from '@/lib/publicOrigin';
 
 // ── Plan prices (must match billing.ts PLANS) ──────────────────────────────
 
@@ -361,7 +362,7 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const referralCode = generateReferralCode(userId);
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_ORIGIN || 'https://startcalico.com';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_ORIGIN || getPublicAppOrigin();
 
   // Zero-state response (returned if tables don't exist yet or queries fail)
   const zeroStats: ReferralStats = {

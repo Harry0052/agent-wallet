@@ -170,7 +170,7 @@ export function AdviceView() {
               </p>
               <button
                 onClick={() => setShowModal(false)}
-                className="w-full rounded-lg bg-[var(--calico-primary, #FDBA74)] px-6 py-3 font-semibold text-white hover:opacity-90 transition-opacity"
+                className="w-full rounded-lg bg-[var(--aw-primary, #FDBA74)] px-6 py-3 font-semibold text-white hover:opacity-90 transition-opacity"
               >
                 Resume
               </button>
@@ -278,7 +278,7 @@ export function AdviceView() {
                               onClick={() =>
                                 setExpandedCard(isExpanded ? null : card.id)
                               }
-                              className="flex items-center gap-2 text-sm font-medium text-[var(--calico-primary, #FDBA74)] hover:underline"
+                              className="flex items-center gap-2 text-sm font-medium text-[var(--aw-primary, #FDBA74)] hover:underline"
                             >
                               Show {card.tasksCompleted} completed
                               <ChevronDown
@@ -310,7 +310,7 @@ export function AdviceView() {
                     onClick={() => setSelectedCategory(chip)}
                     className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                       selectedCategory === chip
-                        ? "bg-[var(--calico-primary, #FDBA74)] text-white"
+                        ? "bg-[var(--aw-primary, #FDBA74)] text-white"
                         : "bg-[var(--aw-surface-subtle)] text-[var(--aw-text)] hover:bg-[var(--aw-border)]"
                     }`}
                   >
@@ -382,7 +382,7 @@ export function AdviceView() {
                       <div
                         className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
                           msg.role === "user"
-                            ? "bg-[var(--calico-primary, #FDBA74)] text-white"
+                            ? "bg-[var(--aw-primary, #FDBA74)] text-white"
                             : "bg-[var(--aw-surface-subtle)] text-[var(--aw-text)]"
                         }`}
                       >
@@ -411,11 +411,11 @@ export function AdviceView() {
                   if (e.key === "Enter") handleChatSend();
                 }}
                 placeholder="Type here..."
-                className="flex-1 rounded-lg border border-[var(--aw-border)] bg-white px-3 py-2 text-sm placeholder-[var(--aw-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--calico-primary, #FDBA74)]"
+                className="flex-1 rounded-lg border border-[var(--aw-border)] bg-white px-3 py-2 text-sm placeholder-[var(--aw-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--aw-primary, #FDBA74)]"
               />
               <button
                 onClick={handleChatSend}
-                className="flex items-center justify-center rounded-lg bg-[var(--calico-primary, #FDBA74)] p-2 hover:opacity-90 transition-opacity"
+                className="flex items-center justify-center rounded-lg bg-[var(--aw-primary, #FDBA74)] p-2 hover:opacity-90 transition-opacity"
               >
                 <Send size={16} className="text-white" />
               </button>
@@ -426,7 +426,7 @@ export function AdviceView() {
         {/* Toggle Button */}
         <button
           onClick={() => setChatOpen(!chatOpen)}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--calico-primary, #FDBA74)] shadow-lg hover:shadow-xl hover:scale-105 transition-all"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--aw-primary, #FDBA74)] shadow-lg hover:shadow-xl hover:scale-105 transition-all"
         >
           <span className="text-2xl">🐱</span>
         </button>

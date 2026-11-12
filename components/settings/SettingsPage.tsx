@@ -153,7 +153,7 @@ function Sidebar({
                   }}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                     activeSection === section.id
-                      ? "bg-[var(--calico-primary)] text-[var(--calico-text)]"
+                      ? "bg-[var(--aw-primary)] text-[var(--aw-text)]"
                       : "text-[var(--aw-text)] hover:bg-[var(--aw-surface)]"
                   }`}
                   type="button"
@@ -179,7 +179,7 @@ function Sidebar({
                   }}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                     activeSection === section.id
-                      ? "bg-[var(--calico-primary)] text-[var(--calico-text)]"
+                      ? "bg-[var(--aw-primary)] text-[var(--aw-text)]"
                       : "text-[var(--aw-text)] hover:bg-[var(--aw-surface)]"
                   }`}
                   type="button"
@@ -218,7 +218,7 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("calico.display-name");
+      const stored = localStorage.getItem("agent-wallet.display-name");
       if (stored) setDisplayName(stored);
     } catch { /* ignore */ }
   }, []);
@@ -227,9 +227,9 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
     const name = displayName.trim();
     try {
       if (name) {
-        localStorage.setItem("calico.display-name", name);
+        localStorage.setItem("agent-wallet.display-name", name);
       } else {
-        localStorage.removeItem("calico.display-name");
+        localStorage.removeItem("agent-wallet.display-name");
       }
       setSavedName(true);
       setTimeout(() => setSavedName(false), 2000);
@@ -262,8 +262,8 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
             className="rounded-lg px-3 py-2 text-xs font-medium transition"
             aria-label="edit-profile"
             style={{
-              background: "var(--calico-card, #FFFCF8)",
-              border: "1px solid var(--calico-border, #F2DECC)",
+              background: "var(--aw-surface-1, #FFFCF8)",
+              border: "1px solid var(--aw-border, #F2DECC)",
               color: "var(--aw-text)",
             }}
             type="button"
@@ -287,8 +287,8 @@ function ProfileSection({ account }: { account: AuthenticatedAccount | null }) {
               onClick={saveDisplayName}
               className="rounded-lg px-3 py-1.5 text-xs font-medium transition"
               style={{
-                background: "var(--calico-primary, #FDBA74)",
-                color: "var(--calico-text, #111)",
+                background: "var(--aw-primary, #FDBA74)",
+                color: "var(--aw-text, #111)",
               }}
             >
               {savedName ? "Saved" : "Save"}
@@ -316,7 +316,7 @@ function DisplaySection() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const stored = readStoredJson("calico.display-prefs", {
+    const stored = readStoredJson("agent-wallet.display-prefs", {
       currency: "USD",
       dateFormat: "MM/DD/YYYY",
       numberFormat: "1,000.00",
@@ -328,7 +328,7 @@ function DisplaySection() {
 
   const saveDisplayPrefs = () => {
     try {
-      localStorage.setItem("calico.display-prefs", JSON.stringify({ currency, dateFormat, numberFormat }));
+      localStorage.setItem("agent-wallet.display-prefs", JSON.stringify({ currency, dateFormat, numberFormat }));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
@@ -403,8 +403,8 @@ function DisplaySection() {
         onClick={saveDisplayPrefs}
         className="rounded-lg px-4 py-2 text-sm font-medium transition"
         style={{
-          background: "var(--calico-primary, #FDBA74)",
-          color: "var(--calico-text, #111)",
+          background: "var(--aw-primary, #FDBA74)",
+          color: "var(--aw-text, #111)",
         }}
       >
         {saved ? "Saved" : "Save display settings"}
@@ -422,7 +422,7 @@ function NotificationsSection() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("calico.notification-prefs");
+      const stored = localStorage.getItem("agent-wallet.notification-prefs");
       if (stored) {
         const prefs = JSON.parse(stored);
         if (typeof prefs.emailWeekly === "boolean") setEmailWeekly(prefs.emailWeekly);
@@ -434,7 +434,7 @@ function NotificationsSection() {
 
   const savePrefs = () => {
     try {
-      localStorage.setItem("calico.notification-prefs", JSON.stringify({ emailWeekly, emailAlerts, pushEnabled }));
+      localStorage.setItem("agent-wallet.notification-prefs", JSON.stringify({ emailWeekly, emailAlerts, pushEnabled }));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch { /* ignore */ }
@@ -497,8 +497,8 @@ function NotificationsSection() {
         onClick={savePrefs}
         className="rounded-lg px-4 py-2 text-sm font-medium transition"
         style={{
-          background: "var(--calico-primary, #FDBA74)",
-          color: "var(--calico-text, #111)",
+          background: "var(--aw-primary, #FDBA74)",
+          color: "var(--aw-text, #111)",
         }}
       >
         {saved ? "Saved" : "Save preferences"}
@@ -517,8 +517,8 @@ function NotificationsSection() {
             onClick={() => setOpenModal(true)}
             className="rounded-lg px-3 py-2 text-xs font-medium transition"
             style={{
-              background: "var(--calico-card, #FFFCF8)",
-              border: "1px solid var(--calico-border, #F2DECC)",
+              background: "var(--aw-surface-1, #FFFCF8)",
+              border: "1px solid var(--aw-border, #F2DECC)",
               color: "var(--aw-text)",
             }}
           >
@@ -565,8 +565,8 @@ function SecuritySection({
             className="rounded-lg px-3 py-2 text-xs font-medium transition"
             aria-label="change-password"
             style={{
-              background: "var(--calico-card, #FFFCF8)",
-              border: "1px solid var(--calico-border, #F2DECC)",
+              background: "var(--aw-surface-1, #FFFCF8)",
+              border: "1px solid var(--aw-border, #F2DECC)",
               color: "var(--aw-text)",
             }}
             type="button"
@@ -603,7 +603,7 @@ function GeneralSection() {
   const { replay } = useTutorialReplay();
 
   useEffect(() => {
-    const stored = readStoredJson("calico.general-prefs", {
+    const stored = readStoredJson("agent-wallet.general-prefs", {
       household: "My Household",
       country: "US",
       currency: "USD",
@@ -615,7 +615,7 @@ function GeneralSection() {
 
   const saveGeneralPrefs = () => {
     try {
-      localStorage.setItem("calico.general-prefs", JSON.stringify({ household, country, currency }));
+      localStorage.setItem("agent-wallet.general-prefs", JSON.stringify({ household, country, currency }));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
@@ -647,8 +647,8 @@ function GeneralSection() {
             onClick={replay}
             className="rounded-lg px-3 py-2 text-xs font-medium transition"
             style={{
-              background: "var(--calico-card, #FFFCF8)",
-              border: "1px solid var(--calico-border, #F2DECC)",
+              background: "var(--aw-surface-1, #FFFCF8)",
+              border: "1px solid var(--aw-border, #F2DECC)",
               color: "var(--aw-text)",
             }}
           >
@@ -708,8 +708,8 @@ function GeneralSection() {
         onClick={saveGeneralPrefs}
         className="rounded-lg px-4 py-2 text-sm font-medium transition"
         style={{
-          background: "var(--calico-primary, #FDBA74)",
-          color: "var(--calico-text, #111)",
+          background: "var(--aw-primary, #FDBA74)",
+          color: "var(--aw-text, #111)",
         }}
       >
         {saved ? "Saved" : "Save general settings"}
@@ -735,7 +735,7 @@ function MembersSection({ account, billing }: { account: AuthenticatedAccount | 
       <div className="space-y-4">
         <div className="flex items-center justify-between rounded-lg border border-[var(--aw-border)] p-3">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-[var(--calico-primary)] text-center leading-8 text-[var(--calico-text)] text-sm font-semibold">
+            <div className="h-8 w-8 rounded-full bg-[var(--aw-primary)] text-center leading-8 text-[var(--aw-text)] text-sm font-semibold">
               {(account?.email ?? "?").charAt(0).toUpperCase()}
             </div>
             <div>
@@ -764,7 +764,7 @@ function PreferencesSection() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const stored = readStoredJson("calico.preferences", {
+    const stored = readStoredJson("agent-wallet.preferences", {
       transactionView: "date",
       firstDay: "sunday",
       fiscalYear: "january",
@@ -776,7 +776,7 @@ function PreferencesSection() {
 
   const savePreferences = () => {
     try {
-      localStorage.setItem("calico.preferences", JSON.stringify({ transactionView, firstDay, fiscalYear }));
+      localStorage.setItem("agent-wallet.preferences", JSON.stringify({ transactionView, firstDay, fiscalYear }));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
@@ -847,8 +847,8 @@ function PreferencesSection() {
         onClick={savePreferences}
         className="rounded-lg px-4 py-2 text-sm font-medium transition"
         style={{
-          background: "var(--calico-primary, #FDBA74)",
-          color: "var(--calico-text, #111)",
+          background: "var(--aw-primary, #FDBA74)",
+          color: "var(--aw-text, #111)",
         }}
       >
         {saved ? "Saved" : "Save preferences"}
@@ -876,8 +876,8 @@ function InstitutionsSection() {
         onClick={() => router.push("/connect")}
         className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition"
         style={{
-          background: "var(--calico-primary, #FDBA74)",
-          color: "var(--calico-text, #111)",
+          background: "var(--aw-primary, #FDBA74)",
+          color: "var(--aw-text, #111)",
         }}
       >
         <Plus size={16} />
@@ -939,8 +939,8 @@ function BillingSection({
             type="button"
             className="shrink-0 rounded-lg px-4 py-2 text-xs font-medium transition"
             style={{
-              background: "var(--calico-card, #FFFCF8)",
-              border: "1px solid var(--calico-border, #F2DECC)",
+              background: "var(--aw-surface-1, #FFFCF8)",
+              border: "1px solid var(--aw-border, #F2DECC)",
               color: "var(--aw-text)",
             }}
           >
@@ -1078,12 +1078,12 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
 
       {/* Progress toward 100% tier — reads from live stats, not stale/mock data */}
       {stats ? (
-        <div className="rounded-xl border border-[var(--calico-primary,#FDBA74)]/30 bg-[rgba(253,186,116,0.08)] p-4">
+        <div className="rounded-xl border border-[var(--aw-primary,#FDBA74)]/30 bg-[rgba(253,186,116,0.08)] p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--aw-text)]">
               {stats.monthlyConversions} of 10 referrals this month
             </p>
-            <span className="rounded-full bg-[var(--calico-primary,#FDBA74)] px-2.5 py-0.5 text-xs font-bold text-[var(--aw-text)]">
+            <span className="rounded-full bg-[var(--aw-primary,#FDBA74)] px-2.5 py-0.5 text-xs font-bold text-[var(--aw-text)]">
               {stats.currentTier}
             </span>
           </div>
@@ -1092,7 +1092,7 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
               className="h-full rounded-full transition-all"
               style={{
                 width: `${Math.min(100, (stats.monthlyConversions / 10) * 100)}%`,
-                backgroundColor: stats.monthlyConversions >= 10 ? 'var(--aw-success)' : 'var(--calico-primary, #FDBA74)',
+                backgroundColor: stats.monthlyConversions >= 10 ? 'var(--aw-success)' : 'var(--aw-primary, #FDBA74)',
               }}
             />
           </div>
@@ -1213,8 +1213,8 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
               type="button"
               className="shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition"
               style={{
-                background: "var(--calico-primary, #FDBA74)",
-                color: "var(--calico-text, #111)",
+                background: "var(--aw-primary, #FDBA74)",
+                color: "var(--aw-text, #111)",
               }}
             >
               {copied ? "Copied!" : "Copy link"}
@@ -1242,7 +1242,7 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
           onClick={() => setReferModalOpen(true)}
           className="w-full rounded-xl py-3 text-sm font-semibold transition-opacity hover:opacity-90"
           style={{
-            background: "var(--calico-primary, #FDBA74)",
+            background: "var(--aw-primary, #FDBA74)",
             color: "var(--aw-text, #111)",
           }}
         >
@@ -1266,7 +1266,7 @@ function ReferralsSection({ account }: { account: AuthenticatedAccount | null })
             onClick={() => setReferModalOpen(false)}
             className="inline-flex h-10 w-full items-center justify-center rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
             style={{
-              background: "var(--calico-primary, #FDBA74)",
+              background: "var(--aw-primary, #FDBA74)",
               color: "var(--aw-text, #111)",
             }}
           >
@@ -1491,7 +1491,7 @@ export function SettingsPage() {
 
           {/* Billing Message */}
           {billingMessage && (
-            <div className="mx-6 mt-6 rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(253,186,116,0.18)", border: "1px solid var(--calico-primary, #FDBA74)", color: "var(--calico-text, #111)" }}>
+            <div className="mx-6 mt-6 rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(253,186,116,0.18)", border: "1px solid var(--aw-primary, #FDBA74)", color: "var(--aw-text, #111)" }}>
               {billingMessage}
               <button type="button" onClick={() => setBillingMessage(null)} className="ml-3 text-xs underline">
                 dismiss

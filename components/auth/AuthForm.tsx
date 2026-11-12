@@ -28,12 +28,12 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
 
   useEffect(() => {
     if (urlRefCode) {
-      try { localStorage.setItem('calico.referral_code', urlRefCode); } catch {}
+      try { localStorage.setItem('agent-wallet.referral_code', urlRefCode); } catch {}
       setRefCode(urlRefCode);
     } else if (!refCode) {
       // No ref in URL — check localStorage for a previously captured code
       try {
-        const stored = localStorage.getItem('calico.referral_code');
+        const stored = localStorage.getItem('agent-wallet.referral_code');
         if (stored) setRefCode(stored);
       } catch {}
     }
@@ -151,7 +151,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
     >
       {/* Ambient background glow */}
       <div
-        className="calico-ambient-glow pointer-events-none absolute"
+        className="agent-wallet-ambient-glow pointer-events-none absolute"
         style={{
           width: 480,
           height: 480,
@@ -163,7 +163,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
         }}
       />
       <div
-        className="calico-ambient-glow pointer-events-none absolute"
+        className="agent-wallet-ambient-glow pointer-events-none absolute"
         style={{
           width: 360,
           height: 360,
@@ -242,7 +242,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
               className="mb-6 flex items-center justify-center gap-2"
             >
               <img
-                src="/calico-icon.png"
+                src="/agent-wallet-icon.png"
                 alt="Agent Wallet"
                 style={{ width: 32, height: 32, borderRadius: 8 }}
               />

@@ -7,6 +7,7 @@ import { extractRequestMeta } from '@/lib/server/requestMeta';
 import { logServerEvent } from '@/lib/server/observability';
 import { enforceRateLimit } from '@/security/rateLimiter';
 import { RequestValidationError, validateJsonBody } from '@/security/requestValidator';
+import { getPublicAppOrigin } from '@/lib/publicOrigin';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +16,7 @@ const BodySchema = z.object({
 });
 
 function buildResetUrl(token: string): string {
-  const origin = process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || 'https://startcalico.com';
+  const origin = process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || getPublicAppOrigin();
   return `${origin}/reset-password?token=${encodeURIComponent(token)}`;
 }
 

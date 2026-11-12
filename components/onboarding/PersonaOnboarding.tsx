@@ -8,11 +8,11 @@ import { completePersonaOnboarding, type PersonaData } from "@/services/persona"
 import { connectAccountsViaSupportedFlow } from "@/services/connect";
 
 interface Message {
-  role: "calico" | "user";
+  role: "assistant" | "user";
   text: string;
 }
 
-const CALICO_QUESTIONS: { key: string; message: string }[] = [
+const AGENT_WALLET_QUESTIONS: { key: string; message: string }[] = [
   {
     key: "intro",
     message:
@@ -175,12 +175,12 @@ export function PersonaOnboarding() {
     }, 50);
   }, []);
 
-  const addCalicoMessage = useCallback(
+  const addAgentWalletMessage = useCallback(
     (text: string) => {
       setIsTyping(true);
       scrollToBottom();
       setTimeout(() => {
-        setMessages((prev) => [...prev, { role: "calico", text }]);
+        setMessages((prev) => [...prev, { role: "assistant", text }]);
         setIsTyping(false);
         scrollToBottom();
         setTimeout(() => inputRef.current?.focus(), 100);
@@ -190,10 +190,10 @@ export function PersonaOnboarding() {
   );
 
   useEffect(() => {
-    if (messages.length === 0 && CALICO_QUESTIONS[0]) {
-      addCalicoMessage(CALICO_QUESTIONS[0].message);
+    if (messages.length === 0 && AGENT_WALLET_QUESTIONS[0]) {
+      addAgentWalletMessage(AGENT_WALLET_QUESTIONS[0].message);
     }
-  }, [addCalicoMessage, messages.length]);
+  }, [addAgentWalletMessage, messages.length]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -203,7 +203,7 @@ export function PersonaOnboarding() {
     setMessages((prev) => [...prev, { role: "user", text }]);
     scrollToBottom();
 
-    const currentQ = CALICO_QUESTIONS[questionIndex];
+    const currentQ = AGENT_WALLET_QUESTIONS[questionIndex];
     if (currentQ) {
       const newAnswers = { ...answers, [currentQ.key]: text };
       setAnswers(newAnswers);
@@ -215,11 +215,11 @@ export function PersonaOnboarding() {
 
     const nextIdx = questionIndex + 1;
 
-    if (nextIdx < CALICO_QUESTIONS.length) {
+    if (nextIdx < AGENT_WALLET_QUESTIONS.length) {
       setQuestionIndex(nextIdx);
-      const nextQ = CALICO_QUESTIONS[nextIdx];
+      const nextQ = AGENT_WALLET_QUESTIONS[nextIdx];
       const nextMsg = nextQ.message.replace("{{name}}", userName.current || "there");
-      addCalicoMessage(nextMsg);
+      addAgentWalletMessage(nextMsg);
     } else {
       // Conversation complete — save persona
       setIsTyping(true);
@@ -228,7 +228,7 @@ export function PersonaOnboarding() {
       const finalAnswers = { ...answers, [currentQ?.key || ""]: text };
       const fullConv = messages
         .concat([{ role: "user", text }])
-        .map((m) => `${m.role === "calico" ? "Agent Wallet" : "User"}: ${m.text}`)
+        .map((m) => `${m.role === "assistant" ? "Agent Wallet" : "User"}: ${m.text}`)
         .join("\n\n");
 
       const persona = parsePersonaFromConversation(finalAnswers, fullConv);
@@ -240,7 +240,7 @@ export function PersonaOnboarding() {
         setIsComplete(true);
         setConnectPhase("connect");
         const completionMsg = `Awesome \u2014 I've created your Agent Wallet profile${userName.current ? `, ${userName.current}` : ""}! \ud83c\udf89\n\nOne more thing \u2014 if you connect a bank account, I can show you your real balances, transactions, and spending patterns right away.\n\nYour data stays private and read-only. Agent Wallet never moves your money.`;
-        setMessages((prev) => [...prev, { role: "calico", text: completionMsg }]);
+        setMessages((prev) => [...prev, { role: "assistant", text: completionMsg }]);
         scrollToBottom();
       } catch (err) {
         setIsTyping(false);
@@ -262,7 +262,7 @@ export function PersonaOnboarding() {
       const successMsg = count === 1
         ? `Connected! I can see your account. Your dashboard will be ready with real data.`
         : `Connected! I can see ${count} accounts. Your dashboard will be ready with real data.`;
-      setMessages((prev) => [...prev, { role: "calico", text: successMsg }]);
+      setMessages((prev) => [...prev, { role: "assistant", text: successMsg }]);
       scrollToBottom();
     } catch (err) {
       // User cancelled Plaid Link or connection failed
@@ -285,7 +285,7 @@ export function PersonaOnboarding() {
   const handleSkipConnect = () => {
     setConnectPhase("skipped");
     const skipMsg = `No problem! You can always connect accounts later from Settings.\n\nIn the meantime, you can add accounts and transactions manually \u2014 everything works the same way.`;
-    setMessages((prev) => [...prev, { role: "calico", text: skipMsg }]);
+    setMessages((prev) => [...prev, { role: "assistant", text: skipMsg }]);
     scrollToBottom();
   };
 
@@ -322,7 +322,7 @@ export function PersonaOnboarding() {
         className="mb-6 flex items-center gap-2"
       >
         <img
-          src="/calico-icon.png"
+          src="/agent-wallet-icon.png"
           alt="Agent Wallet"
           style={{ width: 32, height: 32, borderRadius: 8 }}
         />
@@ -340,7 +340,7 @@ export function PersonaOnboarding() {
 
       {/* Progress dots */}
       <div className="mb-6 flex items-center gap-2">
-        {CALICO_QUESTIONS.map((_, i) => (
+        {AGENT_WALLET_QUESTIONS.map((_, i) => (
           <div
             key={i}
             className="h-1.5 rounded-full transition-all duration-300"

@@ -1,8 +1,10 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { previousProductPrefix } from "@/lib/previousName";
 import { getPlaidClient } from "@/financial_connectors/plaidClient";
 import { logServerEvent } from "@/lib/server/observability";
 import {
@@ -52,7 +54,15 @@ interface PlaidStatementsListResponse {
 // ── Configuration ─────────────────────────────────────────────────────
 
 function getStorageBasePath(): string {
-  return process.env.STATEMENT_STORAGE_PATH || "/tmp/calico-statements";
+  const configured = process.env.STATEMENT_STORAGE_PATH;
+  if (configured) return configured;
+
+  const nextDirectory = "/tmp/agent-wallet-statements";
+  const previousDirectory = `/tmp/${previousProductPrefix()}-statements`;
+  if (!existsSync(nextDirectory) && existsSync(previousDirectory)) {
+    return previousDirectory;
+  }
+  return nextDirectory;
 }
 
 function getStatementLookbackYears(): number {

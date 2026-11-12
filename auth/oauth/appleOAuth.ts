@@ -3,6 +3,7 @@ import 'server-only';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getOptionalSecret, getRequiredSecret, getSecretFromAny } from '@/security/secretsManager';
+import { getPublicAppOrigin } from '@/lib/publicOrigin';
 
 const APPLE_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_APPLE_ISSUER = 'https://appleid.apple.com';
@@ -23,7 +24,7 @@ export interface VerifiedAppleIdentity {
 }
 
 function appOrigin(): string {
-  return process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || 'https://startcalico.com';
+  return process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || getPublicAppOrigin();
 }
 
 function appleClientId(): string {

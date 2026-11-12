@@ -28,7 +28,7 @@ test.describe('Authenticated API routes', () => {
     const body = await response.json();
     expect(body.ok).toBe(true);
     expect(body.authenticated).toBe(true);
-    expect(body.user?.email).toBe('launchtest@calico-test.dev');
+    expect(body.user?.email).toBe('launchtest@agent-wallet-test.dev');
   });
 
   test('GET /api/smart/home returns dashboard payload', async ({ request }) => {

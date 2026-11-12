@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppProvider } from '@/lib/store';
 import { AppNav } from '@/components/AppNav';
-import { CalicoAssistant } from '@/components/CalicoAssistant';
+import { AgentWalletAssistant } from '@/components/AgentWalletAssistant';
 import { TutorialOrchestrator } from '@/components/plans/TutorialOrchestrator';
 
 function AppEntryReveal({ children }: { children: React.ReactNode }) {
@@ -42,7 +42,7 @@ function AppEntryReveal({ children }: { children: React.ReactNode }) {
               className="flex items-center gap-3"
             >
               <img
-                src="/calico-icon.png"
+                src="/agent-wallet-icon.png"
                 alt="Agent Wallet"
                 style={{ width: 36, height: 36, borderRadius: 10 }}
               />
@@ -83,7 +83,7 @@ export function AppLayoutShell({ children }: { children: React.ReactNode }) {
           >
             {children}
           </motion.div>
-          <CalicoAssistant />
+          <AgentWalletAssistant />
         </AppEntryReveal>
       </TutorialOrchestrator>
     </AppProvider>

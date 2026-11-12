@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, useState } from "react";
-import { calicoTheme } from "@/styles/theme";
+import { agentWalletTheme } from "@/styles/theme";
 import { C } from "./landingConstants";
 import { LandingNav } from "./LandingNav";
 import { LandingHero } from "./LandingHero";
@@ -166,7 +166,7 @@ export function LandingPage() {
   return (
     <div
       className="min-h-screen"
-      style={{ fontFamily: calicoTheme.fontFamily, background: calicoTheme.card }}
+      style={{ fontFamily: agentWalletTheme.fontFamily, background: agentWalletTheme.card }}
     >
       {/* Fixed nav — always visible, outside the looping content */}
       <LandingNav />

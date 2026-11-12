@@ -432,7 +432,7 @@ export function GoalsView() {
             onClick={() => setActiveTab("save-up")}
             className={`pb-3 text-sm font-medium transition-colors ${
               activeTab === "save-up"
-                ? "border-b-2 border-[var(--calico-primary, #FDBA74)] text-[var(--aw-text)]"
+                ? "border-b-2 border-[var(--aw-primary, #FDBA74)] text-[var(--aw-text)]"
                 : "text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
             }`}
           >
@@ -443,7 +443,7 @@ export function GoalsView() {
             onClick={() => setActiveTab("pay-down")}
             className={`pb-3 text-sm font-medium transition-colors ${
               activeTab === "pay-down"
-                ? "border-b-2 border-[var(--calico-primary, #FDBA74)] text-[var(--aw-text)]"
+                ? "border-b-2 border-[var(--aw-primary, #FDBA74)] text-[var(--aw-text)]"
                 : "text-[var(--aw-text-muted)] hover:text-[var(--aw-text)]"
             }`}
           >
@@ -505,7 +505,7 @@ export function GoalsView() {
             <button
               type="button"
               onClick={() => openCreateGoal()}
-              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--aw-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
             >
               <Plus size={16} />
               Add a goal
@@ -578,7 +578,7 @@ export function GoalsView() {
                           </div>
                           <div className="h-1.5 rounded-full bg-[var(--aw-border)]">
                             <div
-                              className="h-full rounded-full bg-[var(--calico-primary, #FDBA74)]"
+                              className="h-full rounded-full bg-[var(--aw-primary, #FDBA74)]"
                               style={{ width: `${goal.progress}%` }}
                             />
                           </div>
@@ -614,7 +614,7 @@ export function GoalsView() {
               <button
                 type="button"
                 onClick={() => openCreateGoal()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--aw-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
               >
                 <Plus size={16} />
                 Add another goal
@@ -858,7 +858,7 @@ export function GoalsView() {
                       setModalStep("budget");
                     }
                   }}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--aw-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
                 >
                   Next
                   <ChevronRight size={14} />
@@ -868,7 +868,7 @@ export function GoalsView() {
                 <button
                   type="button"
                   onClick={saveGoal}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--calico-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[var(--aw-primary, #FDBA74)] px-4 text-sm font-medium text-[var(--aw-text)]"
                 >
                   {editingGoalId ? "Save changes" : "Create goal"}
                 </button>

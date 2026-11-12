@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
-import { calicoTheme } from "@/styles/theme";
+import { agentWalletTheme } from "@/styles/theme";
 
 export const dashboardSurfaceStyle: CSSProperties = {
-  background: calicoTheme.card,
+  background: agentWalletTheme.card,
   boxShadow: "0 1px 2px rgba(17, 17, 17, 0.02), 0 2px 10px rgba(17, 17, 17, 0.03)",
 };
 
@@ -18,20 +18,20 @@ export const dashboardDashedStyle: CSSProperties = {
 };
 
 export const dashboardPrimaryButtonStyle: CSSProperties = {
-  background: calicoTheme.primary,
-  borderRadius: calicoTheme.radiusButton,
+  background: agentWalletTheme.primary,
+  borderRadius: agentWalletTheme.radiusButton,
   boxShadow: "0 2px 8px rgba(253, 186, 116, 0.3)",
-  color: calicoTheme.text,
+  color: agentWalletTheme.text,
 };
 
 export const dashboardSecondaryButtonStyle: CSSProperties = {
-  background: calicoTheme.card,
+  background: agentWalletTheme.card,
   border: `1px solid rgba(242, 222, 204, 0.6)`,
-  borderRadius: calicoTheme.radiusButton,
-  color: calicoTheme.text,
+  borderRadius: agentWalletTheme.radiusButton,
+  color: agentWalletTheme.text,
 };
 
 export const dashboardChipStyle: CSSProperties = {
   background: "rgba(255, 241, 230, 0.5)",
-  color: calicoTheme.textMuted,
+  color: agentWalletTheme.textMuted,
 };

@@ -9,7 +9,7 @@ export function LandingFooter() {
         <div className="mb-10 grid grid-cols-2 gap-8 md:grid-cols-4">
           <div>
             <div className="mb-3 flex items-center gap-2">
-              <img src="/calico-icon.png" alt="Agent Wallet" style={{ width: 22, height: 22, borderRadius: 5, objectFit: "cover" }} />
+              <img src="/agent-wallet-icon.png" alt="Agent Wallet" style={{ width: 22, height: 22, borderRadius: 5, objectFit: "cover" }} />
               <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.textPrimary, fontFamily: C.fontFamily }}>
                 Agent Wallet
               </p>

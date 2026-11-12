@@ -1,8 +1,8 @@
 import { chromium } from "playwright";
 
-const baseUrl = process.env.CALICO_BASE_URL || "http://127.0.0.1:3000";
-const email = process.env.CALICO_SMOKE_EMAIL || "calico-route-smoke-1773892979235@example.com";
-const password = process.env.CALICO_SMOKE_PASSWORD || "CalicoTest123";
+const baseUrl = process.env.AGENT_WALLET_BASE_URL || "http://127.0.0.1:3000";
+const email = process.env.AGENT_WALLET_SMOKE_EMAIL || "agent-wallet-route-smoke-1773892979235@example.com";
+const password = process.env.AGENT_WALLET_SMOKE_PASSWORD || "AgentWalletTest123";
 const mode = process.argv[2] || "starter";
 
 const scenarios = {

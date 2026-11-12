@@ -19,6 +19,7 @@ import {
   setStripeToolNeedsReconnect,
 } from '@/lib/server/toolsVault';
 import type { SavedPaymentMethod } from '@/lib/types';
+import { getPublicAppOrigin } from '@/lib/publicOrigin';
 
 function resolveAppOrigin(): string {
   const explicit = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_ORIGIN;
@@ -31,7 +32,7 @@ function resolveAppOrigin(): string {
     return `https://${vercelUrl.replace(/^https?:\/\//i, '').replace(/\/+$/, '')}`;
   }
 
-  return 'https://startcalico.com';
+  return getPublicAppOrigin();
 }
 
 function normalizeTopupAmountCents(amount: number): number {

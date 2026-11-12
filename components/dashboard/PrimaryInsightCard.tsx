@@ -37,7 +37,7 @@ const ACCENT_MAP: Record<InsightType, { bg: string; border: string; icon: string
   opportunity: {
     bg: "rgba(253, 186, 116, 0.12)",
     border: "rgba(253, 186, 116, 0.35)",
-    icon: "var(--calico-primary)",
+    icon: "var(--aw-primary)",
     badge: "rgba(253, 186, 116, 0.22)",
   },
   warning: {
@@ -49,7 +49,7 @@ const ACCENT_MAP: Record<InsightType, { bg: string; border: string; icon: string
   prediction: {
     bg: "rgba(251, 207, 232, 0.14)",
     border: "rgba(251, 207, 232, 0.4)",
-    icon: "var(--calico-primary-secondary)",
+    icon: "var(--aw-primary-secondary)",
     badge: "rgba(251, 207, 232, 0.26)",
   },
 };
@@ -101,10 +101,10 @@ function InsightCard({ insight, index }: { insight: ActionableInsight; index: nu
           <Icon size={17} style={{ color: accent.icon }} />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-[0.92rem] font-semibold leading-snug text-[var(--calico-text)]">
+          <h3 className="text-[0.92rem] font-semibold leading-snug text-[var(--aw-text)]">
             {insight.title}
           </h3>
-          <p className="mt-1 text-[0.8rem] leading-relaxed text-[var(--calico-text-muted)]">
+          <p className="mt-1 text-[0.8rem] leading-relaxed text-[var(--aw-text-muted)]">
             {insight.description}
           </p>
           <div className="mt-2.5 flex flex-wrap items-center gap-3">
@@ -142,8 +142,8 @@ function LockedCard({ preview, index }: { preview: LockedPreview; index: number 
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.18 + index * 0.06, duration: 0.2, ease: "easeOut" }}
-      className="relative overflow-hidden rounded-[14px] border border-[var(--calico-border)] px-5 py-3.5"
-      style={{ background: "var(--calico-card)" }}
+      className="relative overflow-hidden rounded-[14px] border border-[var(--aw-border)] px-5 py-3.5"
+      style={{ background: "var(--aw-surface-1)" }}
     >
       {/* Blur overlay */}
       <div
@@ -158,9 +158,9 @@ function LockedCard({ preview, index }: { preview: LockedPreview; index: number 
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[10px]"
           style={{ background: "rgba(107, 91, 75, 0.08)" }}
         >
-          <Lock size={13} className="text-[var(--calico-text-muted)]" />
+          <Lock size={13} className="text-[var(--aw-text-muted)]" />
         </div>
-        <span className="text-[0.8rem] font-medium text-[var(--calico-text-muted)]">
+        <span className="text-[0.8rem] font-medium text-[var(--aw-text-muted)]">
           {preview.teaser}
         </span>
       </div>
@@ -186,9 +186,9 @@ function LearningCard({ message, index }: { message: string; index: number }) {
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[10px]"
           style={{ background: "rgba(253, 186, 116, 0.12)" }}
         >
-          <BarChart3 size={13} style={{ color: "var(--calico-primary)" }} />
+          <BarChart3 size={13} style={{ color: "var(--aw-primary)" }} />
         </div>
-        <span className="text-[0.8rem] font-medium text-[var(--calico-text-muted)]">
+        <span className="text-[0.8rem] font-medium text-[var(--aw-text-muted)]">
           {message}
         </span>
       </div>
@@ -214,9 +214,9 @@ function SyncingCard({ index }: { index: number }) {
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[10px]"
           style={{ background: "rgba(253, 186, 116, 0.12)" }}
         >
-          <Clock size={13} style={{ color: "var(--calico-primary)" }} />
+          <Clock size={13} style={{ color: "var(--aw-primary)" }} />
         </div>
-        <span className="text-[0.8rem] font-medium text-[var(--calico-text-muted)]">
+        <span className="text-[0.8rem] font-medium text-[var(--aw-text-muted)]">
           This insight appears once Agent Wallet has enough data
         </span>
       </div>
@@ -265,10 +265,10 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
               style={{
                 background: "rgba(253, 186, 116, 0.15)",
                 border: "1px solid rgba(253, 186, 116, 0.3)",
-                color: "var(--calico-text)",
+                color: "var(--aw-text)",
               }}
             >
-              <Sparkles size={12} style={{ color: "var(--calico-primary)" }} />
+              <Sparkles size={12} style={{ color: "var(--aw-primary)" }} />
               Unlock all insights
               <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
             </Link>
@@ -306,10 +306,10 @@ export function PrimaryInsightCard({ home }: { home: SmartHomePayload }) {
             style={{
               background: "rgba(253, 186, 116, 0.15)",
               border: "1px solid rgba(253, 186, 116, 0.3)",
-              color: "var(--calico-text)",
+              color: "var(--aw-text)",
             }}
           >
-            <Sparkles size={12} style={{ color: "var(--calico-primary)" }} />
+            <Sparkles size={12} style={{ color: "var(--aw-primary)" }} />
             Connect an account
             <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
           </Link>

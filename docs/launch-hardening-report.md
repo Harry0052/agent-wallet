@@ -88,7 +88,7 @@ Complete these before launch:
 - [ ] Verify `AUTH_ADMIN_EMAILS` / `ADMIN_EMAIL_ALLOWLIST` only contains intended admin emails
 
 ### Sentry
-- [ ] Create a Sentry project for Calico
+- [ ] Create a Sentry project for Agent Wallet
 - [ ] Set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` in Vercel production env
 - [ ] After deploy, trigger a test error and confirm it appears in Sentry
 

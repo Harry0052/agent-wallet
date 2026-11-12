@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "calico.custom-labels.v1";
+const STORAGE_KEY = "agent-wallet.custom-labels.v1";
 
 /** Internal route keys → user-visible labels. Only display labels change. */
 export type CustomLabelMap = Record<string, string>;
